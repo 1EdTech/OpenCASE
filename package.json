@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.5",
+    "@types/jest": "^29.5.14",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.10.1",
     "eslint": "^8.57.1",
