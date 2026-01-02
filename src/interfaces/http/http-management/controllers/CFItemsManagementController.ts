@@ -1,6 +1,7 @@
-import { Request, Response } from 'express'
-import { UpdateCFItem } from '../../../../application/case/endpoints/UpdateCFItem'
-import { DeleteCFItem } from '../../../../application/case/endpoints/DeleteCFItem'
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+import { type Request, type Response } from 'express'
+import { type UpdateCFItem } from '../../../../application/case/endpoints/UpdateCFItem'
+import { type DeleteCFItem } from '../../../../application/case/endpoints/DeleteCFItem'
 
 export class CFItemsManagementController {
   constructor (
@@ -63,4 +64,3 @@ export class CFItemsManagementController {
     }
   }
 }
-

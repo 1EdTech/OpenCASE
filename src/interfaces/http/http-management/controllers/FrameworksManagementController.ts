@@ -1,5 +1,6 @@
-import { Request, Response } from 'express'
-import { ListFrameworks } from '../../../../application/case/endpoints/ListFrameworks'
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+import { type Request, type Response } from 'express'
+import { type ListFrameworks } from '../../../../application/case/endpoints/ListFrameworks'
 
 export class FrameworksManagementController {
   constructor (private readonly listFrameworks: ListFrameworks) {}
@@ -26,4 +27,3 @@ export class FrameworksManagementController {
     }
   }
 }
-

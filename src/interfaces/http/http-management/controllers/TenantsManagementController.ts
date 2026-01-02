@@ -1,6 +1,7 @@
-import { Request, Response } from 'express'
-import { ListTenants } from '../../../../application/case/endpoints/ListTenants'
-import { CreateTenant } from '../../../../application/case/endpoints/CreateTenant'
+/* eslint-disable @typescript-eslint/explicit-function-return-type */
+import { type Request, type Response } from 'express'
+import { type ListTenants } from '../../../../application/case/endpoints/ListTenants'
+import { type CreateTenant } from '../../../../application/case/endpoints/CreateTenant'
 
 export class TenantsManagementController {
   constructor (
@@ -30,7 +31,7 @@ export class TenantsManagementController {
       }
 
       // Validate tenantId format (basic validation)
-      if (!/^[a-zA-Z0-9_-]+$/.test(tenantId)) {
+      if (!/^[a-zA-Z0-9_-]+$/.test(tenantId as string)) {
         return res.status(400).json({ error: 'tenantId must contain only alphanumeric characters, hyphens, and underscores' })
       }
 
@@ -39,7 +40,7 @@ export class TenantsManagementController {
         tenantId
       })
 
-      res.status(201).json({ 
+      res.status(201).json({
         status: 'created',
         tenantId: result.tenantId,
         adminAccount: result.adminAccount
