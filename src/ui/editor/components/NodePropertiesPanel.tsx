@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Node } from '@xyflow/react'
 import { Button } from '@/ui/shared/components/ui/button'
-import type { CaseItemNodeData, CaseItemNodeDataPatch } from '../reactflow/types'
-import type { CFItem } from '@/domain/case/types'
+import type { CaseEditorNodeData, CaseEditorNodeDataPatch } from '../reactflow/types'
+import type { CFDocument, CFItem } from '@/domain/case/types'
 
 type Props = {
-  node: Node<CaseItemNodeData> | null
+  node: Node<CaseEditorNodeData> | null
   onClose?: () => void
-  onChangeNode?: (_nodeId: string, _patch: CaseItemNodeDataPatch) => void
+  onChangeNode?: (_nodeId: string, _patch: CaseEditorNodeDataPatch) => void
 }
 
 export default function NodePropertiesPanel({ node, onClose, onChangeNode }: Readonly<Props>) {
@@ -23,7 +23,10 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }: Rea
     return () => globalThis.removeEventListener('keydown', onKeyDown)
   }, [node, onClose])
 
-  const cfItem = node?.data?.cfItem
+  const nodeType = node?.type
+  const cfItem = (node?.data as any)?.cfItem as CFItem | undefined
+  const cfDocument = (node?.data as any)?.cfDocument as CFDocument | undefined
+  const isFramework = nodeType === 'caseFrameworkNode'
 
   const formatDateTime = (iso?: string) => {
     if (!iso) return '—'
@@ -49,6 +52,11 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }: Rea
   const updateItem = (patch: Partial<CFItem>) => {
     if (!node) return
     onChangeNode?.(node.id, { cfItem: { ...patch, lastChangeDateTime: new Date().toISOString() } })
+  }
+
+  const updateDocument = (patch: Partial<CFDocument>) => {
+    if (!node) return
+    onChangeNode?.(node.id, { cfDocument: { ...patch, lastChangeDateTime: new Date().toISOString() } })
   }
 
   const parseCsv = (raw: string) =>
@@ -77,12 +85,14 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }: Rea
         'fixed right-0 top-0 z-20 flex h-screen w-[min(460px,92vw)] flex-col border-l border-black/10 bg-gradient-to-b from-white to-slate-50 text-slate-900 shadow-[-16px_0_40px_rgba(0,0,0,0.18)] transition-transform duration-200 ease-out',
         isOpen ? 'translate-x-0' : 'translate-x-full',
       ].join(' ')}
-      aria-label="Item details"
+      aria-label={isFramework ? 'Framework details' : 'Item details'}
     >
       <div className="flex items-center justify-between border-b border-black/10 bg-white/70 px-4 py-3 backdrop-blur">
         <div>
-          <div className="text-sm font-bold">Item details</div>
-          <div className="text-xs text-slate-500">Select a card on the canvas to view and edit.</div>
+          <div className="text-sm font-bold">{isFramework ? 'Framework details' : 'Item details'}</div>
+          <div className="text-xs text-slate-500">
+            {isFramework ? 'High-level information about this framework.' : 'Select a card on the canvas to view and edit.'}
+          </div>
         </div>
         <Button variant="secondary" size="xs" onClick={() => onClose?.()}>
           Close
@@ -93,11 +103,13 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }: Rea
         <div className="flex-1 overflow-auto p-4">
           <div className="mb-4 rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
             <div className="mb-2">
-              <div className="text-xs font-semibold text-slate-700">Item</div>
+              <div className="text-xs font-semibold text-slate-700">{isFramework ? 'Framework' : 'Item'}</div>
               <div className="mt-1 text-base font-semibold text-slate-900">
-                {cfItem?.humanCodingScheme ?? cfItem?.alternativeLabel ?? 'Untitled item'}
+                {isFramework
+                  ? cfDocument?.title ?? 'Untitled framework'
+                  : cfItem?.humanCodingScheme ?? cfItem?.alternativeLabel ?? 'Untitled item'}
               </div>
-              {cfItem?.CFItemType || cfItem?.subject?.[0] || cfItem?.educationLevel?.[0] ? (
+              {!isFramework && (cfItem?.CFItemType || cfItem?.subject?.[0] || cfItem?.educationLevel?.[0]) ? (
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {cfItem?.CFItemType ? (
                     <span className="rounded-full border border-black/10 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700">
@@ -132,91 +144,114 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }: Rea
           <div className="space-y-3">
             <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
               <div className="mb-2">
-                <div className="text-sm font-semibold text-slate-900">Statement</div>
-                <div className="text-xs text-slate-500">The main description of this item.</div>
+                <div className="text-sm font-semibold text-slate-900">{isFramework ? 'Description' : 'Statement'}</div>
+                <div className="text-xs text-slate-500">
+                  {isFramework ? 'What this framework is about.' : 'The main description of this item.'}
+                </div>
               </div>
               <textarea
                 id="node-fullStatement"
                 rows={6}
                 className="w-full resize-y rounded-xl border border-black/15 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
-                value={cfItem?.fullStatement ?? ''}
-                onChange={(e) => updateItem({ fullStatement: e.target.value })}
+                value={isFramework ? cfDocument?.description ?? '' : cfItem?.fullStatement ?? ''}
+                onChange={(e) => (isFramework ? updateDocument({ description: e.target.value }) : updateItem({ fullStatement: e.target.value }))}
               />
             </div>
 
             <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
               <div className="mb-3">
-                <div className="text-sm font-semibold text-slate-900">About this item</div>
-                <div className="text-xs text-slate-500">Helps people find and organize items.</div>
+                <div className="text-sm font-semibold text-slate-900">{isFramework ? 'About this framework' : 'About this item'}</div>
+                <div className="text-xs text-slate-500">
+                  {isFramework ? 'High-level details for the framework.' : 'Helps people find and organize items.'}
+                </div>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="node-humanCodingScheme">
-                    Code
+                    {isFramework ? 'Title' : 'Code'}
                   </label>
-                  <div className="flex gap-2">
+                  {isFramework ? (
                     <input
                       id="node-humanCodingScheme"
                       className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
-                      value={cfItem?.humanCodingScheme ?? ''}
-                      onChange={(e) => updateItem({ humanCodingScheme: e.target.value })}
+                      value={cfDocument?.title ?? ''}
+                      onChange={(e) => updateDocument({ title: e.target.value })}
+                      placeholder="Framework title"
                     />
-                    <Button
-                      variant="secondary"
-                      size="xs"
-                      disabled={!cfItem?.humanCodingScheme}
-                      onClick={() => {
-                        if (!cfItem?.humanCodingScheme) return
-                        void copyToClipboard(cfItem.humanCodingScheme, 'code')
-                      }}
-                      title="Copy code"
-                    >
-                      {copied === 'code' ? 'Copied' : 'Copy'}
-                    </Button>
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">Example: 3.NBT.A.2</div>
+                  ) : (
+                    <>
+                      <div className="flex gap-2">
+                        <input
+                          id="node-humanCodingScheme"
+                          className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
+                          value={cfItem?.humanCodingScheme ?? ''}
+                          onChange={(e) => updateItem({ humanCodingScheme: e.target.value })}
+                        />
+                        <Button
+                          variant="secondary"
+                          size="xs"
+                          disabled={!cfItem?.humanCodingScheme}
+                          onClick={() => {
+                            if (!cfItem?.humanCodingScheme) return
+                            void copyToClipboard(cfItem.humanCodingScheme, 'code')
+                          }}
+                          title="Copy code"
+                        >
+                          {copied === 'code' ? 'Copied' : 'Copy'}
+                        </Button>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">Example: 3.NBT.A.2</div>
+                    </>
+                  )}
                 </div>
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="node-type">
-                    Type
+                    {isFramework ? 'Creator' : 'Type'}
                   </label>
                   <input
                     id="node-type"
                     className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
-                    value={cfItem?.CFItemType ?? ''}
-                    onChange={(e) => updateItem({ CFItemType: e.target.value })}
-                    placeholder="Example: Standard"
+                    value={isFramework ? cfDocument?.creator ?? '' : cfItem?.CFItemType ?? ''}
+                    onChange={(e) => (isFramework ? updateDocument({ creator: e.target.value }) : updateItem({ CFItemType: e.target.value }))}
+                    placeholder={isFramework ? 'Who authored this framework' : 'Example: Standard'}
                   />
                 </div>
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="node-subject">
-                    Subject(s)
+                    {isFramework ? 'Framework type' : 'Subject(s)'}
                   </label>
                   <input
                     id="node-subject"
                     className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
-                    value={joinCsv(cfItem?.subject)}
-                    onChange={(e) => updateItem({ subject: parseCsv(e.target.value) })}
-                    placeholder="Example: Mathematics, Algebra"
+                    value={isFramework ? cfDocument?.frameworkType ?? '' : joinCsv(cfItem?.subject)}
+                    onChange={(e) =>
+                      isFramework ? updateDocument({ frameworkType: e.target.value }) : updateItem({ subject: parseCsv(e.target.value) })
+                    }
+                    placeholder={isFramework ? 'Example: K-12' : 'Example: Mathematics, Algebra'}
                   />
                 </div>
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="node-educationLevel">
-                    Education level(s)
+                    {isFramework ? 'Adoption status' : 'Education level(s)'}
                   </label>
                   <input
                     id="node-educationLevel"
                     className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
-                    value={joinCsv(cfItem?.educationLevel)}
-                    onChange={(e) => updateItem({ educationLevel: parseCsv(e.target.value) })}
-                    placeholder="Example: Grade 3"
+                    value={isFramework ? cfDocument?.adoptionStatus ?? '' : joinCsv(cfItem?.educationLevel)}
+                    onChange={(e) =>
+                      isFramework
+                        ? updateDocument({ adoptionStatus: e.target.value })
+                        : updateItem({ educationLevel: parseCsv(e.target.value) })
+                    }
+                    placeholder={isFramework ? 'Example: Draft' : 'Example: Grade 3'}
                   />
                 </div>
 
-                <div className="sm:col-span-2">
+                {!isFramework ? (
+                  <div className="sm:col-span-2">
                   <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="node-alternativeLabel">
                     Short label
                   </label>
@@ -227,9 +262,11 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }: Rea
                     onChange={(e) => updateItem({ alternativeLabel: e.target.value })}
                     placeholder="A short, human-friendly title"
                   />
-                </div>
+                  </div>
+                ) : null}
 
-                <div className="sm:col-span-2">
+                {!isFramework ? (
+                  <div className="sm:col-span-2">
                   <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="node-keywords">
                     Keywords
                   </label>
@@ -253,7 +290,8 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }: Rea
                       ))}
                     </div>
                   ) : null}
-                </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -266,8 +304,8 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }: Rea
                 id="node-notes"
                 rows={4}
                 className="w-full resize-y rounded-xl border border-black/15 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
-                value={cfItem?.notes ?? ''}
-                onChange={(e) => updateItem({ notes: e.target.value })}
+                value={isFramework ? cfDocument?.notes ?? '' : cfItem?.notes ?? ''}
+                onChange={(e) => (isFramework ? updateDocument({ notes: e.target.value }) : updateItem({ notes: e.target.value }))}
               />
             </div>
 
@@ -277,9 +315,10 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }: Rea
                 <div className="text-xs text-slate-500">Custom fields</div>
               </div>
 
-              {cfItem?.extensions && Object.keys(cfItem.extensions).length ? (
+              {((isFramework ? cfDocument?.extensions : cfItem?.extensions) &&
+                Object.keys((isFramework ? cfDocument!.extensions! : cfItem!.extensions!) as any).length) ? (
                 <div className="space-y-2">
-                  {Object.entries(cfItem.extensions).map(([k, v]) => (
+                  {Object.entries((isFramework ? cfDocument!.extensions! : cfItem!.extensions!) as any).map(([k, v]) => (
                     <div key={k} className="rounded-lg border border-black/10 bg-slate-900/2 p-2">
                       <div className="text-xs font-semibold text-slate-700">{k}</div>
                       <div className="mt-1 text-xs text-slate-900">

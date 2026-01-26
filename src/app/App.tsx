@@ -19,8 +19,14 @@ import {
 } from '@xyflow/react'
 
 import { nodeTypes } from '@/ui/editor/reactflow/nodeTypes'
-import type { CaseItemNodeData, CaseItemNodeDataPatch } from '@/ui/editor/reactflow/types'
-import type { CFItem } from '@/domain/case/types'
+import type {
+  CaseEditorNodeData,
+  CaseEditorNodeDataPatch,
+  CaseEditorNodeType,
+  CaseItemNodeData,
+  CaseItemNodeDataPatch,
+} from '@/ui/editor/reactflow/types'
+import type { CFDocument, CFItem } from '@/domain/case/types'
 import NodePropertiesPanel from '@/ui/editor/components/NodePropertiesPanel'
 
 const caseItemNodeClassName =
@@ -33,7 +39,7 @@ const DEFAULT_NODE_HEIGHT = 220
 const NODE_GAP_X = 36
 const NODE_GAP_Y = 28
 
-const getNodeSize = (n: Node<CaseItemNodeData>) => {
+const getNodeSize = (n: Node<CaseEditorNodeData>) => {
   const anyNode = n as unknown as {
     measured?: { width?: number; height?: number }
     width?: number
@@ -71,7 +77,7 @@ const rectsOverlap = (
 const findNonOverlappingPosition = (
   desired: { x: number; y: number },
   size: { w: number; h: number },
-  nodes: Node<CaseItemNodeData>[],
+  nodes: Node<CaseEditorNodeData>[],
 ) => {
   const occupied = nodes.map((n) => {
     const s = getNodeSize(n)
@@ -105,7 +111,32 @@ const makeCfItem = (id: string, fullStatement: string, extras?: Partial<CFItem>)
   ...extras,
 })
 
-const initialNodes: Node<CaseItemNodeData>[] = [
+const makeCfDocument = (id: string, title: string, extras?: Partial<CFDocument>): CFDocument => ({
+  identifier: id,
+  uri: `urn:case:document:${id}`,
+  creator: 'District Curriculum Team',
+  title,
+  lastChangeDateTime: nowIso(),
+  CFPackageURI: { uri: `urn:case:package:${id}` },
+  caseVersion: '1.1',
+  ...extras,
+})
+
+const initialNodes: Node<CaseEditorNodeData>[] = [
+  {
+    id: 'fw1',
+    type: 'caseFrameworkNode',
+    position: { x: 0, y: -220 },
+    style: { width: 520, height: 210 },
+    data: {
+      cfDocument: makeCfDocument('fw1', 'Grade 3–5 Mathematics (Draft)', {
+        frameworkType: 'K-12',
+        adoptionStatus: 'Draft',
+        description: 'A draft set of math expectations focused on number and operations (grades 3–5).',
+      }),
+    },
+    className: caseItemNodeClassName,
+  },
   {
     id: 'n1',
     type: 'caseItemNode',
@@ -158,25 +189,31 @@ const initialNodes: Node<CaseItemNodeData>[] = [
 ]
 
 const initialEdges: Edge[] = [
+  { id: 'fw1-n1', source: 'fw1', target: 'n1' },
   { id: 'n1-n2', source: 'n1', target: 'n2' },
   { id: 'n2-n3', source: 'n2', target: 'n3' },
 ]
 
 export default function App() {
-  const [nodes, setNodes] = useState<Node<CaseItemNodeData>[]>(initialNodes)
+  const [nodes, setNodes] = useState<Node<CaseEditorNodeData>[]>(initialNodes)
   const [edges, setEdges] = useState<Edge[]>(initialEdges)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
 
-  const updateNodeData = useCallback((nodeId: string, patch: CaseItemNodeDataPatch) => {
+  const updateNodeData = useCallback((nodeId: string, patch: CaseEditorNodeDataPatch) => {
     setNodes((nodesSnapshot) =>
       nodesSnapshot.map((n) => {
         if (n.id !== nodeId) return n
 
-        const nextData: CaseItemNodeData = {
-          ...n.data,
-          ...patch,
-          cfItem: patch.cfItem ? { ...n.data.cfItem, ...patch.cfItem } : n.data.cfItem,
-        }
+        const anyData = n.data as any
+        const anyPatch = patch as any
+
+        const nextData: CaseEditorNodeData = {
+          ...anyData,
+          ...anyPatch,
+          cfItem: anyPatch.cfItem && anyData.cfItem ? { ...anyData.cfItem, ...anyPatch.cfItem } : anyData.cfItem,
+          cfDocument:
+            anyPatch.cfDocument && anyData.cfDocument ? { ...anyData.cfDocument, ...anyPatch.cfDocument } : anyData.cfDocument,
+        } as CaseEditorNodeData
 
         return { ...n, data: nextData }
       }),
@@ -192,7 +229,7 @@ export default function App() {
       const parent = nodesSnapshot.find((n) => n.id === parentId)
       if (!parent) return nodesSnapshot
 
-      const children = nodesSnapshot.filter((n) => n.data?.parentId === parentId)
+      const children = nodesSnapshot.filter((n) => (n.data as any)?.parentId === parentId)
 
       const parentSize = getNodeSize(parent)
       const childRowY = parent.position.y + parentSize.h + 40
@@ -232,19 +269,35 @@ export default function App() {
     ])
   }, [])
 
-  const nodesWithCallbacks = useMemo(
-    () =>
-      nodes.map((n) =>
-        n.type === 'caseItemNode'
-          ? {
-              ...n,
-              className: caseItemNodeClassName,
-              data: { ...n.data, onAddChild: addChildCaseItemNode, onUpdateItem: (id, patch) => updateNodeData(id, { cfItem: patch }) },
-            }
-          : n,
-      ),
-    [nodes, addChildCaseItemNode, updateNodeData],
-  )
+  const nodesWithCallbacks = useMemo(() => {
+    return nodes.map((n) => {
+      if (n.type === 'caseItemNode') {
+        return {
+          ...n,
+          className: caseItemNodeClassName,
+          data: {
+            ...(n.data as any),
+            onAddChild: addChildCaseItemNode,
+            onUpdateItem: (id: string, patch: Partial<CFItem>) => updateNodeData(id, { cfItem: patch } as CaseItemNodeDataPatch),
+          },
+        }
+      }
+
+      if (n.type === 'caseFrameworkNode') {
+        return {
+          ...n,
+          className: caseItemNodeClassName,
+          data: {
+            ...(n.data as any),
+            onAddChild: addChildCaseItemNode,
+            onUpdateDocument: (id: string, patch: Partial<CFDocument>) => updateNodeData(id, { cfDocument: patch }),
+          },
+        }
+      }
+
+      return n
+    })
+  }, [nodes, addChildCaseItemNode, updateNodeData])
 
   const selectedNode = useMemo(
     () => (selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null),
@@ -255,12 +308,9 @@ export default function App() {
     setSelectedNodeId(selectedNodes?.[0]?.id ?? null)
   }, [])
 
-  const onChangeSelectedNode = useCallback(
-    (nodeId: string, patch: CaseItemNodeDataPatch) => {
-      updateNodeData(nodeId, patch)
-    },
-    [updateNodeData],
-  )
+  const onChangeSelectedNode = useCallback((nodeId: string, patch: CaseEditorNodeDataPatch) => {
+    updateNodeData(nodeId, patch)
+  }, [updateNodeData])
 
   const clearSelection = useCallback(() => {
     setSelectedNodeId(null)
@@ -268,7 +318,7 @@ export default function App() {
     setEdges((edgesSnapshot) => edgesSnapshot.map((e) => ({ ...e, selected: false })))
   }, [])
 
-  const onNodesChange = useCallback((changes: NodeChange<Node<CaseItemNodeData>>[]) => {
+  const onNodesChange = useCallback((changes: NodeChange<Node<CaseEditorNodeData>>[]) => {
     setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot))
   }, [])
 
