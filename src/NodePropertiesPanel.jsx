@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import PropTypes from 'prop-types';
+import { Button } from '@/components/ui/button';
 
 export default function NodePropertiesPanel({ node, onClose, onChangeNode }) {
   useEffect(() => {
@@ -34,13 +35,9 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }) {
     >
         <div className="flex items-center justify-between border-b border-black/10 px-4 py-3">
           <div className="font-bold">Properties</div>
-          <button
-            type="button"
-          className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-900 hover:bg-slate-200 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
-            onClick={() => onClose?.()}
-          >
+          <Button variant="secondary" size="xs" onClick={() => onClose?.()}>
             Close
-          </button>
+          </Button>
         </div>
 
         {node ? (
@@ -52,7 +49,7 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode }) {
                   className="grid grid-cols-[90px_1fr] gap-2 border-b border-black/5 py-1 last:border-b-0"
                 >
                   <div className="text-xs text-slate-600">{k}</div>
-                <div className="break-words font-mono text-xs text-slate-900">{String(v)}</div>
+                <div className="wrap-break-word font-mono text-xs text-slate-900">{String(v)}</div>
                 </div>
               ))}
             </div>
