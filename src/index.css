@@ -1,8 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
 /* React Flow note for Tailwind v4: import React Flow styles in global CSS (not JS) */
 @layer base {
   @import "@xyflow/react/dist/style.css";
