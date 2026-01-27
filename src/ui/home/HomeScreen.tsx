@@ -9,11 +9,11 @@ export default function HomeScreen({
   frameworks,
   onOpenFramework,
   onCreateNew,
-}: {
+}: Readonly<{
   frameworks: HomeFramework[]
   onOpenFramework: (_id: string) => void
   onCreateNew: (_draft: CreateFrameworkDraft) => void
-}) {
+}>) {
   const [createOpen, setCreateOpen] = useState(false)
 
   return (
@@ -37,9 +37,6 @@ export default function HomeScreen({
               key={fw.id}
               cfDocument={fw.cfDocument}
               rightHint="Open to edit"
-              primaryActionLabel="Open"
-              primaryActionIcon="none"
-              onPrimaryAction={() => onOpenFramework(fw.id)}
               onClick={() => onOpenFramework(fw.id)}
             />
           ))}

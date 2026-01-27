@@ -1,8 +1,11 @@
-import { Handle, Position, type NodeProps, NodeResizer } from '@xyflow/react'
-import { ArrowUpCircleIcon, ArrowDownCircleIcon, PlusIcon } from '@heroicons/react/24/solid'
+import { Handle, Position, type NodeProps, NodeResizer, useReactFlow } from '@xyflow/react'
+import { ArrowUpCircleIcon, ArrowDownCircleIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/solid'
 import type { CaseItemNodeType } from '../types'
+import type { CaseEditorNodeType } from '@/ui/editor/reactflow/types'
 
 export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemNodeType>) {
+  const rf = useReactFlow<CaseEditorNodeType>()
+
   // Defensive typing: React Flow's NodeProps typing can lag behind our node-data evolution.
   // Runtime `data` is shaped by `App.tsx` and always includes `cfItem` for CASE item nodes.
   const typedData = data as unknown as {
@@ -43,10 +46,16 @@ export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemN
         lineStyle={{ borderColor: 'rgba(15, 23, 42, 0.18)' }}
         handleStyle={{ width: 5, height: 5, borderRadius: 10, borderColor: 'rgba(109, 40, 217, 0.7)' }}
       />
-      <div className="nodrag nopan absolute right-[-28px] top-2 flex opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+
+      <div
+        className={[
+          'nodrag nopan absolute left-full top-2 ml-2 flex flex-col gap-2 transition-opacity',
+          selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+        ].join(' ')}
+      >
         <button
           type="button"
-          className="grid h-[22px] w-[22px] place-items-center rounded-full border border-violet-700/90 bg-white/90 text-violet-700 shadow-sm hover:bg-violet-700/10 focus-visible:outline-2 focus-visible:outline-violet-700/50 focus-visible:outline-offset-2"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-violet-300 bg-white px-3 py-1 text-xs font-semibold text-violet-700 shadow-sm hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
           onClick={(e) => {
             e.stopPropagation()
             typedData?.onAddChild?.(id)
@@ -55,6 +64,23 @@ export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemN
           title="Add child item"
         >
           <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          Add item
+        </button>
+
+        <button
+          type="button"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-700 shadow-sm hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-rose-700/40 focus-visible:outline-offset-2"
+          onClick={(e) => {
+            e.stopPropagation()
+            const node = rf.getNode(id)
+            if (!node) return
+            rf.deleteElements({ nodes: [node], edges: [] })
+          }}
+          aria-label="Delete item"
+          title="Delete item"
+        >
+          <TrashIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          Delete
         </button>
       </div>
 
@@ -83,7 +109,6 @@ export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemN
             ) : null}
           </div>
         </div>
-        <div className="text-[10px] font-medium text-slate-500">Select to edit</div>
       </div>
 
       <div className="text-[12px] leading-snug text-slate-900">
@@ -153,6 +178,10 @@ export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemN
           }}
         />
       </Handle>
+
+      <div className="pointer-events-none absolute bottom-2 right-3 text-[10px] font-medium text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        Select to edit
+      </div>
     </div>
   )
 }

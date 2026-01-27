@@ -4,6 +4,18 @@ import type { CFDocument } from '@/domain/case/types'
 import { Button } from '@/ui/shared/components/ui/button'
 import { cn } from '@/lib/utils'
 
+type Props = {
+  cfDocument: Pick<CFDocument, 'title' | 'creator' | 'description' | 'frameworkType' | 'adoptionStatus'>
+  selected?: boolean
+  rightHint?: string
+  onPrimaryAction?: () => void
+  primaryActionLabel?: string
+  primaryActionIcon?: 'plus' | 'none'
+  onClick?: () => void
+  className?: string
+  children?: ReactNode
+}
+
 export function FrameworkCard({
   cfDocument,
   selected,
@@ -14,17 +26,7 @@ export function FrameworkCard({
   onClick,
   className,
   children,
-}: {
-  cfDocument: Pick<CFDocument, 'title' | 'creator' | 'description' | 'frameworkType' | 'adoptionStatus'>
-  selected?: boolean
-  rightHint?: string
-  onPrimaryAction?: () => void
-  primaryActionLabel?: string
-  primaryActionIcon?: 'plus' | 'none'
-  onClick?: () => void
-  className?: string
-  children?: ReactNode
-}) {
+}: Readonly<Props>) {
   const title = cfDocument.title ?? 'Untitled framework'
   const creator = cfDocument.creator
   const frameworkType = (cfDocument as { frameworkType?: string }).frameworkType
@@ -32,18 +34,14 @@ export function FrameworkCard({
   const description = (cfDocument as { description?: string }).description
 
   const clickable = Boolean(onClick)
+  const Root = clickable ? 'button' : 'div'
 
   return (
-    <div
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (!clickable) return
-        if (e.key === 'Enter' || e.key === ' ') onClick?.()
-      }}
+    <Root
+      type={clickable ? 'button' : undefined}
+      onClick={clickable ? onClick : undefined}
       className={cn(
-        'group relative h-full w-full rounded-2xl border bg-gradient-to-b from-violet-50 to-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md',
+        'group relative h-full w-full rounded-2xl border bg-linear-to-b from-violet-50 to-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md',
         selected ? 'border-violet-500 shadow-md ring-2 ring-violet-500/15' : 'border-violet-200',
         clickable ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2' : '',
         className,
@@ -69,9 +67,7 @@ export function FrameworkCard({
         </div>
 
         <div className="flex flex-col items-end gap-2">
-          {rightHint ? <div className="text-[10px] font-medium text-slate-600">{rightHint}</div> : null}
-
-          {primaryActionLabel && onPrimaryAction ? (
+          {!clickable && primaryActionLabel && onPrimaryAction ? (
             <Button
               type="button"
               variant="secondary"
@@ -97,8 +93,14 @@ export function FrameworkCard({
         <div className="text-sm text-slate-500">Add a description to help others understand this framework.</div>
       )}
 
+      {rightHint ? (
+        <div className="pointer-events-none absolute bottom-2 right-3 text-[10px] font-medium text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          {rightHint}
+        </div>
+      ) : null}
+
       {children}
-    </div>
+    </Root>
   )
 }
 
