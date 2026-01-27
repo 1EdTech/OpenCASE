@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react'
 import type { Connection, Edge, EdgeChange, NodeChange, OnSelectionChangeFunc } from '@xyflow/react'
 import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import type {
@@ -9,6 +9,7 @@ import type {
   CaseItemNodeType,
 } from '@/ui/editor/reactflow/types'
 import type { CFDocument, CFItem } from '@/domain/case/types'
+import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
 
 const DEFAULT_NODE_WIDTH = 360
 const DEFAULT_NODE_HEIGHT = 220
@@ -189,7 +190,7 @@ type Action =
   | { type: 'edges/applyChanges'; changes: EdgeChange[] }
   | { type: 'edges/connect'; connection: Connection }
   | { type: 'node/updateData'; nodeId: string; patch: CaseEditorNodeDataPatch }
-  | { type: 'node/addChild'; parentId: string }
+  | { type: 'node/addChild'; parentId: string; childId: string; cfItem: CFItem }
   | { type: 'layout/apply'; positions: Record<string, { x: number; y: number }> }
 
 function reducer(state: EditorState, action: Action): EditorState {
@@ -226,10 +227,7 @@ function reducer(state: EditorState, action: Action): EditorState {
     case 'node/addChild': {
       const parent = state.nodes.find((n) => n.id === action.parentId)
       if (!parent) return state
-
-      const uuid = globalThis.crypto?.randomUUID?.()
-      const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
-      const childId = `tu_${uuid ?? fallbackId}`
+      const childId = action.childId
 
       const children = state.nodes.filter((n) => isItemNode(n) && n.data.parentId === action.parentId)
 
@@ -248,17 +246,17 @@ function reducer(state: EditorState, action: Action): EditorState {
         type: 'caseItemNode',
         position: nextPosition,
         style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
-        data: { cfItem: makeCfItem(childId, 'New item'), parentId: action.parentId },
+        data: { cfItem: action.cfItem, parentId: action.parentId },
         className: wrapperNodeClassName,
       }
 
-      const nextNodes = [...state.nodes, childNode]
+      const nextNodes = [...state.nodes.map((n) => ({ ...n, selected: false })), { ...childNode, selected: true }]
       const nextEdges: Edge[] = [
-        ...state.edges,
+        ...state.edges.map((e) => ({ ...e, selected: false })),
         { id: `e_${action.parentId}_${childId}`, source: action.parentId, target: childId },
       ]
 
-      return { ...state, nodes: nextNodes, edges: nextEdges }
+      return { ...state, nodes: nextNodes, edges: nextEdges, selectedNodeId: childId }
     }
     case 'layout/apply': {
       const nextNodes = state.nodes.map((n) => {
@@ -287,6 +285,14 @@ type EditorContextValue = {
   clearSelection: () => void
   updateNodeData: (_nodeId: string, _patch: CaseEditorNodeDataPatch) => void
   addChild: (_parentId: string) => void
+  addItemDialog: {
+    open: boolean
+    parentId: string | null
+    draft: AddItemDraft
+  }
+  setAddItemDraft: (_patch: Partial<AddItemDraft>) => void
+  cancelAddItem: () => void
+  confirmAddItem: () => void
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null)
@@ -294,6 +300,11 @@ const EditorContext = createContext<EditorContextValue | null>(null)
 export function EditorProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [state, dispatch] = useReducer(reducer, { nodes: initialNodes, edges: initialEdges, selectedNodeId: null, layoutVersion: 0 })
   const didInitialLayout = useRef(false)
+  const [addItemDialog, setAddItemDialog] = useState<{ open: boolean; parentId: string | null; draft: AddItemDraft }>({
+    open: false,
+    parentId: null,
+    draft: { fullStatement: '' },
+  })
 
   const selectedNode = useMemo(
     () => (state.selectedNodeId ? state.nodes.find((n) => n.id === state.selectedNodeId) ?? null : null),
@@ -381,7 +392,56 @@ export function EditorProvider({ children }: Readonly<{ children: ReactNode }>) 
     didInitialLayout.current = true
   }, [state.nodes, state.edges])
 
-  const addChild = useCallback((parentId: string) => dispatch({ type: 'node/addChild', parentId }), [])
+  const addChild = useCallback((parentId: string) => {
+    setAddItemDialog({ open: true, parentId, draft: { fullStatement: '' } })
+  }, [])
+
+  const setAddItemDraft = useCallback((patch: Partial<AddItemDraft>) => {
+    setAddItemDialog((s) => ({ ...s, draft: { ...s.draft, ...patch } }))
+  }, [])
+
+  const cancelAddItem = useCallback(() => {
+    setAddItemDialog({ open: false, parentId: null, draft: { fullStatement: '' } })
+  }, [])
+
+  const confirmAddItem = useCallback(() => {
+    setAddItemDialog((s) => {
+      if (!s.parentId) return { ...s, open: false }
+
+      const fullStatement = s.draft.fullStatement.trim()
+      if (!fullStatement) return s
+
+      const uuid = globalThis.crypto?.randomUUID?.()
+      const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
+      const childId = `tu_${uuid ?? fallbackId}`
+
+      const parseCsv = (raw?: string) =>
+        (raw ?? '')
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean)
+
+      const cfItemExtras: Partial<CFItem> = {
+        abbreviatedStatement: s.draft.abbreviatedStatement?.trim() || undefined,
+        alternativeLabel: s.draft.alternativeLabel?.trim() || undefined,
+        humanCodingScheme: s.draft.humanCodingScheme?.trim() || undefined,
+        CFItemType: s.draft.CFItemType?.trim() || undefined,
+        subject: parseCsv(s.draft.subjectCsv),
+        educationLevel: parseCsv(s.draft.educationLevelCsv),
+        conceptKeywords: parseCsv(s.draft.conceptKeywordsCsv),
+        notes: s.draft.notes?.trim() || undefined,
+      }
+
+      dispatch({
+        type: 'node/addChild',
+        parentId: s.parentId,
+        childId,
+        cfItem: makeCfItem(childId, fullStatement, cfItemExtras),
+      })
+
+      return { open: false, parentId: null, draft: { fullStatement: '' } }
+    })
+  }, [])
   const updateNodeData = useCallback(
     (nodeId: string, patch: CaseEditorNodeDataPatch) => dispatch({ type: 'node/updateData', nodeId, patch }),
     [],
@@ -448,6 +508,10 @@ export function EditorProvider({ children }: Readonly<{ children: ReactNode }>) 
       clearSelection,
       updateNodeData,
       addChild,
+      addItemDialog,
+      setAddItemDraft,
+      cancelAddItem,
+      confirmAddItem,
     }),
     [
       state.nodes,
@@ -464,6 +528,10 @@ export function EditorProvider({ children }: Readonly<{ children: ReactNode }>) 
       clearSelection,
       updateNodeData,
       addChild,
+      addItemDialog,
+      setAddItemDraft,
+      cancelAddItem,
+      confirmAddItem,
     ],
   )
 

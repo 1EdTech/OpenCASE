@@ -4,8 +4,10 @@ import { Background, BackgroundVariant, Controls, MiniMap, ReactFlow } from '@xy
 import { nodeTypes } from '@/ui/editor/reactflow/nodeTypes'
 import CanvasHeader from '@/ui/editor/components/CanvasHeader'
 import NodePropertiesPanel from '@/ui/editor/components/NodePropertiesPanel'
+import AddItemDialog from '@/ui/editor/components/AddItemDialog'
 import { useEditor } from '@/ui/editor/state/EditorContext'
 import type { CaseEditorNodeType } from '@/ui/editor/reactflow/types'
+import type { CFDocument, CFItem } from '@/domain/case/types'
 
 export default function EditorCanvas() {
   const {
@@ -20,6 +22,10 @@ export default function EditorCanvas() {
     clearSelection,
     updateNodeData,
     layoutVersion,
+    addItemDialog,
+    setAddItemDraft,
+    cancelAddItem,
+    confirmAddItem,
   } = useEditor()
 
   const reactFlowWrapRef = useRef<HTMLDivElement | null>(null)
@@ -95,6 +101,25 @@ export default function EditorCanvas() {
       </div>
 
       <NodePropertiesPanel node={selectedNode} onClose={clearSelection} onChangeNode={updateNodeData} />
+
+      <AddItemDialog
+        open={addItemDialog.open}
+        parentLabel={(() => {
+          const parent = nodesWithCallbacks.find((n) => n.id === addItemDialog.parentId)
+          if (!parent) return undefined
+          if (parent.type === 'caseFrameworkNode') return (parent.data as { cfDocument?: CFDocument })?.cfDocument?.title ?? 'Framework'
+          return (
+            (parent.data as { cfItem?: CFItem })?.cfItem?.humanCodingScheme ??
+            (parent.data as { cfItem?: CFItem })?.cfItem?.abbreviatedStatement ??
+            (parent.data as { cfItem?: CFItem })?.cfItem?.fullStatement ??
+            'Item'
+          )
+        })()}
+        draft={addItemDialog.draft}
+        onChange={setAddItemDraft}
+        onCancel={cancelAddItem}
+        onCreate={confirmAddItem}
+      />
     </div>
   )
 }
