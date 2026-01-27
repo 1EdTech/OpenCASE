@@ -191,6 +191,7 @@ type Action =
   | { type: 'edges/connect'; connection: Connection }
   | { type: 'node/updateData'; nodeId: string; patch: CaseEditorNodeDataPatch }
   | { type: 'node/addChild'; parentId: string; childId: string; cfItem: CFItem }
+  | { type: 'graph/delete'; nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }
   | { type: 'layout/apply'; positions: Record<string, { x: number; y: number }> }
 
 function reducer(state: EditorState, action: Action): EditorState {
@@ -258,6 +259,63 @@ function reducer(state: EditorState, action: Action): EditorState {
 
       return { ...state, nodes: nextNodes, edges: nextEdges, selectedNodeId: childId }
     }
+    case 'graph/delete': {
+      const deleteNodeIds = new Set(action.nodeIds)
+      const deleteEdgeIds = new Set(action.edgeIds)
+
+      const deletedNodes = state.nodes.filter((n) => deleteNodeIds.has(n.id))
+      let remainingNodes = state.nodes.filter((n) => !deleteNodeIds.has(n.id))
+
+      // Remove requested edges AND any edge connected to a deleted node.
+      let remainingEdges = state.edges.filter(
+        (e) => !deleteEdgeIds.has(e.id) && !deleteNodeIds.has(e.source) && !deleteNodeIds.has(e.target),
+      )
+
+      if (action.reattachChildren) {
+        const parentExists = new Set(remainingNodes.map((n) => n.id))
+        const reparentMap = new Map<string, string>() // childId -> newParentId
+
+        for (const dn of deletedNodes) {
+          if (!isItemNode(dn)) continue
+          const parentId = dn.data.parentId
+          if (!parentId) continue
+          if (deleteNodeIds.has(parentId)) continue
+          if (!parentExists.has(parentId)) continue
+
+          for (const n of remainingNodes) {
+            if (isItemNode(n) && n.data.parentId === dn.id) {
+              reparentMap.set(n.id, parentId)
+            }
+          }
+        }
+
+        if (reparentMap.size) {
+          remainingNodes = remainingNodes.map((n) => {
+            const newParentId = reparentMap.get(n.id)
+            if (!newParentId) return n
+            if (!isItemNode(n)) return n
+            return { ...n, data: { ...n.data, parentId: newParentId } }
+          })
+
+          const existingEdgeIds = new Set(remainingEdges.map((e) => e.id))
+          for (const [childId, parentId] of reparentMap.entries()) {
+            const newEdgeId = `e_${parentId}_${childId}`
+            if (!existingEdgeIds.has(newEdgeId)) {
+              remainingEdges = [...remainingEdges, { id: newEdgeId, source: parentId, target: childId }]
+              existingEdgeIds.add(newEdgeId)
+            }
+          }
+        }
+      }
+
+      const selectedNodeId = state.selectedNodeId && deleteNodeIds.has(state.selectedNodeId) ? null : state.selectedNodeId
+      return {
+        ...state,
+        selectedNodeId,
+        nodes: remainingNodes.map((n) => ({ ...n, selected: selectedNodeId ? n.id === selectedNodeId : false })),
+        edges: remainingEdges.map((e) => ({ ...e, selected: false })),
+      }
+    }
     case 'layout/apply': {
       const nextNodes = state.nodes.map((n) => {
         const p = action.positions[n.id]
@@ -293,6 +351,7 @@ type EditorContextValue = {
   setAddItemDraft: (_patch: Partial<AddItemDraft>) => void
   cancelAddItem: () => void
   confirmAddItem: () => void
+  deleteElements: (_params: { nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }) => void
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null)
@@ -405,42 +464,44 @@ export function EditorProvider({ children }: Readonly<{ children: ReactNode }>) 
   }, [])
 
   const confirmAddItem = useCallback(() => {
-    setAddItemDialog((s) => {
-      if (!s.parentId) return { ...s, open: false }
+    if (!addItemDialog.parentId) return
 
-      const fullStatement = s.draft.fullStatement.trim()
-      if (!fullStatement) return s
+    const fullStatement = addItemDialog.draft.fullStatement.trim()
+    if (!fullStatement) return
 
-      const uuid = globalThis.crypto?.randomUUID?.()
-      const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
-      const childId = `tu_${uuid ?? fallbackId}`
+    const uuid = globalThis.crypto?.randomUUID?.()
+    const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
+    const childId = `tu_${uuid ?? fallbackId}`
 
-      const parseCsv = (raw?: string) =>
-        (raw ?? '')
-          .split(',')
-          .map((x) => x.trim())
-          .filter(Boolean)
+    const parseCsv = (raw?: string) =>
+      (raw ?? '')
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean)
 
-      const cfItemExtras: Partial<CFItem> = {
-        abbreviatedStatement: s.draft.abbreviatedStatement?.trim() || undefined,
-        alternativeLabel: s.draft.alternativeLabel?.trim() || undefined,
-        humanCodingScheme: s.draft.humanCodingScheme?.trim() || undefined,
-        CFItemType: s.draft.CFItemType?.trim() || undefined,
-        subject: parseCsv(s.draft.subjectCsv),
-        educationLevel: parseCsv(s.draft.educationLevelCsv),
-        conceptKeywords: parseCsv(s.draft.conceptKeywordsCsv),
-        notes: s.draft.notes?.trim() || undefined,
-      }
+    const cfItemExtras: Partial<CFItem> = {
+      abbreviatedStatement: addItemDialog.draft.abbreviatedStatement?.trim() || undefined,
+      alternativeLabel: addItemDialog.draft.alternativeLabel?.trim() || undefined,
+      humanCodingScheme: addItemDialog.draft.humanCodingScheme?.trim() || undefined,
+      CFItemType: addItemDialog.draft.CFItemType?.trim() || undefined,
+      subject: parseCsv(addItemDialog.draft.subjectCsv),
+      educationLevel: parseCsv(addItemDialog.draft.educationLevelCsv),
+      conceptKeywords: parseCsv(addItemDialog.draft.conceptKeywordsCsv),
+      notes: addItemDialog.draft.notes?.trim() || undefined,
+    }
 
-      dispatch({
-        type: 'node/addChild',
-        parentId: s.parentId,
-        childId,
-        cfItem: makeCfItem(childId, fullStatement, cfItemExtras),
-      })
-
-      return { open: false, parentId: null, draft: { fullStatement: '' } }
+    dispatch({
+      type: 'node/addChild',
+      parentId: addItemDialog.parentId,
+      childId,
+      cfItem: makeCfItem(childId, fullStatement, cfItemExtras),
     })
+
+    setAddItemDialog({ open: false, parentId: null, draft: { fullStatement: '' } })
+  }, [addItemDialog])
+
+  const deleteElements = useCallback((params: { nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }) => {
+    dispatch({ type: 'graph/delete', ...params })
   }, [])
   const updateNodeData = useCallback(
     (nodeId: string, patch: CaseEditorNodeDataPatch) => dispatch({ type: 'node/updateData', nodeId, patch }),
@@ -512,6 +573,7 @@ export function EditorProvider({ children }: Readonly<{ children: ReactNode }>) 
       setAddItemDraft,
       cancelAddItem,
       confirmAddItem,
+      deleteElements,
     }),
     [
       state.nodes,
@@ -532,6 +594,7 @@ export function EditorProvider({ children }: Readonly<{ children: ReactNode }>) 
       setAddItemDraft,
       cancelAddItem,
       confirmAddItem,
+      deleteElements,
     ],
   )
 
