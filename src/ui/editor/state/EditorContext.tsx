@@ -336,7 +336,7 @@ type EditorContextValue = {
   nodesWithCallbacks: CaseEditorNodeType[]
   frameworkInfo: { title: string; subtitle?: string; creator?: string }
   layoutVersion: number
-  onSelectionChange: OnSelectionChangeFunc
+  onSelectionChange: OnSelectionChangeFunc<CaseEditorNodeType>
   onNodesChange: (_changes: NodeChange<CaseEditorNodeType>[]) => void
   onEdgesChange: (_changes: EdgeChange[]) => void
   onConnect: (_connection: Connection) => void
@@ -535,7 +535,7 @@ export function EditorProvider({ children }: Readonly<{ children: ReactNode }>) 
     })
   }, [state.nodes, addChild, updateNodeData])
 
-  const onSelectionChange: OnSelectionChangeFunc = useCallback(({ nodes }) => {
+  const onSelectionChange: OnSelectionChangeFunc<CaseEditorNodeType> = useCallback(({ nodes }) => {
     dispatch({ type: 'selection/set', nodeId: nodes?.[0]?.id ?? null })
   }, [])
 

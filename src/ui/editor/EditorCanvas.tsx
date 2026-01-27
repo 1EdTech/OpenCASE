@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactFlowInstance } from '@xyflow/react'
 import type { OnBeforeDelete } from '@xyflow/react'
+import type { OnSelectionChangeFunc } from '@xyflow/react'
 import { Background, BackgroundVariant, Controls, MiniMap, ReactFlow } from '@xyflow/react'
 import { nodeTypes } from '@/ui/editor/reactflow/nodeTypes'
 import CanvasHeader from '@/ui/editor/components/CanvasHeader'
@@ -100,6 +101,89 @@ export default function EditorCanvas() {
     [pendingDelete, deleteElements],
   )
 
+  const ensureNodeVisible = useCallback(
+    (node: CaseEditorNodeType) => {
+      const instance = reactFlowRef.current
+      const wrap = reactFlowWrapRef.current
+      if (!instance || !wrap) return
+
+      const viewport = instance.getViewport()
+      const zoom = viewport.zoom
+
+      // Node size heuristics: prefer measured/explicit sizes, fall back to style defaults.
+      const anyNode = node as unknown as {
+        measured?: { width?: number; height?: number }
+        width?: number
+        height?: number
+        style?: { width?: number | string; height?: number | string }
+      }
+      const w =
+        anyNode.measured?.width ??
+        (typeof anyNode.width === 'number' ? anyNode.width : undefined) ??
+        (typeof anyNode.style?.width === 'number' ? anyNode.style?.width : undefined) ??
+        360
+      const h =
+        anyNode.measured?.height ??
+        (typeof anyNode.height === 'number' ? anyNode.height : undefined) ??
+        (typeof anyNode.style?.height === 'number' ? anyNode.style?.height : undefined) ??
+        220
+
+      const wrapRect = wrap.getBoundingClientRect()
+      const panelWidth = selectedNode ? Math.min(460, globalThis.innerWidth * 0.92) : 0
+
+      const margin = 24
+      const safeTop = 96 // leave room for the floating header
+      const safeRight = wrapRect.width - panelWidth - margin
+      const safeLeft = margin
+      const safeBottom = wrapRect.height - margin
+
+      const nodeX = node.position.x
+      const nodeY = node.position.y
+
+      const x1 = nodeX * zoom + viewport.x
+      const x2 = (nodeX + w) * zoom + viewport.x
+      const y1 = nodeY * zoom + viewport.y
+      const y2 = (nodeY + h) * zoom + viewport.y
+
+      let dx = 0
+      let dy = 0
+
+      if (x2 > safeRight) dx = x2 - safeRight
+      if (x1 - dx < safeLeft) dx = x1 - safeLeft
+
+      if (y2 > safeBottom) dy = y2 - safeBottom
+      if (y1 - dy < safeTop) dy = y1 - safeTop
+
+      if (dx === 0 && dy === 0) return
+
+      instance.setViewport(
+        {
+          x: viewport.x - dx,
+          y: viewport.y - dy,
+          zoom,
+        },
+        { duration: 220 },
+      )
+    },
+    [selectedNode],
+  )
+
+  const onSelectionChangeWithPan: OnSelectionChangeFunc<CaseEditorNodeType> = useCallback(
+    (params) => {
+      onSelectionChange(params)
+      const selected = params.nodes?.[0]
+      if (!selected) return
+
+      // Two rAFs: selection state and node measurements may settle after the event.
+      globalThis.requestAnimationFrame(() => {
+        globalThis.requestAnimationFrame(() => {
+          ensureNodeVisible(selected)
+        })
+      })
+    },
+    [onSelectionChange, ensureNodeVisible],
+  )
+
   const fitToContents = useCallback(() => {
     const instance = reactFlowRef.current
     const wrap = reactFlowWrapRef.current
@@ -152,7 +236,7 @@ export default function EditorCanvas() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onSelectionChange={onSelectionChange}
+          onSelectionChange={onSelectionChangeWithPan}
           onBeforeDelete={onBeforeDelete}
           nodeTypes={nodeTypes}
           proOptions={{ hideAttribution: true }}
