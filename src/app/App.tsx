@@ -3,6 +3,7 @@ import { EditorProvider } from '@/ui/editor/state/EditorContext'
 import EditorCanvas from '@/ui/editor/EditorCanvas'
 import HomeScreen from '@/ui/home/HomeScreen'
 import { createNewFrameworkDraft, loadFrameworks, saveFrameworks, type HomeFramework } from '@/ui/home/frameworkStore'
+import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 
 export default function App() {
   const [screen, setScreen] = useState<'home' | 'editor'>('home')
@@ -19,8 +20,8 @@ export default function App() {
     setScreen('editor')
   }, [])
 
-  const createNew = useCallback(() => {
-    const fw = createNewFrameworkDraft()
+  const createNew = useCallback((draft: CreateFrameworkDraft) => {
+    const fw = createNewFrameworkDraft(draft)
     setFrameworks((prev) => {
       const next = [fw, ...prev]
       saveFrameworks(next)

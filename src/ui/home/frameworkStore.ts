@@ -1,6 +1,7 @@
 import type { CFDocument } from '@/domain/case/types'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
 import { createEmptyFrameworkGraph, createSampleGraph } from '@/ui/editor/state/editorFactories'
+import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 
 export type HomeFramework = {
   id: string
@@ -59,15 +60,15 @@ export function saveFrameworks(frameworks: HomeFramework[]) {
   }
 }
 
-export function createNewFrameworkDraft(params?: { title?: string }): HomeFramework {
+export function createNewFrameworkDraft(params: CreateFrameworkDraft): HomeFramework {
   const id = globalThis.crypto?.randomUUID?.() ?? `fw_${Date.now()}`
-  const title = params?.title ?? 'New framework (Draft)'
+  const title = params.title || 'New framework (Draft)'
   const graph = createEmptyFrameworkGraph({
     id,
     title,
-    frameworkType: 'K-12',
-    adoptionStatus: 'Draft',
-    description: '',
+    frameworkType: params.frameworkType ?? 'K-12',
+    adoptionStatus: params.adoptionStatus ?? 'Draft',
+    description: params.description ?? '',
     creator: 'District Curriculum Team',
   })
 

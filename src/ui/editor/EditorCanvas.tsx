@@ -37,6 +37,7 @@ export default function EditorCanvas({ onBack }: { onBack?: () => void }) {
   const reactFlowWrapRef = useRef<HTMLDivElement | null>(null)
   const reactFlowRef = useRef<ReactFlowInstance<CaseEditorNodeType> | null>(null)
   const [rfReady, setRfReady] = useState(false)
+  const didInitialViewportRef = useRef(false)
   const [leaveOpen, setLeaveOpen] = useState(false)
 
   const [pendingDelete, setPendingDelete] = useState<null | {
@@ -193,19 +194,85 @@ export default function EditorCanvas({ onBack }: { onBack?: () => void }) {
     if (!instance || !wrap) return
 
     const HEADER_OVERLAY_PX = 72 // header height + breathing room
+    const MAX_INITIAL_ZOOM = 1.0 // avoid over-zooming when the graph is small (e.g. new/empty framework)
+    const SAFE_TOP_PX = 96 // keep the framework node just under the floating header
+    const animate = didInitialViewportRef.current
+    const fitDuration = animate ? 200 : 0
+    const biasDuration = animate ? 160 : 0
 
     const fit = () => {
       const h = wrap.getBoundingClientRect().height || 800
       const padding = Math.max(0.12, (HEADER_OVERLAY_PX + 12) / h)
-      instance.fitView({ padding, duration: 200 })
+      instance.fitView({ padding, duration: fitDuration, maxZoom: MAX_INITIAL_ZOOM })
     }
 
     // Two rAFs to let React Flow apply any pending node measurements/positions.
     const id = globalThis.requestAnimationFrame(() => fit())
     const id2 = globalThis.requestAnimationFrame(() => fit())
+
+    const biasToTop = () => {
+      const instance2 = reactFlowRef.current
+      const wrap2 = reactFlowWrapRef.current
+      if (!instance2 || !wrap2) return
+
+      const nodes = instance2.getNodes()
+      if (!nodes.length) return
+
+      const getSize = (n: (typeof nodes)[number]) => {
+        const anyNode = n as unknown as {
+          measured?: { width?: number; height?: number }
+          width?: number
+          height?: number
+          style?: { width?: number | string; height?: number | string }
+        }
+
+        const w =
+          anyNode.measured?.width ??
+          (typeof anyNode.width === 'number' ? anyNode.width : undefined) ??
+          (typeof anyNode.style?.width === 'number' ? anyNode.style?.width : undefined) ??
+          360
+        const h =
+          anyNode.measured?.height ??
+          (typeof anyNode.height === 'number' ? anyNode.height : undefined) ??
+          (typeof anyNode.style?.height === 'number' ? anyNode.style?.height : undefined) ??
+          220
+        return { w, h }
+      }
+
+      let minY = Number.POSITIVE_INFINITY
+      let maxY = Number.NEGATIVE_INFINITY
+      for (const n of nodes) {
+        const { h } = getSize(n)
+        minY = Math.min(minY, n.position.y)
+        maxY = Math.max(maxY, n.position.y + h)
+      }
+
+      const viewport = instance2.getViewport()
+      const zoom = viewport.zoom
+
+      const wrapRect = wrap2.getBoundingClientRect()
+      const availableH = wrapRect.height - SAFE_TOP_PX - 24
+      const contentH = (maxY - minY) * zoom
+
+      // Only apply top bias when the graph is small enough to fit without hiding content.
+      if (contentH > availableH) return
+
+      const desiredY = SAFE_TOP_PX - minY * zoom
+      instance2.setViewport({ x: viewport.x, y: desiredY, zoom }, { duration: biasDuration })
+      didInitialViewportRef.current = true
+    }
+
+    // Bias after fit has applied; keep it rAF-based to avoid a visible "jump".
+    const id3 = globalThis.requestAnimationFrame(() => {
+      globalThis.requestAnimationFrame(() => {
+        biasToTop()
+      })
+    })
+
     return () => {
       globalThis.cancelAnimationFrame(id)
       globalThis.cancelAnimationFrame(id2)
+      globalThis.cancelAnimationFrame(id3)
     }
   }, [])
 
@@ -254,8 +321,6 @@ export default function EditorCanvas({ onBack }: { onBack?: () => void }) {
           onInit={(instance) => {
             reactFlowRef.current = instance as unknown as ReactFlowInstance<CaseEditorNodeType>
             setRfReady(true)
-            // Run a fit immediately on init so we don't start off-screen.
-            fitToContents()
           }}
         >
           <Background color="#ccc" variant={BackgroundVariant.Dots} />

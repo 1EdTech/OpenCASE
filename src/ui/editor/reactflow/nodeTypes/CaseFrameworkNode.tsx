@@ -21,7 +21,7 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
   const adoptionStatus = typedData?.cfDocument?.adoptionStatus
 
   return (
-    <div>
+    <div className="h-full w-full">
       <NodeResizer
         isVisible={Boolean(selected)}
         minWidth={320}
@@ -45,18 +45,19 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
         primaryActionLabel="Add item"
         primaryActionIcon="plus"
         onPrimaryAction={() => typedData?.onAddChild?.(id)}
-      />
-
-      <Handle
-        position={Position.Bottom}
-        type="source"
-        style={{
-          background: 'none',
-          border: 'none',
-          width: '1em',
-          height: '1em',
-        }}
-      />
+      >
+        <Handle
+          position={Position.Bottom}
+          type="source"
+          // Anchor to the visible card, not the (potentially larger) node bounds.
+          style={{
+            background: 'none',
+            border: 'none',
+            width: '1em',
+            height: '1em',
+          }}
+        />
+      </FrameworkCard>
     </div>
   )
 }

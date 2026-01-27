@@ -1,4 +1,5 @@
 import { PlusIcon } from '@heroicons/react/24/solid'
+import type { ReactNode } from 'react'
 import type { CFDocument } from '@/domain/case/types'
 import { Button } from '@/ui/shared/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -12,6 +13,7 @@ export function FrameworkCard({
   primaryActionIcon = 'plus',
   onClick,
   className,
+  children,
 }: {
   cfDocument: Pick<CFDocument, 'title' | 'creator' | 'description' | 'frameworkType' | 'adoptionStatus'>
   selected?: boolean
@@ -21,6 +23,7 @@ export function FrameworkCard({
   primaryActionIcon?: 'plus' | 'none'
   onClick?: () => void
   className?: string
+  children?: ReactNode
 }) {
   const title = cfDocument.title ?? 'Untitled framework'
   const creator = cfDocument.creator
@@ -40,7 +43,7 @@ export function FrameworkCard({
         if (e.key === 'Enter' || e.key === ' ') onClick?.()
       }}
       className={cn(
-        'group relative rounded-2xl border bg-gradient-to-b from-violet-50 to-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md',
+        'group relative h-full w-full rounded-2xl border bg-gradient-to-b from-violet-50 to-white px-4 py-3 shadow-sm transition-shadow hover:shadow-md',
         selected ? 'border-violet-500 shadow-md ring-2 ring-violet-500/15' : 'border-violet-200',
         clickable ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2' : '',
         className,
@@ -93,6 +96,8 @@ export function FrameworkCard({
       ) : (
         <div className="text-sm text-slate-500">Add a description to help others understand this framework.</div>
       )}
+
+      {children}
     </div>
   )
 }
