@@ -32,18 +32,23 @@ export class ListTenants {
         let hasFrameworks = false
         
         try {
-          // Check if tenant has any frameworks
-          const v1p1Path = path.join(tenantPath, 'v1p1')
-          const v1p0Path = path.join(tenantPath, 'v1p0')
-          
-          const [v1p1Exists, v1p0Exists] = await Promise.all([
-            fs.access(v1p1Path).then(() => true).catch(() => false),
-            fs.access(v1p0Path).then(() => true).catch(() => false)
-          ])
-          
-          if (v1p1Exists || v1p0Exists) {
-            hasFrameworks = true
+          // A tenant "has frameworks" only if at least one framework exists under v1p0/v1p1 frameworks/
+          const hasFrameworksInVersion = async (versionDirName: 'v1p0' | 'v1p1'): Promise<boolean> => {
+            const frameworksDir = path.join(tenantPath, versionDirName, 'frameworks')
+            try {
+              const entries = await fs.readdir(frameworksDir, { withFileTypes: true })
+              return entries.some(e => e.isDirectory())
+            } catch {
+              return false
+            }
           }
+
+          const [v1p1Has, v1p0Has] = await Promise.all([
+            hasFrameworksInVersion('v1p1'),
+            hasFrameworksInVersion('v1p0')
+          ])
+
+          hasFrameworks = v1p1Has || v1p0Has
         } catch {
           // Ignore errors
         }

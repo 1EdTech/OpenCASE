@@ -23,7 +23,11 @@ describe('ListTenants', () => {
       ]
 
       ;(fs.readdir as jest.Mock).mockResolvedValue(mockTenants)
-      ;(fs.access as jest.Mock).mockResolvedValue(undefined)
+      ;(fs.readdir as jest.Mock).mockImplementation((p: string) => {
+        // First call (tenantsDir) returns tenants list; subsequent calls return "has frameworks"
+        if (p === path.join(baseDataDir, 'tenants')) return Promise.resolve(mockTenants)
+        return Promise.resolve([{ name: 'doc-1', isDirectory: () => true }])
+      })
 
       const result = await listTenants.execute({ baseDataDir })
 
@@ -55,8 +59,10 @@ describe('ListTenants', () => {
         { name: 'tenant2', isDirectory: () => true }
       ]
 
-      ;(fs.readdir as jest.Mock).mockResolvedValue(mockEntries)
-      ;(fs.access as jest.Mock).mockResolvedValue(undefined)
+      ;(fs.readdir as jest.Mock).mockImplementation((p: string) => {
+        if (p === path.join(baseDataDir, 'tenants')) return Promise.resolve(mockEntries)
+        return Promise.resolve([{ name: 'doc-1', isDirectory: () => true }])
+      })
 
       const result = await listTenants.execute({ baseDataDir })
 
@@ -72,21 +78,20 @@ describe('ListTenants', () => {
 
       ;(fs.readdir as jest.Mock).mockResolvedValue(mockTenants)
       
-      // Mock fs.access calls - Since tenants are processed in parallel with Promise.all,
-      // and each tenant checks both v1p1 and v1p0 in parallel, the mock calls can interleave.
-      // We need to mock based on the path being accessed.
-      // tenant-with-frameworks: v1p1 exists -> hasFrameworks = true
-      // tenant-empty: both v1p1 and v1p0 don't exist -> hasFrameworks = false
-      const error = new Error('ENOENT')
-      ;(error as any).code = 'ENOENT'
-      
-      ;(fs.access as jest.Mock).mockImplementation((path: string) => {
-        // tenant-with-frameworks v1p1 exists
-        if (path.includes('tenant-with-frameworks') && path.includes('v1p1')) {
-          return Promise.resolve(undefined)
+      // Mock fs.readdir for frameworks directories.
+      const enoent = new Error('ENOENT')
+      ;(enoent as any).code = 'ENOENT'
+
+      ;(fs.readdir as jest.Mock).mockImplementation((p: string, _opts?: any) => {
+        if (p === path.join(baseDataDir, 'tenants')) return Promise.resolve(mockTenants)
+        if (p.includes('tenant-with-frameworks') && p.endsWith(path.join('v1p1', 'frameworks'))) {
+          return Promise.resolve([{ name: 'doc-1', isDirectory: () => true }])
         }
-        // All other paths don't exist
-        return Promise.reject(error)
+        if (p.includes('tenant-empty') && p.endsWith(path.join('v1p1', 'frameworks'))) {
+          return Promise.resolve([]) // exists but empty
+        }
+        // all other frameworks dirs missing
+        return Promise.reject(enoent)
       })
 
       const result = await listTenants.execute({ baseDataDir })
@@ -101,7 +106,10 @@ describe('ListTenants', () => {
       ]
 
       ;(fs.readdir as jest.Mock).mockResolvedValue(mockTenants)
-      ;(fs.access as jest.Mock).mockRejectedValue(new Error('Permission denied'))
+      ;(fs.readdir as jest.Mock).mockImplementation((p: string, _opts?: any) => {
+        if (p === path.join(baseDataDir, 'tenants')) return Promise.resolve(mockTenants)
+        return Promise.reject(new Error('Permission denied'))
+      })
 
       const result = await listTenants.execute({ baseDataDir })
 
