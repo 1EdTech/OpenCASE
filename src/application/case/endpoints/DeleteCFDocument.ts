@@ -44,6 +44,9 @@ export class DeleteCFDocument {
       if (rubricId) this.store.removeRubricFromIndex(tenantId, caseVersion, rubricId)
     }
 
+    // Remove definitions from index (per-tenant defaults may have been sourced from this framework)
+    this.store.removeDefinitionsFromIndexForDocument(tenantId, caseVersion, sourcedId)
+
     // Delete framework directory
     const rootDir = this.store.getTenantVersionRootDir(tenantId, caseVersion)
     const frameworksDir = path.join(rootDir, 'frameworks', sourcedId)

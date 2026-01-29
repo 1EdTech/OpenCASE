@@ -15,5 +15,10 @@ export function registerAdminRoutes(app: Express, deps: AdminDeps) {
     '/admin/tenants/:tenantId/frameworks/import',
     deps.frameworksController.importFromEndpoint
   );
+
+  app.delete(
+    '/admin/tenants/:tenantId/frameworks/:docId',
+    deps.frameworksController.delete
+  );
 }
 

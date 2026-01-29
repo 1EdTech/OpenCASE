@@ -61,6 +61,12 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
     deps.frameworksController.list
   )
 
+  // Framework delete endpoint
+  app.delete(
+    '/management/tenants/:tenantId/frameworks/:docId',
+    deps.frameworksController.delete
+  )
+
   // Tenant management endpoints (require case.admin scope)
   app.get(
     '/management/tenants',

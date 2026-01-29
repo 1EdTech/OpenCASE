@@ -703,6 +703,19 @@ export class FileFrameworkStore {
     }
   }
 
+  removeDefinitionsFromIndexForDocument (tenantId: TenantId, version: CaseVersion, docId: string): void {
+    const versionMap = this.definitionsIndex.get(tenantId)?.get(version)
+    if (!versionMap) return
+
+    for (const [, catMap] of versionMap.entries()) {
+      for (const [id, entry] of catMap.entries()) {
+        if (entry.docSourcedId === docId) {
+          catMap.delete(id)
+        }
+      }
+    }
+  }
+
   async writeIndexesToDisk (tenantId: TenantId, version: CaseVersion): Promise<void> {
     const rootDir = this.getTenantVersionRootDir(tenantId, version)
     const idxDir = path.join(rootDir, 'indexes')

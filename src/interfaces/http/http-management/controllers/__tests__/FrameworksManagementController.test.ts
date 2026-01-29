@@ -1,10 +1,12 @@
 import { Request, Response } from 'express'
 import { FrameworksManagementController } from '../FrameworksManagementController'
+import { DeleteCFDocument } from '../../../../../application/case/endpoints/DeleteCFDocument'
 import { ListFrameworks } from '../../../../../application/case/endpoints/ListFrameworks'
 
 describe('FrameworksManagementController', () => {
   let controller: FrameworksManagementController
   let mockListFrameworks: jest.Mocked<ListFrameworks>
+  let mockDeleteCFDocument: jest.Mocked<DeleteCFDocument>
   let mockRequest: Partial<Request>
   let mockResponse: Partial<Response>
   let responseJson: jest.Mock
@@ -26,7 +28,11 @@ describe('FrameworksManagementController', () => {
       })
     } as any
 
-    controller = new FrameworksManagementController(mockListFrameworks)
+    mockDeleteCFDocument = {
+      execute: jest.fn().mockResolvedValue(undefined)
+    } as any
+
+    controller = new FrameworksManagementController(mockListFrameworks, mockDeleteCFDocument)
 
     responseJson = jest.fn()
     responseStatus = jest.fn().mockReturnValue({ json: responseJson })
@@ -95,6 +101,33 @@ describe('FrameworksManagementController', () => {
       expect(responseJson).toHaveBeenCalledWith({
         error: 'List failed'
       })
+    })
+  })
+
+  describe('delete', () => {
+    it('should delete framework successfully', async () => {
+      ;(mockRequest as any).tenantId = 'test-tenant'
+      mockRequest.params = { tenantId: 'test-tenant', docId: 'doc-1' } as any
+
+      await controller.delete(mockRequest as Request, mockResponse as Response)
+
+      expect(mockDeleteCFDocument.execute).toHaveBeenCalledWith({
+        tenantId: 'test-tenant',
+        caseVersion: '1.1',
+        sourcedId: 'doc-1'
+      })
+      expect(responseStatus).toHaveBeenCalledWith(200)
+      expect(responseJson).toHaveBeenCalledWith({ status: 'deleted', docId: 'doc-1' })
+    })
+
+    it('should return 403 when tenant mismatch', async () => {
+      ;(mockRequest as any).tenantId = 'different-tenant'
+      mockRequest.params = { tenantId: 'test-tenant', docId: 'doc-1' } as any
+
+      await controller.delete(mockRequest as Request, mockResponse as Response)
+
+      expect(responseStatus).toHaveBeenCalledWith(403)
+      expect(mockDeleteCFDocument.execute).not.toHaveBeenCalled()
     })
   })
 })

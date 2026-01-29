@@ -210,7 +210,7 @@ export async function buildContainer(): Promise<Container> {
   const deleteCFAssociation = new DeleteCFAssociation(pkgRepo, store)
 
   // Initialize controllers
-  const frameworksController = new FrameworksController(createFramework, importFramework)
+  const frameworksController = new FrameworksController(createFramework, importFramework, deleteCFDocument)
 
   const cfPackagesControllerV1p0 = new CFPackagesControllerV1p0(getCFPackage)
   const cfDocumentsControllerV1p0 = new CFDocumentsControllerV1p0(getCFDocument)
@@ -285,7 +285,8 @@ export async function buildContainer(): Promise<Container> {
     deleteCFAssociation
   )
   const frameworksManagementController = new FrameworksManagementController(
-    listFrameworks
+    listFrameworks,
+    deleteCFDocument
   )
   const tenantsManagementController = new TenantsManagementController(
     listTenants,

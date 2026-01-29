@@ -1,11 +1,13 @@
 import { Request, Response } from 'express'
 import { FrameworksController } from '../FrameworksController'
 import { CreateFramework } from '../../../../../application/case/endpoints/CreateFramework'
+import { DeleteCFDocument } from '../../../../../application/case/endpoints/DeleteCFDocument'
 import { ImportFrameworkFromEndpoint } from '../../../../../application/case/endpoints/ImportFrameworkFromEndpoint'
 
 describe('FrameworksController', () => {
   let controller: FrameworksController
   let mockCreateFramework: jest.Mocked<CreateFramework>
+  let mockDeleteCFDocument: jest.Mocked<DeleteCFDocument>
   let mockImportFramework: jest.Mocked<ImportFrameworkFromEndpoint>
   let mockRequest: Partial<Request>
   let mockResponse: Partial<Response>
@@ -21,7 +23,11 @@ describe('FrameworksController', () => {
       execute: jest.fn().mockResolvedValue({ docId: 'doc-123', version: 1 })
     } as any
 
-    controller = new FrameworksController(mockCreateFramework, mockImportFramework)
+    mockDeleteCFDocument = {
+      execute: jest.fn().mockResolvedValue(undefined)
+    } as any
+
+    controller = new FrameworksController(mockCreateFramework, mockImportFramework, mockDeleteCFDocument)
 
     responseJson = jest.fn();
     responseStatus = jest.fn().mockReturnValue({ json: responseJson });
@@ -132,6 +138,31 @@ describe('FrameworksController', () => {
         error: 'creation_failed',
         message: 'Validation error'
       })
+    })
+  })
+
+  describe('delete', () => {
+    it('should delete framework successfully', async () => {
+      mockRequest.params = { tenantId: 'test-tenant', docId: 'doc-123' } as any
+
+      await controller.delete(mockRequest as Request, mockResponse as Response)
+
+      expect(mockDeleteCFDocument.execute).toHaveBeenCalledWith({
+        tenantId: 'test-tenant',
+        caseVersion: '1.1',
+        sourcedId: 'doc-123'
+      })
+      expect(responseStatus).toHaveBeenCalledWith(200)
+      expect(responseJson).toHaveBeenCalledWith({ status: 'deleted', docId: 'doc-123' })
+    })
+
+    it('should return 404 when framework not found', async () => {
+      mockRequest.params = { tenantId: 'test-tenant', docId: 'missing-doc' } as any
+      mockDeleteCFDocument.execute.mockRejectedValueOnce(new Error('CFDocument with sourcedId missing-doc not found'))
+
+      await controller.delete(mockRequest as Request, mockResponse as Response)
+
+      expect(responseStatus).toHaveBeenCalledWith(404)
     })
   })
 })

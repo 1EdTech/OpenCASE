@@ -24,6 +24,8 @@ describe('DeleteCFDocument', () => {
       removeDocumentFromIndex: jest.fn(),
       removeItemFromIndex: jest.fn(),
       removeAssociationFromIndex: jest.fn(),
+      removeRubricFromIndex: jest.fn(),
+      removeDefinitionsFromIndexForDocument: jest.fn(),
       writeIndexesToDisk: jest.fn().mockResolvedValue(undefined),
       getTenantVersionRootDir: jest.fn().mockReturnValue('/data/tenants/test-tenant/v1p1')
     } as any
