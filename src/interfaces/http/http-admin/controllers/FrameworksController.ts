@@ -71,17 +71,17 @@ export class FrameworksController {
 
   delete = async (req: Request, res: Response) => {
     const tenantId = req.params.tenantId
-    const docId = req.params.docId
+    const id = req.params.id
     const caseVersion = (req.query.caseVersion as '1.0' | '1.1') ?? '1.1'
 
     try {
       await this.deleteCFDocument.execute({
         tenantId,
         caseVersion,
-        sourcedId: docId
+        sourcedId: id
       })
 
-      return res.status(200).json({ status: 'deleted', docId })
+      return res.status(200).json({ status: 'deleted', id })
     } catch (error: any) {
       const msg = error?.message || 'Delete failed'
       const status = msg.includes('not found') ? 404 : 400

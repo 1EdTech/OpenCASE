@@ -1,61 +1,110 @@
-import { Express } from 'express';
-import { FrameworksController } from './controllers/FrameworksController';
+import type { Express, RequestHandler } from 'express'
+import type { FrameworksController } from './controllers/FrameworksController'
 
 export interface AdminDeps {
-  frameworksController: FrameworksController;
+  frameworksController: FrameworksController
+}
+
+function withCaseVersion (caseVersion: '1.0' | '1.1', handler: RequestHandler): RequestHandler {
+  return (req, res, next) => {
+    // Treat query param as legacy; versioned routes set it explicitly.
+    ;(req as any).query = { ...(req as any).query, caseVersion }
+    return handler(req, res, next)
+  }
 }
 
 /**
  * @openapi
- * /admin/tenants/{tenantId}/frameworks:
+ * /admin/tenants/{tenantId}/ims/case/v1p0/CFPackages:
  *   post:
- *     operationId: adminCreateFramework
- *     summary: Create/publish a framework (non-CASE extension)
+ *     operationId: adminCreateCFPackageV1p0
+ *     summary: Create/publish a CFPackage (non-CASE extension) (CASE v1p0)
  *     tags: [Admin]
  *     parameters:
  *       - { name: tenantId, in: path, required: true, schema: { type: string } }
- *       - { name: caseVersion, in: query, required: false, schema: { type: string, enum: [1.0, 1.1], default: 1.1 } }
  *     responses:
  *       200: { description: Unchanged }
  *       201: { description: Created/Published }
  *
- * /admin/tenants/{tenantId}/frameworks/import:
+ * /admin/tenants/{tenantId}/ims/case/v1p1/CFPackages:
  *   post:
- *     operationId: adminImportFramework
- *     summary: Import a framework from endpoint (non-CASE extension)
+ *     operationId: adminCreateCFPackageV1p1
+ *     summary: Create/publish a CFPackage (non-CASE extension) (CASE v1p1)
  *     tags: [Admin]
  *     parameters:
  *       - { name: tenantId, in: path, required: true, schema: { type: string } }
- *       - { name: caseVersion, in: query, required: false, schema: { type: string, enum: [1.0, 1.1], default: 1.1 } }
+ *     responses:
+ *       200: { description: Unchanged }
+ *       201: { description: Created/Published }
+ *
+ * /admin/tenants/{tenantId}/ims/case/v1p0/CFPackages/import:
+ *   post:
+ *     operationId: adminImportCFPackageV1p0
+ *     summary: Import a CFPackage from endpoint (non-CASE extension) (CASE v1p0)
+ *     tags: [Admin]
+ *     parameters:
+ *       - { name: tenantId, in: path, required: true, schema: { type: string } }
  *     responses:
  *       201: { description: Imported }
  *
- * /admin/tenants/{tenantId}/frameworks/{docId}:
- *   delete:
- *     operationId: adminDeleteFramework
- *     summary: Delete a framework (non-CASE extension)
+ * /admin/tenants/{tenantId}/ims/case/v1p1/CFPackages/import:
+ *   post:
+ *     operationId: adminImportCFPackageV1p1
+ *     summary: Import a CFPackage from endpoint (non-CASE extension) (CASE v1p1)
  *     tags: [Admin]
  *     parameters:
  *       - { name: tenantId, in: path, required: true, schema: { type: string } }
- *       - { name: docId, in: path, required: true, schema: { type: string, format: uuid } }
- *       - { name: caseVersion, in: query, required: false, schema: { type: string, enum: [1.0, 1.1], default: 1.1 } }
+ *     responses:
+ *       201: { description: Imported }
+ *
+ * /admin/tenants/{tenantId}/ims/case/v1p0/CFPackages/{id}:
+ *   delete:
+ *     operationId: adminDeleteCFPackageV1p0
+ *     summary: Delete a CFPackage (non-CASE extension) (CASE v1p0)
+ *     tags: [Admin]
+ *     parameters:
+ *       - { name: tenantId, in: path, required: true, schema: { type: string } }
+ *       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+ *     responses:
+ *       200: { description: Deleted }
+ *
+ * /admin/tenants/{tenantId}/ims/case/v1p1/CFPackages/{id}:
+ *   delete:
+ *     operationId: adminDeleteCFPackageV1p1
+ *     summary: Delete a CFPackage (non-CASE extension) (CASE v1p1)
+ *     tags: [Admin]
+ *     parameters:
+ *       - { name: tenantId, in: path, required: true, schema: { type: string } }
+ *       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
  *     responses:
  *       200: { description: Deleted }
  */
-export function registerAdminRoutes(app: Express, deps: AdminDeps) {
+export function registerAdminRoutes (app: Express, deps: AdminDeps): void {
+  // Explicit CASE version in the path for mutation endpoints
   app.post(
-    '/admin/tenants/:tenantId/frameworks',
-    deps.frameworksController.create
-  );
+    '/admin/tenants/:tenantId/ims/case/v1p0/CFPackages',
+    withCaseVersion('1.0', deps.frameworksController.create as unknown as RequestHandler)
+  )
+  app.post(
+    '/admin/tenants/:tenantId/ims/case/v1p1/CFPackages',
+    withCaseVersion('1.1', deps.frameworksController.create as unknown as RequestHandler)
+  )
 
   app.post(
-    '/admin/tenants/:tenantId/frameworks/import',
-    deps.frameworksController.importFromEndpoint
-  );
+    '/admin/tenants/:tenantId/ims/case/v1p0/CFPackages/import',
+    withCaseVersion('1.0', deps.frameworksController.importFromEndpoint as unknown as RequestHandler)
+  )
+  app.post(
+    '/admin/tenants/:tenantId/ims/case/v1p1/CFPackages/import',
+    withCaseVersion('1.1', deps.frameworksController.importFromEndpoint as unknown as RequestHandler)
+  )
 
   app.delete(
-    '/admin/tenants/:tenantId/frameworks/:docId',
-    deps.frameworksController.delete
-  );
+    '/admin/tenants/:tenantId/ims/case/v1p0/CFPackages/:id',
+    withCaseVersion('1.0', deps.frameworksController.delete as unknown as RequestHandler)
+  )
+  app.delete(
+    '/admin/tenants/:tenantId/ims/case/v1p1/CFPackages/:id',
+    withCaseVersion('1.1', deps.frameworksController.delete as unknown as RequestHandler)
+  )
 }
-

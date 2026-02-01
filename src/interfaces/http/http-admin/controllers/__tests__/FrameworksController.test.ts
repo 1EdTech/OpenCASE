@@ -143,7 +143,7 @@ describe('FrameworksController', () => {
 
   describe('delete', () => {
     it('should delete framework successfully', async () => {
-      mockRequest.params = { tenantId: 'test-tenant', docId: 'doc-123' } as any
+      mockRequest.params = { tenantId: 'test-tenant', id: 'doc-123' } as any
 
       await controller.delete(mockRequest as Request, mockResponse as Response)
 
@@ -153,11 +153,11 @@ describe('FrameworksController', () => {
         sourcedId: 'doc-123'
       })
       expect(responseStatus).toHaveBeenCalledWith(200)
-      expect(responseJson).toHaveBeenCalledWith({ status: 'deleted', docId: 'doc-123' })
+      expect(responseJson).toHaveBeenCalledWith({ status: 'deleted', id: 'doc-123' })
     })
 
     it('should return 404 when framework not found', async () => {
-      mockRequest.params = { tenantId: 'test-tenant', docId: 'missing-doc' } as any
+      mockRequest.params = { tenantId: 'test-tenant', id: 'missing-doc' } as any
       mockDeleteCFDocument.execute.mockRejectedValueOnce(new Error('CFDocument with sourcedId missing-doc not found'))
 
       await controller.delete(mockRequest as Request, mockResponse as Response)

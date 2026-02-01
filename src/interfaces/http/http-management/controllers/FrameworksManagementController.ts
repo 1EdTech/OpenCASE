@@ -31,11 +31,11 @@ export class FrameworksManagementController {
     }
   }
 
-  delete: RequestHandler<{ tenantId: string, docId: string }> = async (req: Request, res: Response) => {
+  delete: RequestHandler<{ tenantId: string, id: string }> = async (req: Request, res: Response) => {
     try {
       const tenantId = (req as any).tenantId ?? req.params.tenantId
       const urlTenantId = req.params.tenantId
-      const docId = req.params.docId
+      const id = req.params.id
       const caseVersion = (req.query.caseVersion as '1.0' | '1.1') ?? '1.1'
 
       // Verify tenant from JWT matches URL parameter
@@ -46,10 +46,10 @@ export class FrameworksManagementController {
       await this.deleteCFDocument.execute({
         tenantId,
         caseVersion,
-        sourcedId: docId
+        sourcedId: id
       })
 
-      return res.status(200).json({ status: 'deleted', docId })
+      return res.status(200).json({ status: 'deleted', id })
     } catch (error: any) {
       const msg = error?.message || 'Delete failed'
       const status = msg.includes('not found') ? 404 : 400

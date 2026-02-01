@@ -110,7 +110,7 @@ describe('FrameworksManagementController', () => {
   describe('delete', () => {
     it('should delete framework successfully', async () => {
       ;(mockRequest as any).tenantId = 'test-tenant'
-      mockRequest.params = { tenantId: 'test-tenant', docId: 'doc-1' } as any
+      mockRequest.params = { tenantId: 'test-tenant', id: 'doc-1' } as any
 
       await (controller.delete as any)(mockRequest as Request, mockResponse as Response, next)
 
@@ -120,12 +120,12 @@ describe('FrameworksManagementController', () => {
         sourcedId: 'doc-1'
       })
       expect(responseStatus).toHaveBeenCalledWith(200)
-      expect(responseJson).toHaveBeenCalledWith({ status: 'deleted', docId: 'doc-1' })
+      expect(responseJson).toHaveBeenCalledWith({ status: 'deleted', id: 'doc-1' })
     })
 
     it('should return 403 when tenant mismatch', async () => {
       ;(mockRequest as any).tenantId = 'different-tenant'
-      mockRequest.params = { tenantId: 'test-tenant', docId: 'doc-1' } as any
+      mockRequest.params = { tenantId: 'test-tenant', id: 'doc-1' } as any
 
       await (controller.delete as any)(mockRequest as Request, mockResponse as Response, next)
 
