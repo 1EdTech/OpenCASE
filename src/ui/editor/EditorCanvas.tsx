@@ -15,7 +15,7 @@ import type { CFDocument, CFItem } from '@/domain/case/types'
 import { useAuth } from '@/app/providers/AuthProvider'
 
 export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void }>) {
-  const { status: authStatus, userName, tenantId, signIn, signOut } = useAuth()
+  const { status: authStatus, userName, signOut } = useAuth()
   const {
     nodesWithCallbacks,
     edges: editorEdges,
@@ -307,13 +307,7 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
         frameworkSubtitle={frameworkInfo.subtitle}
         userName={userName ?? undefined}
         reserveRightForPanel={Boolean(selectedNode)}
-        onSignIn={
-          authStatus === 'authenticated'
-            ? undefined
-            : () => {
-                void signIn(tenantId)
-              }
-        }
+        onSignIn={undefined}
         onSignOut={
           authStatus !== 'authenticated'
             ? undefined

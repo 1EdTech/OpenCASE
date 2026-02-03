@@ -9,6 +9,7 @@ import { getAppConfig } from '@/app/config'
 import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import { createGraphFromCfPackage } from '@/ui/editor/state/editorFactories'
+import LoginScreen from '@/ui/auth/LoginScreen'
 
 export default function App() {
   return (
@@ -19,7 +20,7 @@ export default function App() {
 }
 
 function AppInner() {
-  const { completeSignIn, getAccessToken } = useAuth()
+  const { completeSignIn, getAccessToken, status: authStatus } = useAuth()
   const cfg = getAppConfig()
   const api = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })), [cfg.opencaseBaseUrl, getAccessToken])
 
@@ -30,6 +31,20 @@ function AppInner() {
   const [authCallbackState, setAuthCallbackState] = useState<'idle' | 'processing' | 'error'>('idle')
   const [remoteOpenState, setRemoteOpenState] = useState<'idle' | 'loading'>('idle')
 
+  const getRoute = useCallback((): 'authCallback' | 'login' | 'app' => {
+    const hash = globalThis.location?.hash ?? ''
+    if (hash.startsWith('#/auth/callback')) return 'authCallback'
+    if (hash.startsWith('#/login')) return 'login'
+    return 'app'
+  }, [])
+  const [route, setRoute] = useState<'authCallback' | 'login' | 'app'>(() => getRoute())
+
+  useEffect(() => {
+    const onHashChange = () => setRoute(getRoute())
+    globalThis.addEventListener('hashchange', onHashChange)
+    return () => globalThis.removeEventListener('hashchange', onHashChange)
+  }, [getRoute])
+
   useEffect(() => {
     const hash = globalThis.location?.hash ?? ''
     if (!hash.startsWith('#/auth/callback')) return
@@ -37,6 +52,7 @@ function AppInner() {
     // This avoids accidental double-redemption (e.g. React StrictMode remount in dev).
     const href = globalThis.location?.href ?? ''
     globalThis.history?.replaceState(null, '', '/#/auth/callback')
+    setRoute('authCallback')
 
     setAuthCallbackState('processing')
     completeSignIn(href)
@@ -44,11 +60,21 @@ function AppInner() {
         // Clear callback hash (and any query params) from the URL.
         globalThis.history?.replaceState(null, '', '/#/')
         setAuthCallbackState('idle')
+        setRoute(getRoute())
       })
       .catch(() => {
         setAuthCallbackState('error')
       })
   }, [completeSignIn])
+
+  // Force unauthenticated users onto the login route.
+  useEffect(() => {
+    if (route === 'authCallback') return
+    if (authStatus === 'authenticated') return
+    if (globalThis.location?.hash?.startsWith('#/login')) return
+    globalThis.history?.replaceState(null, '', '/#/login')
+    setRoute('login')
+  }, [authStatus, route])
 
   const activeFramework = useMemo(() => {
     if (!activeFrameworkId) return null
@@ -116,6 +142,15 @@ function AppInner() {
         </div>
       </div>
     )
+  }
+
+  if (route === 'login') {
+    return <LoginScreen />
+  }
+
+  if (authStatus !== 'authenticated') {
+    // During the redirect to /#/login.
+    return <LoginScreen />
   }
 
   if (screen === 'home') {

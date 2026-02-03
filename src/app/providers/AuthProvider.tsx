@@ -12,7 +12,7 @@ type AuthContextValue = {
   accessToken: string | null
   error: string | null
   setTenantId: (_tenantId: string) => void
-  signIn: (_tenantId?: string) => Promise<void>
+  signIn: (_tenantId?: string, _options?: { loginHint?: string }) => Promise<void>
   completeSignIn: (_callbackUrl?: string) => Promise<void>
   signOut: () => Promise<void>
   getAccessToken: () => Promise<string | null>
@@ -44,7 +44,7 @@ function pickUserName(user: User | null): string | null {
 function createUserManager(params: { authority: string; clientId: string; redirectUri: string; tenantId: string }) {
   // Use per-tenant prefixes to avoid mixing tokens/state across tenant client_ids.
   const prefix = `case-editor:oidc:${params.tenantId}:`
-  const postLogoutRedirectUri = `${globalThis.location?.origin ?? ''}/#/`
+  const postLogoutRedirectUri = `${globalThis.location?.origin ?? ''}/#/login`
   return new UserManager({
     authority: params.authority,
     client_id: params.clientId,
@@ -127,16 +127,30 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   }, [])
 
   const signIn = useCallback(
-    async (maybeTenantId?: string) => {
+    async (maybeTenantId?: string, options?: { loginHint?: string }) => {
       const nextTenantId = (maybeTenantId ?? tenantId).trim()
       if (!nextTenantId) throw new Error('tenantId is required')
       if (nextTenantId !== tenantId) setTenantId(nextTenantId)
 
       setStatus('loading')
       setError(null)
-      await userManager.signinRedirect()
+      // Important: tenantId changes affect client_id. If the caller supplied a different tenantId,
+      // we must redirect using a UserManager configured for that tenant immediately (state updates
+      // are async, and React StrictMode can remount in dev).
+      const mgr =
+        nextTenantId === tenantId
+          ? userManager
+          : createUserManager({
+              authority: cfg.oidcAuthority,
+              clientId: `${cfg.oidcClientIdPrefix}${nextTenantId}`,
+              redirectUri,
+              tenantId: nextTenantId,
+            })
+      await mgr.signinRedirect({
+        extraQueryParams: options?.loginHint ? { login_hint: options.loginHint } : undefined,
+      })
     },
-    [tenantId, userManager, setTenantId],
+    [tenantId, userManager, setTenantId, cfg.oidcAuthority, cfg.oidcClientIdPrefix, redirectUri],
   )
 
   const completeSignIn = useCallback(async (callbackUrl?: string) => {
@@ -168,7 +182,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     setError(null)
     try {
       await userManager.signoutRedirect({
-        post_logout_redirect_uri: `${globalThis.location?.origin ?? ''}/#/`,
+        post_logout_redirect_uri: `${globalThis.location?.origin ?? ''}/#/login`,
       })
     } catch (e: unknown) {
       // Some Keycloak clients may not have front-channel logout configured; still clear local state.

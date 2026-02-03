@@ -23,7 +23,7 @@ export default function HomeScreen({
   onCreateNew: (_draft: CreateFrameworkDraft) => void
 }>) {
   const [createOpen, setCreateOpen] = useState(false)
-  const { status, tenantId, setTenantId, userName, signIn, signOut, getAccessToken } = useAuth()
+  const { status, tenantId, userName, signOut, getAccessToken } = useAuth()
   const cfg = getAppConfig()
 
   const api = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })), [cfg.opencaseBaseUrl, getAccessToken])
@@ -69,24 +69,14 @@ export default function HomeScreen({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2 rounded-xl border border-black/10 bg-white px-3 py-2">
-              <div className="text-xs font-semibold text-slate-700">Tenant</div>
-              <input
-                className="w-28 rounded-md border border-black/10 bg-white px-2 py-1 text-sm text-slate-900 focus:outline-2 focus:outline-violet-700/30"
-                value={tenantId}
-                onChange={(e) => setTenantId(e.target.value)}
-                placeholder="demo"
-              />
-            </div>
-
             <Button
               variant="secondary"
               onClick={() => {
                 if (status === 'authenticated') void signOut()
-                else void signIn(tenantId)
               }}
+              disabled={status !== 'authenticated'}
             >
-              {status === 'authenticated' ? 'Sign out' : 'Sign in'}
+              Sign out
             </Button>
 
             <Button onClick={() => setCreateOpen(true)}>
@@ -100,6 +90,9 @@ export default function HomeScreen({
           <div className="rounded-full border border-black/10 bg-white px-3 py-1">
             {status === 'authenticated' ? `Signed in${userName ? ` as ${userName}` : ''}` : status === 'loading' ? 'Auth: loading…' : 'Not signed in'}
           </div>
+          {status === 'authenticated' ? (
+            <div className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-slate-600">Tenant: {tenantId}</div>
+          ) : null}
 
           <Button
             variant="secondary"
