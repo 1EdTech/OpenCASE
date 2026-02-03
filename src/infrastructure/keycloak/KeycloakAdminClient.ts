@@ -99,6 +99,35 @@ export class KeycloakAdminClient {
     return { id: created.id }
   }
 
+  async findUserByEmailExact (email: string): Promise<{ id: string, username?: string, email?: string } | null> {
+    const realm = this.cfg.realm
+    const users = await this.requestJson(
+      'GET',
+      `/admin/realms/${encodeURIComponent(realm)}/users?email=${encodeURIComponent(email)}&exact=true`
+    )
+    const u = Array.isArray(users) ? users[0] : undefined
+    return u?.id ? { id: u.id, username: u.username, email: u.email } : null
+  }
+
+  async listClients (opts?: { max?: number }): Promise<Array<{ id: string, clientId: string }>> {
+    const realm = this.cfg.realm
+    const max = opts?.max ?? 2000
+    const list = await this.requestJson('GET', `/admin/realms/${encodeURIComponent(realm)}/clients?max=${max}`)
+    if (!Array.isArray(list)) return []
+    return list
+      .map((c: any) => ({ id: c?.id as string | undefined, clientId: c?.clientId as string | undefined }))
+      .filter((c: any) => typeof c.id === 'string' && typeof c.clientId === 'string') as Array<{ id: string, clientId: string }>
+  }
+
+  async getUserClientRoleMappings (userId: string, clientUuid: string): Promise<any[]> {
+    const realm = this.cfg.realm
+    const roles = await this.requestJson(
+      'GET',
+      `/admin/realms/${encodeURIComponent(realm)}/users/${encodeURIComponent(userId)}/role-mappings/clients/${encodeURIComponent(clientUuid)}`
+    )
+    return Array.isArray(roles) ? roles : []
+  }
+
   async setUserPassword (userId: string, password: string, temporary: boolean): Promise<void> {
     const realm = this.cfg.realm
     await this.requestJson('PUT', `/admin/realms/${encodeURIComponent(realm)}/users/${encodeURIComponent(userId)}/reset-password`, {

@@ -63,12 +63,14 @@ import { CaseApiClient } from '../infrastructure/http/CaseApiClient'
 import { JsonSchemaValidator } from '../infrastructure/validation/JsonSchemaValidator'
 import { KeycloakAdminClient } from '../infrastructure/keycloak/KeycloakAdminClient'
 import { KeycloakTenantProvisioner } from '../infrastructure/keycloak/KeycloakTenantProvisioner'
+import { TenantLookupController } from '../interfaces/http/http-public/public/controllers/TenantLookupController'
 
 export interface Container {
   config: AppConfig
   logger: typeof logger
   jwtVerifier: OidcJwtVerifier
   store: FileFrameworkStore
+  keycloakAdmin: KeycloakAdminClient
   controllers: {
     v1p0: {
       cfPackages: CFPackagesControllerV1p0
@@ -106,6 +108,9 @@ export interface Container {
       cfAssociations: CFAssociationsManagementController
       cfPackages: CFPackagesManagementController
       tenants: TenantsManagementController
+    }
+    public: {
+      tenantLookup: TenantLookupController
     }
   }
 }
@@ -289,11 +294,16 @@ export async function buildContainer(): Promise<Container> {
     config.caseDataDir
   )
 
+  const tenantLookupController = new TenantLookupController(keycloakAdmin, {
+    clientIdPrefix: config.oidcClientIdPrefix
+  })
+
   return {
     config,
     logger,
     jwtVerifier,
     store,
+    keycloakAdmin,
     controllers: {
       v1p0: {
         cfPackages: cfPackagesControllerV1p0,
@@ -331,6 +341,9 @@ export async function buildContainer(): Promise<Container> {
         cfAssociations: cfAssociationsManagementController,
         cfPackages: cfPackagesManagementController,
         tenants: tenantsManagementController
+      },
+      public: {
+        tenantLookup: tenantLookupController
       }
     }
   }

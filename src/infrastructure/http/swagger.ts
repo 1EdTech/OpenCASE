@@ -19,7 +19,8 @@ export function generateOpenApiFromJSDoc (opts: { baseUrl: string, caseVersion: 
 
   const apis = [
     publicRoutesFile,
-    path.join(srcRoot, 'interfaces/http/http-management/routes.ts')
+    path.join(srcRoot, 'interfaces/http/http-management/routes.ts'),
+    path.join(srcRoot, 'interfaces/http/http-public/public/routes.ts')
   ]
 
   const definition = {
