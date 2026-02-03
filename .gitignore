@@ -38,3 +38,5 @@ coverage
 
 # OS / misc
 Thumbs.db
+
+.npm-cache

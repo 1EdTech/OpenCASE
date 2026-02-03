@@ -1,5 +1,5 @@
 import type { Edge } from '@xyflow/react'
-import type { CFDocument, CFItem } from '@/domain/case/types'
+import type { CFAssociation, CFDocument, CFItem, CFPackage } from '@/domain/case/types'
 import type { CaseEditorNodeType, CaseFrameworkNodeType, CaseItemNodeType } from '@/ui/editor/reactflow/types'
 
 export type EditorGraph = {
@@ -140,6 +140,73 @@ export function createSampleGraph(): EditorGraph {
     { id: 'n1-n2', source: 'n1', target: 'n2' },
     { id: 'n2-n3', source: 'n2', target: 'n3' },
   ]
+
+  return { nodes, edges }
+}
+
+export function createGraphFromCfPackage(pkg: CFPackage): EditorGraph {
+  const doc = pkg.CFDocument
+  const wrapperNodeClassName = 'bg-transparent border-0 p-0 shadow-none'
+
+  const fwNode: CaseFrameworkNodeType = {
+    id: doc.identifier,
+    type: 'caseFrameworkNode',
+    position: { x: 0, y: HEADER_SAFE_Y },
+    style: { width: 520, height: 210 },
+    data: { cfDocument: doc },
+    className: wrapperNodeClassName,
+  }
+
+  const nodes: CaseEditorNodeType[] = [fwNode]
+  const edges: Edge[] = []
+
+  const itemById = new Map<string, CFItem>((pkg.CFItems ?? []).map((it) => [it.identifier, it]))
+  const parentByChild = new Map<string, string>()
+
+  for (const a of pkg.CFAssociations ?? []) {
+    // For hierarchical edges, treat destination as parent and origin as child for layout.
+    const type = (a.associationType ?? '').toLowerCase()
+    if (type !== 'ischildof' && type !== 'ispartof') continue
+    const childId = a.originNodeURI?.identifier
+    const parentId = a.destinationNodeURI?.identifier
+    if (!childId || !parentId) continue
+    parentByChild.set(childId, parentId)
+  }
+
+  const sortedItems = Array.from(itemById.values()).sort((a, b) => a.identifier.localeCompare(b.identifier))
+  let y = HEADER_SAFE_Y + 210 + 140
+  for (const it of sortedItems) {
+    const parentId = parentByChild.get(it.identifier) ?? doc.identifier
+    const node: CaseItemNodeType = {
+      id: it.identifier,
+      type: 'caseItemNode',
+      position: { x: 0, y },
+      style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
+      data: { cfItem: it, parentId },
+      className: wrapperNodeClassName,
+    }
+    nodes.push(node)
+    y += DEFAULT_NODE_HEIGHT + 100
+  }
+
+  // Build edges used by layout (source=parent, target=child).
+  for (const it of sortedItems) {
+    const parentId = parentByChild.get(it.identifier) ?? doc.identifier
+    const edgeId = `e_${parentId}_${it.identifier}`
+    edges.push({ id: edgeId, source: parentId, target: it.identifier })
+  }
+
+  // Optionally include non-hierarchical associations as edges (kept separate from parentId wiring).
+  for (const a of pkg.CFAssociations ?? []) {
+    const type = (a.associationType ?? '').toLowerCase()
+    if (type === 'ischildof' || type === 'ispartof') continue
+    const fromId = a.originNodeURI?.identifier
+    const toId = a.destinationNodeURI?.identifier
+    if (!fromId || !toId) continue
+    if (!itemById.has(fromId) || !itemById.has(toId)) continue
+    const edgeId = a.identifier || `a_${fromId}_${toId}`
+    edges.push({ id: edgeId, source: fromId, target: toId })
+  }
 
   return { nodes, edges }
 }

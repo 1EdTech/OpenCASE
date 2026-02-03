@@ -1,14 +1,54 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { EditorProvider } from '@/ui/editor/state/EditorContext'
 import EditorCanvas from '@/ui/editor/EditorCanvas'
 import HomeScreen from '@/ui/home/HomeScreen'
 import { createNewFrameworkDraft, loadFrameworks, saveFrameworks, type HomeFramework } from '@/ui/home/frameworkStore'
 import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
+import { AuthProvider, useAuth } from '@/app/providers/AuthProvider'
+import { getAppConfig } from '@/app/config'
+import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
+import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
+import { createGraphFromCfPackage } from '@/ui/editor/state/editorFactories'
 
 export default function App() {
+  return (
+    <AuthProvider>
+      <AppInner />
+    </AuthProvider>
+  )
+}
+
+function AppInner() {
+  const { completeSignIn, getAccessToken } = useAuth()
+  const cfg = getAppConfig()
+  const api = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })), [cfg.opencaseBaseUrl, getAccessToken])
+
   const [screen, setScreen] = useState<'home' | 'editor'>('home')
   const [frameworks, setFrameworks] = useState<HomeFramework[]>(() => loadFrameworks())
   const [activeFrameworkId, setActiveFrameworkId] = useState<string | null>(null)
+
+  const [authCallbackState, setAuthCallbackState] = useState<'idle' | 'processing' | 'error'>('idle')
+  const [remoteOpenState, setRemoteOpenState] = useState<'idle' | 'loading'>('idle')
+
+  useEffect(() => {
+    const hash = globalThis.location?.hash ?? ''
+    if (!hash.startsWith('#/auth/callback')) return
+    // Capture the full URL (includes one-time code), then immediately strip it from the address bar.
+    // This avoids accidental double-redemption (e.g. React StrictMode remount in dev).
+    const href = globalThis.location?.href ?? ''
+    globalThis.history?.replaceState(null, '', '/#/auth/callback')
+
+    setAuthCallbackState('processing')
+    completeSignIn(href)
+      .then(() => {
+        // Clear callback hash (and any query params) from the URL.
+        globalThis.history?.replaceState(null, '', '/#/')
+        setAuthCallbackState('idle')
+      })
+      .catch(() => {
+        setAuthCallbackState('error')
+      })
+  }, [completeSignIn])
 
   const activeFramework = useMemo(() => {
     if (!activeFrameworkId) return null
@@ -31,12 +71,75 @@ export default function App() {
     setScreen('editor')
   }, [])
 
+  const openRemoteFramework = useCallback(
+    async (docId: string) => {
+      setRemoteOpenState('loading')
+      try {
+        const pkg = await api.getCfPackage({ docId, caseVersion: 'v1p1' })
+        const graph = createGraphFromCfPackage(pkg)
+        const fw: HomeFramework = { id: pkg.CFDocument.identifier, cfDocument: pkg.CFDocument, graph }
+
+        setFrameworks((prev) => {
+          const exists = prev.some((f) => f.id === fw.id)
+          const next = exists ? prev : [fw, ...prev]
+          // Persist so a refresh doesn't lose the loaded backend framework.
+          saveFrameworks(next)
+          return next
+        })
+
+        setActiveFrameworkId(fw.id)
+        setScreen('editor')
+      } finally {
+        setRemoteOpenState('idle')
+      }
+    },
+    [api],
+  )
+
+  if (authCallbackState === 'processing') {
+    return (
+      <div className="min-h-screen w-full bg-slate-50">
+        <div className="mx-auto w-full max-w-2xl px-5 py-12">
+          <div className="text-lg font-semibold text-slate-900">Signing you in…</div>
+          <div className="mt-2 text-sm text-slate-600">Completing login redirect.</div>
+        </div>
+      </div>
+    )
+  }
+
+  if (authCallbackState === 'error') {
+    return (
+      <div className="min-h-screen w-full bg-slate-50">
+        <div className="mx-auto w-full max-w-2xl px-5 py-12">
+          <div className="text-lg font-semibold text-slate-900">Sign-in failed</div>
+          <div className="mt-2 text-sm text-slate-600">Please try signing in again.</div>
+        </div>
+      </div>
+    )
+  }
+
   if (screen === 'home') {
-    return <HomeScreen frameworks={frameworks} onOpenFramework={openFramework} onCreateNew={createNew} />
+    return (
+      <HomeScreen
+        frameworks={frameworks}
+        onOpenFramework={openFramework}
+        onOpenRemoteFramework={openRemoteFramework}
+        remoteOpenLoading={remoteOpenState === 'loading'}
+        onCreateNew={createNew}
+      />
+    )
   }
 
   if (!activeFramework) {
-    return <HomeScreen frameworks={frameworks} onOpenFramework={openFramework} onCreateNew={createNew} />
+    return (
+      <HomeScreen
+        frameworks={frameworks}
+        onOpenFramework={openFramework}
+        onOpenRemoteFramework={openRemoteFramework}
+        remoteOpenLoading={remoteOpenState === 'loading'}
+        onCreateNew={createNew}
+      />
+    )
   }
 
   return (

@@ -12,8 +12,10 @@ import ConfirmLeaveDialog from '@/ui/editor/components/ConfirmLeaveDialog'
 import { useEditor } from '@/ui/editor/state/EditorContext'
 import type { CaseEditorNodeType } from '@/ui/editor/reactflow/types'
 import type { CFDocument, CFItem } from '@/domain/case/types'
+import { useAuth } from '@/app/providers/AuthProvider'
 
-export default function EditorCanvas({ onBack }: { onBack?: () => void }) {
+export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void }>) {
+  const { status: authStatus, userName, tenantId, signIn, signOut } = useAuth()
   const {
     nodesWithCallbacks,
     edges: editorEdges,
@@ -81,7 +83,7 @@ export default function EditorCanvas({ onBack }: { onBack?: () => void }) {
           nodeCount,
           itemCount,
           childItemCount,
-          reattachChildren: includesFramework ? false : true,
+          reattachChildren: !includesFramework,
           isFrameworkDelete: includesFramework,
           resolve,
         })
@@ -202,7 +204,7 @@ export default function EditorCanvas({ onBack }: { onBack?: () => void }) {
     if (!instance || !wrap) return
 
     const HEADER_OVERLAY_PX = 72 // header height + breathing room
-    const MAX_INITIAL_ZOOM = 1.0 // avoid over-zooming when the graph is small (e.g. new/empty framework)
+    const MAX_INITIAL_ZOOM = 1 // avoid over-zooming when the graph is small (e.g. new/empty framework)
     const SAFE_TOP_PX = 96 // keep the framework node just under the floating header
     const animate = didInitialViewportRef.current
     const fitDuration = animate ? 200 : 0
@@ -303,8 +305,22 @@ export default function EditorCanvas({ onBack }: { onBack?: () => void }) {
       <CanvasHeader
         frameworkTitle={frameworkInfo.title}
         frameworkSubtitle={frameworkInfo.subtitle}
-        userName="Taylor Couper"
+        userName={userName ?? undefined}
         reserveRightForPanel={Boolean(selectedNode)}
+        onSignIn={
+          authStatus === 'authenticated'
+            ? undefined
+            : () => {
+                void signIn(tenantId)
+              }
+        }
+        onSignOut={
+          authStatus !== 'authenticated'
+            ? undefined
+            : () => {
+                void signOut()
+              }
+        }
         onBack={
           onBack
             ? () => {

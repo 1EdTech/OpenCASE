@@ -101,12 +101,16 @@ export default function CanvasHeader({
   userName,
   reserveRightForPanel,
   onBack,
+  onSignIn,
+  onSignOut,
 }: {
   frameworkTitle: string
   frameworkSubtitle?: string
   userName?: string
   reserveRightForPanel?: boolean
   onBack?: () => void
+  onSignIn?: () => void
+  onSignOut?: () => void
 }) {
   const avatarText = useMemo(() => initials(userName), [userName])
 
@@ -153,7 +157,9 @@ export default function CanvasHeader({
             items={[
               { label: userName ? `Signed in as ${userName}` : 'Not signed in', disabled: true },
               'divider',
-              { label: userName ? 'Sign out' : 'Sign in', icon: ArrowRightOnRectangleIcon, onClick: () => {} },
+              userName
+                ? { label: 'Sign out', icon: ArrowRightOnRectangleIcon, onClick: onSignOut, disabled: !onSignOut }
+                : { label: 'Sign in', icon: ArrowRightOnRectangleIcon, onClick: onSignIn, disabled: !onSignIn },
             ]}
           />
 
