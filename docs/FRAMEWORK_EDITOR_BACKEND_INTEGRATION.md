@@ -10,12 +10,11 @@ This document is intended as **integration context** for a separate “framework
 
 ## What this project provides
 
-OpenCASE exposes three relevant HTTP surfaces:
+OpenCASE exposes two relevant HTTP surfaces:
 
 - **External OIDC provider (Keycloak)** for login + tokens (OpenCASE no longer issues tokens)
 - **CASE Provider API (read-only, spec-aligned)**: `/ims/case/v1p1/*` (and v1p0 in the project, but v1p1 is the primary path in `src/interfaces/http/server.ts`)
-- **Non-standard Management API (write operations)**: `/management/*` (update/delete + tenant/account/client management)
-- **Admin “authoring” endpoints**: `/admin/*` (not the HTML admin UI; these are JSON endpoints for creating/importing framework bundles)
+- **Non-standard Management API (write operations + tenant admin)**: `/management/*` (create/import CFPackage bundles + update/delete CASE entities + tenant management)
 
 All framework data is persisted **to disk** under `data/tenants/<tenantId>/v1p1/...` (and/or `v1p0`).
 
@@ -37,7 +36,6 @@ All framework data is persisted **to disk** under `data/tenants/<tenantId>/v1p1/
 
 - **All** routes under:
   - `/ims/case/*`
-  - `/admin/*`
   - `/management/*`
   require an `Authorization: Bearer <JWT>` header.
 - OpenCASE does **not** provide `/oauth/*` token issuance in this deployment; tokens come from **Keycloak**.
@@ -126,7 +124,7 @@ Add:
 
 - `Authorization: Bearer <access_token>`
 
-to all `/ims/case/*`, `/admin/*`, and `/management/*` calls.
+to all `/ims/case/*` and `/management/*` calls.
 
 ### Alternative (recommended for production): BFF / token broker
 
@@ -150,7 +148,7 @@ The API uses a JWT verifier that requires:
 - **issuer** matches configured issuer
 - **audience** matches configured audience
 
-Tokens issued by OpenCASE include:
+Tokens issued by Keycloak (in this deployment) include:
 
 - `tenantId` (used to scope which tenant’s frameworks you can access)
 - `scope` (space-separated OAuth scopes, used by some management routes)
@@ -168,16 +166,15 @@ Scopes exist and are returned in tokens, and **some** endpoints enforce them:
 - `case.admin` is enforced for:
   - `GET /management/tenants`
   - `POST /management/tenants`
-- `case.owner` is enforced for account management under:
-  - `/management/tenants/:tenantId/accounts/*`
-- `case.owner` **or** `case.admin` is enforced for OAuth client management under:
-  - `/management/tenants/:tenantId/clients/*`
+- Other management endpoints are currently protected by:
+  - a valid JWT
+  - tenant mismatch protection (token tenantId must match URL tenantId)
 
 As of the current code, the write endpoints for updating CASE entities:
 
-- `PUT/DELETE /management/tenants/:tenantId/CFDocuments/:id`
-- `PUT/DELETE /management/tenants/:tenantId/CFItems/:id`
-- `PUT/DELETE /management/tenants/:tenantId/CFAssociations/:id`
+- `PUT/DELETE /management/tenants/:tenantId/ims/case/v1p1/CFDocuments/:id` (or `v1p0`)
+- `PUT/DELETE /management/tenants/:tenantId/ims/case/v1p1/CFItems/:id` (or `v1p0`)
+- `PUT/DELETE /management/tenants/:tenantId/ims/case/v1p1/CFAssociations/:id` (or `v1p0`)
 
 do **not** additionally require `case.write` at the router level (they still require a valid JWT and correct tenant).
 
@@ -185,11 +182,11 @@ do **not** additionally require `case.write` at the router level (they still req
 
 ## How to list and consume frameworks (read side)
 
-### Option A (recommended for editors): list frameworks via Management API
+### Option A (recommended for editors): list CFPackages via Management API
 
-**List frameworks for a tenant**
+**List CFPackages for a tenant (non-standard)**
 
-- `GET /management/tenants/{tenantId}/frameworks?caseVersion=1.1`
+- `GET /management/tenants/{tenantId}/CFPackages?caseVersion=1.1`
 - Returns metadata including `sourcedId` (document id) + `caseVersion`.
 
 Use this to drive your editor’s “open framework” picker.
@@ -234,7 +231,8 @@ This means you can implement editing in two main ways:
 
 **Endpoint**
 
-- `POST /admin/tenants/{tenantId}/frameworks?caseVersion=1.1`
+- `POST /management/tenants/{tenantId}/ims/case/v1p1/CFPackages`
+  - (or v1p0): `POST /management/tenants/{tenantId}/ims/case/v1p0/CFPackages`
 
 **Body shape expected by OpenCASE**
 
@@ -254,12 +252,18 @@ This means you can implement editing in two main ways:
   - `/ims/case/v1p1/CFDocuments/{docId}`
   - `/ims/case/v1p1/CFPackages/{docId}`
 - Calling this endpoint again with the same `document.sourcedId` will create **another** version on disk (i.e., “publish new revision”).
+- **Schema note**: OpenCASE validates against the CASE CFPackage schema. Minimal requirements that often trip up test payloads:
+  - `document.creator` is required
+  - every `sourcedId` must be a **UUID**
+  - each CFItem requires `uri`, `lastChangeDateTime`, and a `CFDocumentURI` link object
+  - each CFAssociation requires `uri`, `lastChangeDateTime`, plus `originNodeURI` and `destinationNodeURI` link objects (not plain `originNode` / `destinationNode` strings)
 
 ### Import a framework bundle from a remote endpoint (optional)
 
 **Endpoint**
 
-- `POST /admin/tenants/{tenantId}/frameworks/import?caseVersion=1.1`
+- `POST /management/tenants/{tenantId}/ims/case/v1p1/CFPackages/import`
+  - (or v1p0): `POST /management/tenants/{tenantId}/ims/case/v1p0/CFPackages/import`
 
 **Body**
 
@@ -280,40 +284,49 @@ These are non-standard endpoints meant for editor-style updates.
 
 **Update CFDocument**
 
-- `PUT /management/tenants/{tenantId}/CFDocuments/{docId}?caseVersion=1.1`
+- `PUT /management/tenants/{tenantId}/ims/case/v1p1/CFDocuments/{docId}`
+  - (or v1p0): `PUT /management/tenants/{tenantId}/ims/case/v1p0/CFDocuments/{docId}`
 - Body: **raw CFDocument JSON** (not wrapped)
 
 **Update CFItem**
 
-- `PUT /management/tenants/{tenantId}/CFItems/{itemId}?caseVersion=1.1`
+- `PUT /management/tenants/{tenantId}/ims/case/v1p1/CFItems/{itemId}`
+  - (or v1p0): `PUT /management/tenants/{tenantId}/ims/case/v1p0/CFItems/{itemId}`
 - Body: **raw CFItem JSON**
 
 **Update CFAssociation**
 
-- `PUT /management/tenants/{tenantId}/CFAssociations/{associationId}?caseVersion=1.1`
+- `PUT /management/tenants/{tenantId}/ims/case/v1p1/CFAssociations/{associationId}`
+  - (or v1p0): `PUT /management/tenants/{tenantId}/ims/case/v1p0/CFAssociations/{associationId}`
 - Body: **raw CFAssociation JSON**
 
 **Delete**
 
-- `DELETE /management/tenants/{tenantId}/CFDocuments/{docId}?caseVersion=1.1`
-- `DELETE /management/tenants/{tenantId}/CFItems/{itemId}?caseVersion=1.1`
-- `DELETE /management/tenants/{tenantId}/CFAssociations/{associationId}?caseVersion=1.1`
+- `DELETE /management/tenants/{tenantId}/ims/case/v1p1/CFDocuments/{docId}`
+- `DELETE /management/tenants/{tenantId}/ims/case/v1p1/CFItems/{itemId}`
+- `DELETE /management/tenants/{tenantId}/ims/case/v1p1/CFAssociations/{associationId}`
+- `DELETE /management/tenants/{tenantId}/ims/case/v1p1/CFPackages/{docId}` (delete entire framework bundle)
+
+**Note on CASE version selection for write operations**
+
+- For **mutation** endpoints (POST/PUT/DELETE), the CASE version is explicit in the path (`.../ims/case/v1p0/...` or `.../ims/case/v1p1/...`).
+- For **GET list** endpoints (e.g. `GET /management/tenants/{tenantId}/CFPackages`), `caseVersion=1.0|1.1` remains an optional query filter.
 
 **Note on “creating” new items/associations**
 
 There is no dedicated `POST /CFItems` or `POST /CFAssociations` management endpoint in the current server. To add new items/associations, use the **bundle publish** endpoint:
 
-- `POST /admin/tenants/{tenantId}/frameworks`
+- `POST /management/tenants/{tenantId}/ims/case/v1p1/CFPackages`
 
 ### Recommended editor workflow
 
 - **Open**:
-  - `GET /management/tenants/{tenantId}/frameworks?caseVersion=1.1`
+  - `GET /management/tenants/{tenantId}/CFPackages?caseVersion=1.1`
   - `GET /ims/case/v1p1/CFPackages/{docId}`
 - **Edit in UI** (local state)
 - **Save**:
-  - for “publish revision / adds new nodes/edges”: `POST /admin/tenants/{tenantId}/frameworks` with full bundle
-  - for “edit an existing node/edge”: `PUT /management/tenants/{tenantId}/CFItems/{id}` / `.../CFAssociations/{id}` / `.../CFDocuments/{id}`
+  - for “publish revision / adds new nodes/edges”: `POST /management/tenants/{tenantId}/ims/case/v1p1/CFPackages` with full bundle
+  - for “edit an existing node/edge”: `PUT /management/tenants/{tenantId}/ims/case/v1p1/CFItems/{id}` / `.../CFAssociations/{id}` / `.../CFDocuments/{id}`
 - **Refresh/canonicalize**:
   - re-fetch `GET /ims/case/v1p1/CFPackages/{docId}` after saving so the UI state matches persisted data
 
