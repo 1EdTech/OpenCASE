@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
 import type { CaseEdgeDataPatch, CaseEditorEdge, CaseAssociationType } from '../reactflow/types'
 import { CASE_ASSOCIATION_TYPES } from '../reactflow/types'
-import type { CaseEditorNodeType, CaseItemNodeType, CaseFrameworkNodeType } from '../reactflow/types'
+import type { CaseEditorNodeType, CaseItemNodeType, CaseFrameworkNodeType, ExternalFrameworkNodeType } from '../reactflow/types'
 
 type Props = {
   edge: CaseEditorEdge | null
@@ -51,9 +51,18 @@ export default function EdgePropertiesPanel({ edge, nodes, onClose, onChangeEdge
 
   const isItemNode = (n: CaseEditorNodeType): n is CaseItemNodeType => n.type === 'caseItemNode'
   const isFrameworkNode = (n: CaseEditorNodeType): n is CaseFrameworkNodeType => n.type === 'caseFrameworkNode'
+  const isExternalFrameworkNode = (n: CaseEditorNodeType): n is ExternalFrameworkNodeType => n.type === 'externalFrameworkNode'
+  const isAnyFrameworkNode = (n: CaseEditorNodeType | undefined): boolean => 
+    n ? (isFrameworkNode(n) || isExternalFrameworkNode(n)) : false
 
   const sourceNode = useMemo(() => nodes.find((n) => n.id === edge?.source), [nodes, edge?.source])
   const targetNode = useMemo(() => nodes.find((n) => n.id === edge?.target), [nodes, edge?.target])
+  
+  // Check if edge connects to a framework node - constrain to isPartOf only
+  const involvesFrameworkNode = isAnyFrameworkNode(sourceNode) || isAnyFrameworkNode(targetNode)
+  const allowedAssociationTypes = involvesFrameworkNode 
+    ? (['isPartOf'] as const)
+    : CASE_ASSOCIATION_TYPES
 
   const getNodeLabel = (node: CaseEditorNodeType | undefined): string => {
     if (!node) return 'Unknown'
@@ -228,12 +237,14 @@ export default function EdgePropertiesPanel({ edge, nodes, onClose, onChangeEdge
               <div className="mb-3">
                 <div className="text-sm font-semibold text-slate-900">Association Type</div>
                 <div className="text-xs text-slate-500">
-                  How the origin item relates to the destination.
+                  {involvesFrameworkNode 
+                    ? 'Framework connections must use "Is Part Of".'
+                    : 'How the origin item relates to the destination.'}
                 </div>
               </div>
 
               <div className="space-y-2">
-                {CASE_ASSOCIATION_TYPES.map((type) => (
+                {allowedAssociationTypes.map((type) => (
                   <label
                     key={type}
                     className={[

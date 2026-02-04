@@ -185,8 +185,17 @@ function reducer(state: EditorState, action: Action): EditorState {
     case 'edges/connect': {
       const { source, target, sourceHandle, targetHandle } = action.connection
       if (!source || !target) return state
-      // Default to isChildOf - source is child, target is parent
-      const defaultAssocType = 'isChildOf'
+      
+      // Check if either node is a framework node - use isPartOf for framework connections
+      const sourceNode = state.nodes.find((n) => n.id === source)
+      const targetNode = state.nodes.find((n) => n.id === target)
+      const involvesFramework = 
+        sourceNode?.type === 'caseFrameworkNode' || 
+        sourceNode?.type === 'externalFrameworkNode' ||
+        targetNode?.type === 'caseFrameworkNode' || 
+        targetNode?.type === 'externalFrameworkNode'
+      
+      const defaultAssocType = involvesFramework ? 'isPartOf' : 'isChildOf'
       
       const newEdge: CaseEditorEdge = {
         id: `e_${source}_${target}_${Date.now()}`,
@@ -421,8 +430,11 @@ function reducer(state: EditorState, action: Action): EditorState {
         childSize
       )
       
+      // Determine association type: isPartOf for framework connections, isChildOf for item-to-item
+      const isParentFramework = isFrameworkNode(parent) || parent.type === 'externalFrameworkNode'
+      const assocType = isParentFramework ? 'isPartOf' : 'isChildOf'
+      
       // Edge visually flows parent → child (hierarchy flows down/out)
-      // But semantically: child isChildOf parent
       // The cfAssociation origin/destination track the semantic relationship
       const nextEdges: CaseEditorEdge[] = [
         ...state.edges.map((e) => ({ ...e, selected: false })),
@@ -432,12 +444,12 @@ function reducer(state: EditorState, action: Action): EditorState {
           target: childId,          // Visual: edge ends at child (arrow points here)
           sourceHandle: handles.sourceHandle,
           targetHandle: handles.targetHandle,
-          label: makeEdgeLabel('isChildOf'),
+          label: makeEdgeLabel(assocType),
           labelStyle: { fill: '#94a3b8', fontSize: 11, fontWeight: 500 },
-          ...getEdgeMarkers('isChildOf'),
+          ...getEdgeMarkers(assocType),
           data: { 
             isHierarchical: true, 
-            associationType: 'isChildOf',
+            associationType: assocType,
             // Track semantic origin/destination separately
             semanticOrigin: childId,
             semanticDestination: action.parentId,
