@@ -10,17 +10,6 @@ import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import CanvasHeader from '@/ui/editor/components/CanvasHeader'
 
-function AuthStatusBadge({ status, userName }: Readonly<{ status: string; userName: string | null }>) {
-  if (status === 'authenticated') {
-    const label = userName ? `Signed in as ${userName}` : 'Signed in'
-    return <div className="rounded-full border border-black/10 bg-white px-3 py-1">{label}</div>
-  }
-  if (status === 'loading') {
-    return <div className="rounded-full border border-black/10 bg-white px-3 py-1">Auth: loading…</div>
-  }
-  return <div className="rounded-full border border-black/10 bg-white px-3 py-1">Not signed in</div>
-}
-
 function OpenCaseFrameworksContent({
   isAuthenticated,
   isLoading,
@@ -165,6 +154,7 @@ export default function HomeScreen({
         frameworkTitle="CASE Editor"
         frameworkSubtitle="Home"
         userName={userName ?? undefined}
+        tenantId={tenantId ?? undefined}
         reserveRightForPanel={false}
         onSignOut={isAuthenticated ? () => void signOut() : undefined}
       />
@@ -177,14 +167,6 @@ export default function HomeScreen({
             <PlusIcon className="h-4 w-4" aria-hidden />
             Create framework
           </Button>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-700">
-          <AuthStatusBadge status={status} userName={userName} />
-          {isAuthenticated && (
-            <div className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs text-slate-600">Tenant: {tenantId}</div>
-          )}
-          <div className="text-xs text-slate-500">API: {cfg.opencaseBaseUrl}</div>
         </div>
 
         {/* OpenCASE Frameworks Section */}

@@ -171,7 +171,9 @@ export default function CanvasHeader({
   frameworkTitle,
   frameworkSubtitle,
   userName,
+  tenantId,
   reserveRightForPanel,
+  showSettings,
   onBack,
   onSignIn,
   onSignOut,
@@ -180,12 +182,38 @@ export default function CanvasHeader({
   frameworkTitle: string
   frameworkSubtitle?: string
   userName?: string
+  tenantId?: string
   reserveRightForPanel?: boolean
+  showSettings?: boolean
   onBack?: () => void
   onSignIn?: () => void
   onSignOut?: () => void
   onOpenSettings?: () => void
 }) {
+  // Build user menu items
+  const userMenuItems: (MenuItem | 'divider')[] = []
+  
+  // Show user name if signed in
+  if (userName) {
+    userMenuItems.push({ label: `Signed in as ${userName}`, disabled: true })
+  } else {
+    userMenuItems.push({ label: 'Not signed in', disabled: true })
+  }
+  
+  // Show tenant if available
+  if (tenantId) {
+    userMenuItems.push({ label: `Tenant: ${tenantId}`, disabled: true })
+  }
+  
+  userMenuItems.push('divider')
+  
+  // Sign in/out action
+  if (userName) {
+    userMenuItems.push({ label: 'Sign out', icon: ArrowRightOnRectangleIcon, onClick: onSignOut, disabled: !onSignOut })
+  } else {
+    userMenuItems.push({ label: 'Sign in', icon: ArrowRightOnRectangleIcon, onClick: onSignIn, disabled: !onSignIn })
+  }
+
   return (
     <div
       className="pointer-events-none absolute top-3 z-10"
@@ -214,25 +242,18 @@ export default function CanvasHeader({
         </div>
 
         <div className="flex items-center gap-2">
-          <PopoverMenu
-            label="Settings"
-            icon={Cog6ToothIcon}
-            items={[
-              { label: 'Settings', icon: Cog6ToothIcon, onClick: onOpenSettings },
-              { label: 'Help', icon: QuestionMarkCircleIcon, onClick: () => {} },
-            ]}
-          />
+          {showSettings ? (
+            <PopoverMenu
+              label="Settings"
+              icon={Cog6ToothIcon}
+              items={[
+                { label: 'Settings', icon: Cog6ToothIcon, onClick: onOpenSettings },
+                { label: 'Help', icon: QuestionMarkCircleIcon, onClick: () => {} },
+              ]}
+            />
+          ) : null}
 
-          <AvatarMenu
-            userName={userName}
-            items={[
-              { label: userName ? `Signed in as ${userName}` : 'Not signed in', disabled: true },
-              'divider',
-              userName
-                ? { label: 'Sign out', icon: ArrowRightOnRectangleIcon, onClick: onSignOut, disabled: !onSignOut }
-                : { label: 'Sign in', icon: ArrowRightOnRectangleIcon, onClick: onSignIn, disabled: !onSignIn },
-            ]}
-          />
+          <AvatarMenu userName={userName} items={userMenuItems} />
         </div>
       </div>
     </div>
