@@ -125,63 +125,31 @@
   }
 }
 
-
-/* React Flow edge styles - matching node selection visual language */
-.react-flow__edges {
-  pointer-events: all;
-}
-
+/* React Flow edge styles for better selection feedback */
 .react-flow__edge {
   cursor: pointer;
-  pointer-events: all;
 }
 
 .react-flow__edge-path {
-  stroke: #94a3b8; /* slate-400 - default edge color */
-  stroke-width: 1.5;
-  transition: stroke 0.2s ease, stroke-width 0.2s ease, filter 0.2s ease;
+  stroke-width: 2;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease;
 }
 
-/* Hover state - subtle highlight */
 .react-flow__edge:hover .react-flow__edge-path {
-  stroke: #a78bfa; /* violet-400 */
-  stroke-width: 2;
+  stroke: #7c3aed; /* violet-600 */
+  stroke-width: 3;
 }
 
-/* Selected state - matches node selection border exactly (violet-500) */
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke: #8b5cf6; /* violet-500 - exact match to border-violet-500 */
-  stroke-width: 2;
-  filter: drop-shadow(0 0 3px rgba(139, 92, 246, 0.25));
+  stroke: #7c3aed; /* violet-600 */
+  stroke-width: 3;
 }
 
-/* Invisible but clickable interaction area for edges */
+/* Make the edge interaction area visible on hover for debugging - can be removed */
 .react-flow__edge-interaction {
   stroke-width: 20;
   stroke: transparent;
   fill: none;
   cursor: pointer;
-  pointer-events: stroke;
 }
 
-/* Arrow marker colors - match edge states */
-.react-flow__edge marker path {
-  fill: #94a3b8;
-}
-
-.react-flow__edge:hover marker path {
-  fill: #a78bfa;
-}
-
-.react-flow__edge.selected marker path {
-  fill: #8b5cf6;
-}
-
-/* Handle styling for side handles */
-.react-flow__handle {
-  transition: transform 0.15s ease, background-color 0.15s ease;
-}
-
-.react-flow__handle:hover {
-  transform: scale(1.3);
-}

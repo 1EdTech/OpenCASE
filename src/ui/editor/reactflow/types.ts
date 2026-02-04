@@ -18,8 +18,22 @@ export type CaseFrameworkNodeData = {
 
 export type CaseFrameworkNodeType = Node<CaseFrameworkNodeData, 'caseFrameworkNode'>
 
-export type CaseEditorNodeData = CaseItemNodeData | CaseFrameworkNodeData
-export type CaseEditorNodeType = CaseItemNodeType | CaseFrameworkNodeType
+/** Data for external/remote framework reference nodes */
+export type ExternalFrameworkNodeData = {
+  /** Title of the external framework */
+  title: string
+  /** URI or identifier of the external framework */
+  uri?: string
+  /** Description or notes about this external reference */
+  description?: string
+  /** Source system or origin (e.g., "OpenCASE", "State Standards") */
+  source?: string
+}
+
+export type ExternalFrameworkNodeType = Node<ExternalFrameworkNodeData, 'externalFrameworkNode'>
+
+export type CaseEditorNodeData = CaseItemNodeData | CaseFrameworkNodeData | ExternalFrameworkNodeData
+export type CaseEditorNodeType = CaseItemNodeType | CaseFrameworkNodeType | ExternalFrameworkNodeType
 
 export type CaseItemNodeDataPatch = Partial<Omit<CaseItemNodeData, 'cfItem'>> & {
   cfItem?: Partial<CFItem>
@@ -29,7 +43,9 @@ export type CaseFrameworkNodeDataPatch = Partial<Omit<CaseFrameworkNodeData, 'cf
   cfDocument?: Partial<CFDocument>
 }
 
-export type CaseEditorNodeDataPatch = CaseItemNodeDataPatch | CaseFrameworkNodeDataPatch
+export type ExternalFrameworkNodeDataPatch = Partial<ExternalFrameworkNodeData>
+
+export type CaseEditorNodeDataPatch = CaseItemNodeDataPatch | CaseFrameworkNodeDataPatch | ExternalFrameworkNodeDataPatch
 
 // ========== Edge Types ==========
 

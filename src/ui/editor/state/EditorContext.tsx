@@ -9,6 +9,8 @@ import type {
   CaseFrameworkNodeType,
   CaseItemNodeData,
   CaseItemNodeType,
+  ExternalFrameworkNodeType,
+  ExternalFrameworkNodeData,
 } from '@/ui/editor/reactflow/types'
 import type { CFDocument, CFItem } from '@/domain/case/types'
 import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
@@ -103,6 +105,8 @@ type Action =
   | { type: 'node/updateData'; nodeId: string; patch: CaseEditorNodeDataPatch }
   | { type: 'edge/updateData'; edgeId: string; patch: CaseEdgeDataPatch }
   | { type: 'node/addChild'; parentId: string; childId: string; cfItem: CFItem }
+  | { type: 'node/addDetachedItem'; nodeId: string; cfItem: CFItem }
+  | { type: 'node/addExternalFramework'; nodeId: string; data: ExternalFrameworkNodeData }
   | { type: 'graph/delete'; nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }
   | { type: 'layout/apply'; positions: Record<string, { x: number; y: number }> }
   | { type: 'graph/load'; graph: EditorGraph }
@@ -245,6 +249,50 @@ function reducer(state: EditorState, action: Action): EditorState {
 
       return { ...state, nodes: nextNodes, edges: nextEdges, selectedNodeId: childId, selectedEdgeId: null, dirty: true }
     }
+    case 'node/addDetachedItem': {
+      // Find a good position for the new detached item (bottom-right of existing nodes)
+      const existingNodes = state.nodes
+      const maxX = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.x)) : 0
+      const maxY = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.y)) : HEADER_SAFE_Y
+
+      const desiredPosition = { x: maxX + DEFAULT_NODE_WIDTH + 60, y: maxY }
+      const nodeSize = { w: DEFAULT_NODE_WIDTH, h: DEFAULT_NODE_HEIGHT }
+      const nextPosition = findNonOverlappingPosition(desiredPosition, nodeSize, state.nodes)
+
+      const newNode: CaseItemNodeType = {
+        id: action.nodeId,
+        type: 'caseItemNode',
+        position: nextPosition,
+        style: { width: DEFAULT_NODE_WIDTH, height: DEFAULT_NODE_HEIGHT },
+        data: { cfItem: action.cfItem }, // No parentId - detached
+        className: wrapperNodeClassName,
+      }
+
+      const nextNodes = [...state.nodes.map((n) => ({ ...n, selected: false })), { ...newNode, selected: true }]
+      return { ...state, nodes: nextNodes, selectedNodeId: action.nodeId, selectedEdgeId: null, dirty: true }
+    }
+    case 'node/addExternalFramework': {
+      // Find a good position for the external framework node
+      const existingNodes = state.nodes
+      const maxX = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.x)) : 0
+      const maxY = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.y)) : HEADER_SAFE_Y
+
+      const desiredPosition = { x: maxX + 320 + 60, y: maxY }
+      const nodeSize = { w: 320, h: 160 }
+      const nextPosition = findNonOverlappingPosition(desiredPosition, nodeSize, state.nodes)
+
+      const newNode: ExternalFrameworkNodeType = {
+        id: action.nodeId,
+        type: 'externalFrameworkNode',
+        position: nextPosition,
+        style: { width: 320, height: 160 },
+        data: action.data,
+        className: wrapperNodeClassName,
+      }
+
+      const nextNodes = [...state.nodes.map((n) => ({ ...n, selected: false })), { ...newNode, selected: true }]
+      return { ...state, nodes: nextNodes, selectedNodeId: action.nodeId, selectedEdgeId: null, dirty: true }
+    }
     case 'graph/delete': {
       const deleteNodeIds = new Set(action.nodeIds)
       const deleteEdgeIds = new Set(action.edgeIds)
@@ -358,6 +406,8 @@ type EditorContextValue = {
   updateNodeData: (_nodeId: string, _patch: CaseEditorNodeDataPatch) => void
   updateEdgeData: (_edgeId: string, _patch: CaseEdgeDataPatch) => void
   addChild: (_parentId: string) => void
+  addDetachedItem: () => void
+  addExternalFramework: (_data: ExternalFrameworkNodeData) => void
   addItemDialog: {
     open: boolean
     parentId: string | null
@@ -506,6 +556,26 @@ export function EditorProvider({
     setAddItemDialog({ open: true, parentId, draft: { fullStatement: '' } })
   }, [])
 
+  const addDetachedItem = useCallback(() => {
+    const uuid = globalThis.crypto?.randomUUID?.()
+    const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
+    const nodeId = `tu_${uuid ?? fallbackId}`
+    
+    const cfItem = makeCfItem(nodeId, 'New Item', {
+      CFItemType: 'Item',
+    })
+    
+    dispatch({ type: 'node/addDetachedItem', nodeId, cfItem })
+  }, [])
+
+  const addExternalFramework = useCallback((data: ExternalFrameworkNodeData) => {
+    const uuid = globalThis.crypto?.randomUUID?.()
+    const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
+    const nodeId = `ext_${uuid ?? fallbackId}`
+    
+    dispatch({ type: 'node/addExternalFramework', nodeId, data })
+  }, [])
+
   const setAddItemDraft = useCallback((patch: Partial<AddItemDraft>) => {
     setAddItemDialog((s) => ({ ...s, draft: { ...s.draft, ...patch } }))
   }, [])
@@ -648,6 +718,8 @@ export function EditorProvider({
       updateNodeData,
       updateEdgeData,
       addChild,
+      addDetachedItem,
+      addExternalFramework,
       addItemDialog,
       setAddItemDraft,
       cancelAddItem,
@@ -676,6 +748,8 @@ export function EditorProvider({
       updateNodeData,
       updateEdgeData,
       addChild,
+      addDetachedItem,
+      addExternalFramework,
       addItemDialog,
       setAddItemDraft,
       cancelAddItem,

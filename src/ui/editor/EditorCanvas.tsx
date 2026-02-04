@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactFlowInstance } from '@xyflow/react'
 import type { OnBeforeDelete } from '@xyflow/react'
 import type { OnSelectionChangeFunc } from '@xyflow/react'
-import { Background, BackgroundVariant, Controls, MiniMap, ReactFlow } from '@xyflow/react'
+import { Background, BackgroundVariant, ConnectionMode, Controls, MiniMap, ReactFlow } from '@xyflow/react'
 import { nodeTypes } from '@/ui/editor/reactflow/nodeTypes'
 import CanvasHeader from '@/ui/editor/components/CanvasHeader'
 import NodePropertiesPanel from '@/ui/editor/components/NodePropertiesPanel'
@@ -11,6 +11,8 @@ import AddItemDialog from '@/ui/editor/components/AddItemDialog'
 import ConfirmDeleteDialog from '@/ui/editor/components/ConfirmDeleteDialog'
 import ConfirmLeaveDialog from '@/ui/editor/components/ConfirmLeaveDialog'
 import SettingsModal from '@/ui/editor/components/SettingsModal'
+import FloatingAddButton from '@/ui/editor/components/FloatingAddButton'
+import AddExternalFrameworkDialog from '@/ui/editor/components/AddExternalFrameworkDialog'
 import { useEditor } from '@/ui/editor/state/EditorContext'
 import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/types'
 import type { CFDocument, CFItem } from '@/domain/case/types'
@@ -40,6 +42,8 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
     isDirty,
     settings,
     updateSettings,
+    addDetachedItem,
+    addExternalFramework,
   } = useEditor()
 
   const reactFlowWrapRef = useRef<HTMLDivElement | null>(null)
@@ -48,6 +52,7 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
   const didInitialViewportRef = useRef(false)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [externalFwDialogOpen, setExternalFwDialogOpen] = useState(false)
 
   // Apply the edge type setting to all edges
   const edgesWithType = useMemo<CaseEditorEdge[]>(
@@ -351,11 +356,10 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
           onSelectionChange={onSelectionChangeWithPan}
           onBeforeDelete={onBeforeDelete}
           nodeTypes={nodeTypes}
-          edgesUpdatable
           edgesFocusable
           elevateEdgesOnSelect
           connectOnClick={true}
-          connectionMode="loose"
+          connectionMode={ConnectionMode.Loose}
           defaultEdgeOptions={{
             interactionWidth: 20,
             style: { strokeWidth: 1.5, stroke: '#94a3b8' },
@@ -369,7 +373,14 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
         >
           <Background color="#ccc" variant={BackgroundVariant.Dots} />
           <Controls />
-          <MiniMap nodeStrokeWidth={3} />
+          <MiniMap
+            position="bottom-left"
+            className="!bottom-1 !left-12"
+            nodeStrokeWidth={2}
+            nodeColor={(node) => (node.selected ? '#8b5cf6' : '#e2e8f0')} // violet-500 if selected, slate-200 otherwise
+            nodeStrokeColor={(node) => (node.selected ? '#7c3aed' : '#cbd5e1')} // violet-600 if selected, slate-300 otherwise
+            maskColor="rgba(240, 240, 245, 0.7)"
+          />
         </ReactFlow>
       </div>
 
@@ -429,6 +440,21 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
         settings={settings}
         onClose={() => setSettingsOpen(false)}
         onSave={updateSettings}
+      />
+
+      <FloatingAddButton
+        onAddItem={addDetachedItem}
+        onAddExternalFramework={() => setExternalFwDialogOpen(true)}
+        sidePanelOpen={Boolean(selectedNode || selectedEdge)}
+      />
+
+      <AddExternalFrameworkDialog
+        open={externalFwDialogOpen}
+        onCancel={() => setExternalFwDialogOpen(false)}
+        onCreate={(draft) => {
+          setExternalFwDialogOpen(false)
+          addExternalFramework(draft)
+        }}
       />
     </div>
   )
