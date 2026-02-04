@@ -103,6 +103,7 @@ export default function CanvasHeader({
   onBack,
   onSignIn,
   onSignOut,
+  onOpenSettings,
 }: {
   frameworkTitle: string
   frameworkSubtitle?: string
@@ -111,6 +112,7 @@ export default function CanvasHeader({
   onBack?: () => void
   onSignIn?: () => void
   onSignOut?: () => void
+  onOpenSettings?: () => void
 }) {
   const avatarText = useMemo(() => initials(userName), [userName])
 
@@ -146,7 +148,7 @@ export default function CanvasHeader({
             label="Settings"
             icon={Cog6ToothIcon}
             items={[
-              { label: 'Settings', icon: Cog6ToothIcon, onClick: () => {} },
+              { label: 'Settings', icon: Cog6ToothIcon, onClick: onOpenSettings },
               { label: 'Help', icon: QuestionMarkCircleIcon, onClick: () => {} },
             ]}
           />

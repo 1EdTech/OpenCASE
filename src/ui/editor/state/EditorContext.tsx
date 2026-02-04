@@ -12,6 +12,7 @@ import type {
 } from '@/ui/editor/reactflow/types'
 import type { CFDocument, CFItem } from '@/domain/case/types'
 import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
+import type { EdgeType, EditorSettings } from '@/ui/editor/components/SettingsModal'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
 import { createSampleGraph, DEFAULT_EDGE_MARKER, getEdgeMarkers, formatAssociationType, makeCfItem } from '@/ui/editor/state/editorFactories'
 
@@ -346,6 +347,8 @@ type EditorContextValue = {
   frameworkInfo: { title: string; subtitle?: string; creator?: string }
   layoutVersion: number
   isDirty: boolean
+  settings: EditorSettings
+  updateSettings: (_settings: EditorSettings) => void
   onSelectionChange: OnSelectionChangeFunc<CaseEditorNodeType>
   onEdgeSelectionChange: (_edgeId: string | null) => void
   onNodesChange: (_changes: NodeChange<CaseEditorNodeType>[]) => void
@@ -381,6 +384,26 @@ export function EditorProvider({
     parentId: null,
     draft: { fullStatement: '' },
   })
+
+  // Editor settings with localStorage persistence
+  const [settings, setSettings] = useState<EditorSettings>(() => {
+    try {
+      const saved = globalThis.localStorage?.getItem('case-editor-settings')
+      if (saved) return JSON.parse(saved) as EditorSettings
+    } catch {
+      // Ignore parse errors
+    }
+    return { edgeType: 'default' }
+  })
+
+  const updateSettings = useCallback((newSettings: EditorSettings) => {
+    setSettings(newSettings)
+    try {
+      globalThis.localStorage?.setItem('case-editor-settings', JSON.stringify(newSettings))
+    } catch {
+      // Ignore storage errors
+    }
+  }, [])
 
   useEffect(() => {
     if (!graphKey) return
@@ -614,6 +637,8 @@ export function EditorProvider({
       frameworkInfo,
       layoutVersion: state.layoutVersion,
       isDirty: state.dirty,
+      settings,
+      updateSettings,
       onSelectionChange,
       onEdgeSelectionChange,
       onNodesChange,
@@ -640,6 +665,8 @@ export function EditorProvider({
       frameworkInfo,
       state.layoutVersion,
       state.dirty,
+      settings,
+      updateSettings,
       onSelectionChange,
       onEdgeSelectionChange,
       onNodesChange,

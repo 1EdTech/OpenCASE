@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactFlowInstance } from '@xyflow/react'
 import type { OnBeforeDelete } from '@xyflow/react'
 import type { OnSelectionChangeFunc } from '@xyflow/react'
@@ -10,8 +10,9 @@ import EdgePropertiesPanel from '@/ui/editor/components/EdgePropertiesPanel'
 import AddItemDialog from '@/ui/editor/components/AddItemDialog'
 import ConfirmDeleteDialog from '@/ui/editor/components/ConfirmDeleteDialog'
 import ConfirmLeaveDialog from '@/ui/editor/components/ConfirmLeaveDialog'
+import SettingsModal from '@/ui/editor/components/SettingsModal'
 import { useEditor } from '@/ui/editor/state/EditorContext'
-import type { CaseEditorNodeType } from '@/ui/editor/reactflow/types'
+import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/types'
 import type { CFDocument, CFItem } from '@/domain/case/types'
 import { useAuth } from '@/app/providers/AuthProvider'
 
@@ -37,6 +38,8 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
     confirmAddItem,
     deleteElements,
     isDirty,
+    settings,
+    updateSettings,
   } = useEditor()
 
   const reactFlowWrapRef = useRef<HTMLDivElement | null>(null)
@@ -44,6 +47,13 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
   const [rfReady, setRfReady] = useState(false)
   const didInitialViewportRef = useRef(false)
   const [leaveOpen, setLeaveOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // Apply the edge type setting to all edges
+  const edgesWithType = useMemo<CaseEditorEdge[]>(
+    () => editorEdges.map((edge) => ({ ...edge, type: settings.edgeType })),
+    [editorEdges, settings.edgeType],
+  )
 
   const [pendingDelete, setPendingDelete] = useState<null | {
     nodeIds: string[]
@@ -326,12 +336,13 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
               }
             : undefined
         }
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <div ref={reactFlowWrapRef} className="h-full w-full">
         <ReactFlow<CaseEditorNodeType>
           nodes={nodesWithCallbacks}
-          edges={editorEdges}
+          edges={edgesWithType}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -409,6 +420,13 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
           setLeaveOpen(false)
           onBack?.()
         }}
+      />
+
+      <SettingsModal
+        open={settingsOpen}
+        settings={settings}
+        onClose={() => setSettingsOpen(false)}
+        onSave={updateSettings}
       />
     </div>
   )
