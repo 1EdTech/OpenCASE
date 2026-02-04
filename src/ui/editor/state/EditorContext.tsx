@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react'
 import type { Connection, EdgeChange, NodeChange, OnSelectionChangeFunc } from '@xyflow/react'
-import { addEdge, applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
+import { applyEdgeChanges, applyNodeChanges } from '@xyflow/react'
 import type {
   CaseEdgeDataPatch,
   CaseEditorEdge,
@@ -14,9 +14,9 @@ import type {
 } from '@/ui/editor/reactflow/types'
 import type { CFDocument, CFItem } from '@/domain/case/types'
 import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
-import type { EdgeType, EditorSettings } from '@/ui/editor/components/SettingsModal'
+import type { EditorSettings } from '@/ui/editor/components/SettingsModal'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
-import { createSampleGraph, DEFAULT_EDGE_MARKER, getEdgeMarkers, formatAssociationType, makeCfItem, makeEdgeLabel } from '@/ui/editor/state/editorFactories'
+import { createSampleGraph, DEFAULT_EDGE_MARKER, getEdgeMarkers, makeCfItem, makeEdgeLabel } from '@/ui/editor/state/editorFactories'
 
 const DEFAULT_NODE_WIDTH = 360
 const DEFAULT_NODE_HEIGHT = 220
@@ -29,6 +29,57 @@ const HEADER_SAFE_Y = 96
 
 const isFrameworkNode = (n: CaseEditorNodeType): n is CaseFrameworkNodeType => n.type === 'caseFrameworkNode'
 const isItemNode = (n: CaseEditorNodeType): n is CaseItemNodeType => n.type === 'caseItemNode'
+
+/**
+ * Calculate the best handles for connecting two nodes based on their positions.
+ * Returns the handles that create the shortest/cleanest edge path.
+ * 
+ * For isChildOf edges: source=child, target=parent
+ * The edge should exit the child from the side FACING the parent,
+ * and enter the parent from the side FACING the child.
+ */
+function getClosestHandles(
+  sourcePos: { x: number; y: number },
+  sourceSize: { w: number; h: number },
+  targetPos: { x: number; y: number },
+  targetSize: { w: number; h: number }
+): { sourceHandle: string; targetHandle: string } {
+  // Calculate centers
+  const sourceCenter = { x: sourcePos.x + sourceSize.w / 2, y: sourcePos.y + sourceSize.h / 2 }
+  const targetCenter = { x: targetPos.x + targetSize.w / 2, y: targetPos.y + targetSize.h / 2 }
+  
+  // Calculate delta: how to get FROM source TO target
+  const dx = targetCenter.x - sourceCenter.x
+  const dy = targetCenter.y - sourceCenter.y
+  
+  // Determine if horizontal or vertical connection is shorter
+  const absX = Math.abs(dx)
+  const absY = Math.abs(dy)
+  
+  if (absX > absY) {
+    // Horizontal connection is primary
+    if (dx > 0) {
+      // Target (parent) is to the RIGHT of source (child)
+      // Child exits from RIGHT, parent receives on LEFT
+      return { sourceHandle: 'right', targetHandle: 'left' }
+    } else {
+      // Target (parent) is to the LEFT of source (child)
+      // Child exits from LEFT, parent receives on RIGHT
+      return { sourceHandle: 'left', targetHandle: 'right' }
+    }
+  } else {
+    // Vertical connection is primary
+    if (dy > 0) {
+      // Target (parent) is BELOW source (child)
+      // Child exits from BOTTOM, parent receives on TOP
+      return { sourceHandle: 'bottom', targetHandle: 'top' }
+    } else {
+      // Target (parent) is ABOVE source (child)
+      // Child exits from TOP, parent receives on BOTTOM
+      return { sourceHandle: 'top', targetHandle: 'bottom' }
+    }
+  }
+}
 
 const getNodeSize = (n: CaseEditorNodeType) => {
   const anyNode = n as unknown as {
@@ -286,15 +337,66 @@ function reducer(state: EditorState, action: Action): EditorState {
       if (!parent) return state
       const childId = action.childId
 
-      const children = state.nodes.filter((n) => isItemNode(n) && n.data.parentId === action.parentId)
-
+      // Find the framework node to determine flow direction
+      const frameworkNode = state.nodes.find((n) => isFrameworkNode(n))
+      const frameworkCenter = frameworkNode 
+        ? { 
+            x: frameworkNode.position.x + (getNodeSize(frameworkNode).w / 2),
+            y: frameworkNode.position.y + (getNodeSize(frameworkNode).h / 2)
+          }
+        : { x: 0, y: 0 }
+      
       const parentSize = getNodeSize(parent)
-      const childRowY = parent.position.y + parentSize.h + 40
-      const childGapX = DEFAULT_NODE_WIDTH + 60
-
-      const rightMostChildX = children.length ? Math.max(...children.map((c) => c.position.x)) : parent.position.x - childGapX
-
-      const desiredPosition = { x: rightMostChildX + childGapX, y: childRowY }
+      const parentCenter = {
+        x: parent.position.x + (parentSize.w / 2),
+        y: parent.position.y + (parentSize.h / 2)
+      }
+      
+      // Calculate direction from framework to parent
+      const dx = parentCenter.x - frameworkCenter.x
+      const dy = parentCenter.y - frameworkCenter.y
+      
+      // Determine primary flow direction (which axis has larger displacement)
+      const isHorizontalFlow = Math.abs(dx) > Math.abs(dy)
+      
+      // Find existing children of this parent
+      const children = state.nodes.filter((n) => isItemNode(n) && n.data.parentId === action.parentId)
+      
+      const gap = 40
+      const childGap = DEFAULT_NODE_WIDTH + 60
+      
+      let desiredPosition: { x: number; y: number }
+      
+      if (isHorizontalFlow) {
+        // Horizontal flow: place child in same horizontal direction as parent from framework
+        const directionX = dx >= 0 ? 1 : -1
+        const childX = directionX > 0 
+          ? parent.position.x + parentSize.w + gap  // Right of parent
+          : parent.position.x - DEFAULT_NODE_WIDTH - gap  // Left of parent
+        
+        // Stack children vertically when flowing horizontally
+        const existingChildYs = children.map((c) => c.position.y)
+        const bottomMostY = existingChildYs.length 
+          ? Math.max(...existingChildYs) + DEFAULT_NODE_HEIGHT + gap
+          : parent.position.y
+        
+        desiredPosition = { x: childX, y: bottomMostY }
+      } else {
+        // Vertical flow: place child in same vertical direction as parent from framework
+        const directionY = dy >= 0 ? 1 : -1
+        const childY = directionY > 0
+          ? parent.position.y + parentSize.h + gap  // Below parent
+          : parent.position.y - DEFAULT_NODE_HEIGHT - gap  // Above parent
+        
+        // Stack children horizontally when flowing vertically
+        const existingChildXs = children.map((c) => c.position.x)
+        const rightMostX = existingChildXs.length 
+          ? Math.max(...existingChildXs) + childGap
+          : parent.position.x
+        
+        desiredPosition = { x: rightMostX, y: childY }
+      }
+      
       const childSize = { w: DEFAULT_NODE_WIDTH, h: DEFAULT_NODE_HEIGHT }
       const nextPosition = findNonOverlappingPosition(desiredPosition, childSize, state.nodes)
 
@@ -308,18 +410,38 @@ function reducer(state: EditorState, action: Action): EditorState {
       }
 
       const nextNodes = [...state.nodes.map((n) => ({ ...n, selected: false })), { ...childNode, selected: true }]
-      // Edge goes child → parent, arrow at parent shows "child is child OF parent"
-      // No explicit handles - let React Flow route naturally
+      
+      // Calculate the closest handles for the edge
+      // Note: we swap the order because visually the edge flows parent → child,
+      // but semantically "child isChildOf parent"
+      const handles = getClosestHandles(
+        parent.position,  // Visual source (parent)
+        parentSize,
+        nextPosition,     // Visual target (child)
+        childSize
+      )
+      
+      // Edge visually flows parent → child (hierarchy flows down/out)
+      // But semantically: child isChildOf parent
+      // The cfAssociation origin/destination track the semantic relationship
       const nextEdges: CaseEditorEdge[] = [
         ...state.edges.map((e) => ({ ...e, selected: false })),
         {
-          id: `e_${childId}_${action.parentId}`,
-          source: childId,
-          target: action.parentId,
+          id: `e_${action.parentId}_${childId}`,
+          source: action.parentId,  // Visual: edge starts at parent
+          target: childId,          // Visual: edge ends at child (arrow points here)
+          sourceHandle: handles.sourceHandle,
+          targetHandle: handles.targetHandle,
           label: makeEdgeLabel('isChildOf'),
           labelStyle: { fill: '#94a3b8', fontSize: 11, fontWeight: 500 },
           ...getEdgeMarkers('isChildOf'),
-          data: { isHierarchical: true, associationType: 'isChildOf' },
+          data: { 
+            isHierarchical: true, 
+            associationType: 'isChildOf',
+            // Track semantic origin/destination separately
+            semanticOrigin: childId,
+            semanticDestination: action.parentId,
+          },
         },
       ]
 
