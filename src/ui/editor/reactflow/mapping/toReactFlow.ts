@@ -10,6 +10,40 @@ const DEFAULT_NODE_WIDTH = 360
 const DEFAULT_NODE_HEIGHT = 220
 const HEADER_SAFE_Y = 96
 
+/**
+ * Calculate the best handles for connecting two nodes based on their positions.
+ * Returns the handles that create the shortest/cleanest edge path.
+ */
+function getClosestHandles(
+  sourcePos: { x: number; y: number },
+  sourceSize: { w: number; h: number },
+  targetPos: { x: number; y: number },
+  targetSize: { w: number; h: number }
+): { sourceHandle: string; targetHandle: string } {
+  const sourceCenter = { x: sourcePos.x + sourceSize.w / 2, y: sourcePos.y + sourceSize.h / 2 }
+  const targetCenter = { x: targetPos.x + targetSize.w / 2, y: targetPos.y + targetSize.h / 2 }
+  
+  const dx = targetCenter.x - sourceCenter.x
+  const dy = targetCenter.y - sourceCenter.y
+  
+  const absX = Math.abs(dx)
+  const absY = Math.abs(dy)
+  
+  if (absX > absY) {
+    if (dx > 0) {
+      return { sourceHandle: 'right', targetHandle: 'left' }
+    } else {
+      return { sourceHandle: 'left', targetHandle: 'right' }
+    }
+  } else {
+    if (dy > 0) {
+      return { sourceHandle: 'bottom', targetHandle: 'top' }
+    } else {
+      return { sourceHandle: 'top', targetHandle: 'bottom' }
+    }
+  }
+}
+
 const nowIso = () => new Date().toISOString()
 
 function mapDomainFrameworkToCfDocument(framework: Framework): CFDocument {
@@ -159,10 +193,20 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
 
   const defaultLabelStyle = { fill: '#94a3b8', fontSize: 11, fontWeight: 500 }
   
+  // Build a position map for calculating closest handles
+  const nodePositions = new Map<string, { x: number; y: number; w: number; h: number }>()
+  for (const node of nodes) {
+    nodePositions.set(node.id, { 
+      x: node.position.x, 
+      y: node.position.y,
+      w: DEFAULT_NODE_WIDTH,
+      h: DEFAULT_NODE_HEIGHT
+    })
+  }
 
-  // Hierarchy edges: source=child, target=parent
-  // This matches CASE semantics: "child isChildOf parent"
-  // Arrow at markerEnd points to parent, handles auto-routed by React Flow
+  // Hierarchy edges: visually flow parent → child
+  // Semantic relationship: child isChildOf parent
+  // Arrow points to child (markerEnd on target)
   for (const itemId of itemIds) {
     const parentId = parentByChild.get(itemId) ?? fwId
     const association = associationByEdgeKey.get(`${parentId}_${itemId}`) ?? associationByEdgeKey.get(`${itemId}_${parentId}`)
@@ -172,11 +216,24 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
     const seqNum = typeof md.sequenceNumber === 'number' ? md.sequenceNumber : undefined
     const markers = getEdgeMarkers(assocType)
     
+    // Calculate closest handles based on node positions
+    const parentPos = nodePositions.get(parentId)
+    const childPos = nodePositions.get(itemId)
+    const handles = parentPos && childPos
+      ? getClosestHandles(
+          { x: parentPos.x, y: parentPos.y },
+          { w: parentPos.w, h: parentPos.h },
+          { x: childPos.x, y: childPos.y },
+          { w: childPos.w, h: childPos.h }
+        )
+      : { sourceHandle: 'bottom', targetHandle: 'top' } // Default fallback
+    
     edges.push({
-      id: `e_${itemId}_${parentId}`,
-      source: itemId,        // child (origin)
-      target: parentId,      // parent (destination)
-      // No explicit handles - let React Flow route naturally
+      id: `e_${parentId}_${itemId}`,
+      source: parentId,      // Visual: edge starts at parent
+      target: itemId,        // Visual: edge ends at child (arrow points here)
+      sourceHandle: handles.sourceHandle,
+      targetHandle: handles.targetHandle,
       label: makeEdgeLabel(assocType, seqNum),
       labelStyle: defaultLabelStyle,
       ...markers,
@@ -185,6 +242,9 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
         isHierarchical: true,
         associationType: assocType,
         sequenceNumber: seqNum,
+        // Track semantic origin/destination
+        semanticOrigin: itemId,
+        semanticDestination: parentId,
       },
     })
   }
@@ -201,10 +261,24 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
     const seqNum = typeof md.sequenceNumber === 'number' ? md.sequenceNumber : undefined
     const markers = getEdgeMarkers(a.associationType)
     
+    // Calculate closest handles based on node positions
+    const fromPos = nodePositions.get(fromId)
+    const toPos = nodePositions.get(toId)
+    const handles = fromPos && toPos
+      ? getClosestHandles(
+          { x: fromPos.x, y: fromPos.y },
+          { w: fromPos.w, h: fromPos.h },
+          { x: toPos.x, y: toPos.y },
+          { w: toPos.w, h: toPos.h }
+        )
+      : { sourceHandle: 'right', targetHandle: 'left' } // Default fallback
+    
     edges.push({
       id: a.id as unknown as string,
       source: fromId,
       target: toId,
+      sourceHandle: handles.sourceHandle,
+      targetHandle: handles.targetHandle,
       label: makeEdgeLabel(a.associationType, seqNum),
       labelStyle: defaultLabelStyle,
       ...markers,
