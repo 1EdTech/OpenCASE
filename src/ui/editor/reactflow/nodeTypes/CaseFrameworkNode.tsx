@@ -44,8 +44,15 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
         minHeight={170}
         maxWidth={820}
         maxHeight={560}
-        lineStyle={{ borderColor: 'rgba(15, 23, 42, 0.18)' }}
-        handleStyle={{ width: 5, height: 5, borderRadius: 10, borderColor: 'rgba(109, 40, 217, 0.7)' }}
+        lineStyle={{ borderColor: 'transparent' }}
+        handleStyle={{ 
+          width: 8, 
+          height: 8, 
+          borderRadius: 4, 
+          backgroundColor: 'rgb(139, 92, 246)',
+          borderColor: 'white',
+          borderWidth: 2,
+        }}
       />
 
       <div
@@ -85,79 +92,77 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
         </button>
       </div>
 
-      <div className={isInvalidTarget ? 'pointer-events-none' : ''}>
-        <FrameworkCard
-          cfDocument={{
-            title,
-            creator,
-            frameworkType,
-            adoptionStatus,
-            description: typedData?.cfDocument?.description,
-          }}
-          selected={selected}
-          rightHint="Select to edit"
-          className={isInvalidTarget ? 'opacity-40 grayscale ring-2 ring-red-300' : ''}
-        >
-          {/* Invalid target indicator */}
-          {isInvalidTarget && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-red-50/50">
-              <div className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-600">
-                Cannot link frameworks
-              </div>
+      <FrameworkCard
+        cfDocument={{
+          title,
+          creator,
+          frameworkType,
+          adoptionStatus,
+          description: typedData?.cfDocument?.description,
+        }}
+        selected={selected}
+        rightHint="Select to edit"
+        className={isInvalidTarget ? 'pointer-events-none opacity-40 grayscale ring-2 ring-red-300' : ''}
+      >
+        {/* Invalid target indicator */}
+        {isInvalidTarget && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-red-50/50">
+            <div className="rounded-full bg-red-100 px-3 py-1 text-xs font-medium text-red-600">
+              Cannot link frameworks
             </div>
-          )}
-          
-          {/* Bidirectional handles on all four sides - graph style connections */}
-          <Handle
-            id="top"
-            position={Position.Top}
-            type="source"
-            isConnectableStart={true}
-            isConnectableEnd={!isInvalidTarget}
-            className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
-              isInvalidTarget 
-                ? '!border-red-300 !bg-red-100' 
-                : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
-            }`}
-          />
-          <Handle
-            id="bottom"
-            position={Position.Bottom}
-            type="source"
-            isConnectableStart={true}
-            isConnectableEnd={!isInvalidTarget}
-            className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
-              isInvalidTarget 
-                ? '!border-red-300 !bg-red-100' 
-                : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
-            }`}
-          />
-          <Handle
-            id="left"
-            position={Position.Left}
-            type="source"
-            isConnectableStart={true}
-            isConnectableEnd={!isInvalidTarget}
-            className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
-              isInvalidTarget 
-                ? '!border-red-300 !bg-red-100' 
-                : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
-            }`}
-          />
-          <Handle
-            id="right"
-            position={Position.Right}
-            type="source"
-            isConnectableStart={true}
-            isConnectableEnd={!isInvalidTarget}
-            className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
-              isInvalidTarget 
-                ? '!border-red-300 !bg-red-100' 
-                : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
-            }`}
-          />
-        </FrameworkCard>
-      </div>
+          </div>
+        )}
+        
+        {/* Bidirectional handles on all four sides - graph style connections */}
+        <Handle
+          id="top"
+          position={Position.Top}
+          type="source"
+          isConnectableStart={true}
+          isConnectableEnd={!isInvalidTarget}
+          className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
+            isInvalidTarget 
+              ? '!border-red-300 !bg-red-100' 
+              : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
+          }`}
+        />
+        <Handle
+          id="bottom"
+          position={Position.Bottom}
+          type="source"
+          isConnectableStart={true}
+          isConnectableEnd={!isInvalidTarget}
+          className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
+            isInvalidTarget 
+              ? '!border-red-300 !bg-red-100' 
+              : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
+          }`}
+        />
+        <Handle
+          id="left"
+          position={Position.Left}
+          type="source"
+          isConnectableStart={true}
+          isConnectableEnd={!isInvalidTarget}
+          className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
+            isInvalidTarget 
+              ? '!border-red-300 !bg-red-100' 
+              : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
+          }`}
+        />
+        <Handle
+          id="right"
+          position={Position.Right}
+          type="source"
+          isConnectableStart={true}
+          isConnectableEnd={!isInvalidTarget}
+          className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
+            isInvalidTarget 
+              ? '!border-red-300 !bg-red-100' 
+              : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
+          }`}
+        />
+      </FrameworkCard>
     </div>
   )
 }

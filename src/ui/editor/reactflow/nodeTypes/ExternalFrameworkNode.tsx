@@ -35,8 +35,15 @@ export default function ExternalFrameworkNode({ id, data, selected }: NodeProps<
         minHeight={120}
         maxWidth={600}
         maxHeight={400}
-        lineStyle={{ borderColor: 'rgba(100, 116, 139, 0.3)' }}
-        handleStyle={{ width: 5, height: 5, borderRadius: 10, borderColor: 'rgba(100, 116, 139, 0.7)' }}
+        lineStyle={{ borderColor: 'transparent' }}
+        handleStyle={{ 
+          width: 8, 
+          height: 8, 
+          borderRadius: 4, 
+          backgroundColor: 'rgb(100, 116, 139)',
+          borderColor: 'white',
+          borderWidth: 2,
+        }}
       />
 
       {/* Action buttons */}

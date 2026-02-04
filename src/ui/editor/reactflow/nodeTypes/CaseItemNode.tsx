@@ -56,8 +56,15 @@ export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemN
         minHeight={160}
         maxWidth={720}
         maxHeight={520}
-        lineStyle={{ borderColor: 'rgba(15, 23, 42, 0.18)' }}
-        handleStyle={{ width: 5, height: 5, borderRadius: 10, borderColor: 'rgba(109, 40, 217, 0.7)' }}
+        lineStyle={{ borderColor: 'transparent' }}
+        handleStyle={{ 
+          width: 8, 
+          height: 8, 
+          borderRadius: 4, 
+          backgroundColor: 'rgb(139, 92, 246)',
+          borderColor: 'white',
+          borderWidth: 2,
+        }}
       />
 
       <div
