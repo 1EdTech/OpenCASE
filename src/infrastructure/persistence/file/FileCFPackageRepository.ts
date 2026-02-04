@@ -21,11 +21,11 @@ export class FileCFPackageRepository implements CFPackageRepository {
 
     const document = CFDocument.fromRaw(tenantId, version, bundle.document)
     const docURI = document.toJSON().uri
-    
-    const items = (bundle.items ?? []).map((i: any) =>
+
+    const items = (bundle.items ?? []).map((i: unknown) =>
       CFItem.fromRaw(tenantId, version, i, docId, docURI)
     )
-    const associations = (bundle.associations ?? []).map((a: any) =>
+    const associations = (bundle.associations ?? []).map((a: unknown) =>
       CFAssociation.fromRaw(tenantId, version, a)
     )
     const rubrics = bundle.rubrics ?? []
@@ -40,13 +40,13 @@ export class FileCFPackageRepository implements CFPackageRepository {
     pkg: CFPackage
   ): Promise<void> {
     const docId = pkg.document.sourcedId
-    const bundle: any = {
+    const bundle: { document: unknown, items: unknown[], associations: unknown[], rubrics: unknown[], definitions?: unknown } = {
       document: pkg.document.toJSON(),
       items: pkg.items.map(i => i.toJSON()),
       associations: pkg.associations.map(a => a.toJSON()),
       rubrics: pkg.rubrics ?? []
     }
-    
+
     if (pkg.definitions) {
       bundle.definitions = pkg.definitions
     }

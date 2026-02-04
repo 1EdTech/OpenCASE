@@ -3,9 +3,13 @@ import { GetCFItemAssociations } from '../../../../../application/case/endpoints
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
 import { absolutizeCaseUris, applyQueryToArray, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified } from '../utils/httpUtils'
 import { getParam } from '../../../utils/expressParams'
+import type { FileFrameworkStore } from '../../../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export class CFItemAssociationsControllerV1p0 {
-  constructor (private readonly getCFItemAssociations: GetCFItemAssociations) {}
+  constructor (
+    private readonly getCFItemAssociations: GetCFItemAssociations,
+    private readonly store: FileFrameworkStore
+  ) {}
 
   getById = async (req: Request, res: Response) => {
     try {
@@ -25,7 +29,14 @@ export class CFItemAssociationsControllerV1p0 {
         sourcedId
       })
 
-      if (!result) return res.status(404).json(StatusInfoFormatter.notFound('The requested CFItem was not found.'))
+      if (!result) {
+        if (this.store.itemExists(tenantId, '1.1', sourcedId)) {
+          return res.status(409).json(StatusInfoFormatter.internalError(
+            `CFItem '${sourcedId}' exists in CASE v1p1. Use GET /ims/case/v1p1/CFItems/${sourcedId}/CFAssociations (and related v1p1 endpoints).`
+          ))
+        }
+        return res.status(404).json(StatusInfoFormatter.notFound('The requested CFItem was not found.'))
+      }
 
       let wrapped: any = result
       if (result?.CFAssociationSet?.CFAssociations) {

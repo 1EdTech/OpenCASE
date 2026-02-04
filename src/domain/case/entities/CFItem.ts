@@ -42,24 +42,23 @@ export class CFItem {
   }
 
   static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any, docId?: string, docURI?: string): CFItem {
-    // Generate URI if not provided (required field)
-    const uri = raw.uri || this.generateURI(tenantId, caseVersion, raw.sourcedId || raw.identifier);
+    const identifier = raw.sourcedId || raw.identifier
+    // Always generate URI based on requested CASE version (do not persist versioned URIs in storage)
+    const uri = this.generateURI(tenantId, caseVersion, identifier)
     
-    // Generate CFDocumentURI if not provided (required field)
-    const CFDocumentURI = raw.CFDocumentURI || (docId && docURI ? {
-      title: 'Document',
-      identifier: docId,
-      uri: docURI
-    } : {
-      title: 'Document',
-      identifier: 'unknown',
-      uri: this.generateDocumentURI(tenantId, caseVersion, docId || 'unknown')
-    });
+    // Always generate CFDocumentURI for the requested CASE version.
+    const docIdentifier = docId ?? raw.CFDocumentURI?.identifier ?? 'unknown'
+    const generatedDocUri = docURI ?? this.generateDocumentURI(tenantId, caseVersion, docIdentifier)
+    const CFDocumentURI = {
+      title: raw.CFDocumentURI?.title ?? 'Document',
+      identifier: docIdentifier,
+      uri: generatedDocUri
+    }
     
     return CFItem.create({
       tenantId,
       caseVersion,
-      sourcedId: raw.sourcedId || raw.identifier,
+      sourcedId: identifier,
       uri,
       fullStatement: raw.fullStatement,
       lastChangeDateTime: raw.lastChangeDateTime ? new Date(raw.lastChangeDateTime) : new Date(),

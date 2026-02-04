@@ -3,9 +3,13 @@ import { GetCFDocument } from '../../../../../application/case/endpoints/GetCFDo
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
 import { absolutizeCaseUris, applyFieldSelectionToEntity, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified } from '../utils/httpUtils'
 import { getParam } from '../../../utils/expressParams'
+import type { FileFrameworkStore } from '../../../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export class CFDocumentsControllerV1p0 {
-  constructor (private readonly getCFDocument: GetCFDocument) {}
+  constructor (
+    private readonly getCFDocument: GetCFDocument,
+    private readonly store: FileFrameworkStore
+  ) {}
 
   getById = async (req: Request, res: Response) => {
     try {
@@ -25,7 +29,14 @@ export class CFDocumentsControllerV1p0 {
         sourcedId
       })
 
-      if (!result) return res.status(404).json(StatusInfoFormatter.notFound('The requested CFDocument was not found.'))
+      if (!result) {
+        if (this.store.documentExists(tenantId, '1.1', sourcedId)) {
+          return res.status(409).json(StatusInfoFormatter.internalError(
+            `CFDocument '${sourcedId}' exists in CASE v1p1. Use GET /ims/case/v1p1/CFDocuments/${sourcedId} (and related v1p1 endpoints).`
+          ))
+        }
+        return res.status(404).json(StatusInfoFormatter.notFound('The requested CFDocument was not found.'))
+      }
 
       const baseUrl = getBaseUrl(req)
       const wrapped = { ...result } as any

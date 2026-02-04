@@ -6,6 +6,7 @@ import { absolutizeCaseUris } from '../../utils/httpUtils'
 describe('CFItemsControllerV1p1', () => {
   let controller: CFItemsControllerV1p1
   let mockGetCFItem: jest.Mocked<GetCFItem>
+  let mockStore: any
   let mockRequest: Partial<Request>
   let mockResponse: Partial<Response>
   let responseJson: jest.Mock
@@ -16,7 +17,10 @@ describe('CFItemsControllerV1p1', () => {
       execute: jest.fn()
     } as any
 
-    controller = new CFItemsControllerV1p1(mockGetCFItem)
+    mockStore = {
+      itemExists: jest.fn().mockReturnValue(false)
+    }
+    controller = new CFItemsControllerV1p1(mockGetCFItem, mockStore)
 
     responseJson = jest.fn()
     mockResponse = {

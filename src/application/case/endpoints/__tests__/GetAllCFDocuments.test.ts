@@ -30,7 +30,7 @@ describe('GetAllCFDocuments', () => {
     })
 
     it('should return CFDocumentSet with documents', async () => {
-      const documents = [
+      const documentsV10 = [
         {
           sourcedId: 'doc-1',
           title: 'Document 1',
@@ -40,7 +40,9 @@ describe('GetAllCFDocuments', () => {
           version: '1.0',
           lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
           currentFile: 'file1.json'
-        },
+        }
+      ]
+      const documentsV11 = [
         {
           sourcedId: 'doc-2',
           title: 'Document 2',
@@ -53,7 +55,11 @@ describe('GetAllCFDocuments', () => {
         }
       ]
 
-      mockStore.getAllDocuments.mockReturnValue(documents as any)
+      mockStore.getAllDocuments.mockImplementation((_: any, v: any) => {
+        if (v === '1.0') return documentsV10 as any
+        if (v === '1.1') return documentsV11 as any
+        return []
+      })
 
       const result = await getAllCFDocuments.execute({ tenantId, caseVersion })
 
@@ -63,6 +69,7 @@ describe('GetAllCFDocuments', () => {
             expect.objectContaining({
               identifier: 'doc-1',
               title: 'Document 1',
+              caseVersion: '1.0',
               CFPackageURI: expect.objectContaining({
                 identifier: 'doc-1'
               })
@@ -70,6 +77,7 @@ describe('GetAllCFDocuments', () => {
             expect.objectContaining({
               identifier: 'doc-2',
               title: 'Document 2',
+              caseVersion: '1.1',
               CFPackageURI: expect.objectContaining({
                 identifier: 'doc-2'
               })
@@ -87,7 +95,7 @@ describe('GetAllCFDocuments', () => {
         currentFile: `file${i}.json`
       }))
 
-      mockStore.getAllDocuments.mockReturnValue(documents as any)
+      mockStore.getAllDocuments.mockImplementation((_: any, v: any) => (v === '1.0' ? documents as any : []))
 
       const result = await getAllCFDocuments.execute({
         tenantId,
@@ -129,7 +137,7 @@ describe('GetAllCFDocuments', () => {
         }
       ]
 
-      mockStore.getAllDocuments.mockReturnValue(documents as any)
+      mockStore.getAllDocuments.mockImplementation((_: any, v: any) => (v === '1.0' ? documents as any : []))
 
       const result = await getAllCFDocuments.execute({
         tenantId,
@@ -160,7 +168,7 @@ describe('GetAllCFDocuments', () => {
         }
       ]
 
-      mockStore.getAllDocuments.mockReturnValue(documents as any)
+      mockStore.getAllDocuments.mockImplementation((_: any, v: any) => (v === '1.0' ? documents as any : []))
 
       const result = await getAllCFDocuments.execute({
         tenantId,
@@ -183,7 +191,7 @@ describe('GetAllCFDocuments', () => {
         }
       ]
 
-      mockStore.getAllDocuments.mockReturnValue(documents as any)
+      mockStore.getAllDocuments.mockImplementation((_: any, v: any) => (v === '1.0' ? documents as any : []))
 
       const result = await getAllCFDocuments.execute({
         tenantId,

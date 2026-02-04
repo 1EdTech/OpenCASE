@@ -3,9 +3,13 @@ import { GetCFPackage } from '../../../../../application/case/endpoints/GetCFPac
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
 import { absolutizeCaseUris, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified } from '../utils/httpUtils'
 import { getParam } from '../../../utils/expressParams'
+import type { FileFrameworkStore } from '../../../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export class CFPackagesControllerV1p0 {
-  constructor (private readonly getCFPackage: GetCFPackage) {}
+  constructor (
+    private readonly getCFPackage: GetCFPackage,
+    private readonly store: FileFrameworkStore
+  ) {}
 
   getById = async (req: Request, res: Response) => {
     try {
@@ -25,7 +29,14 @@ export class CFPackagesControllerV1p0 {
         docId
       })
 
-      if (!result) return res.status(404).json(StatusInfoFormatter.notFound('The requested CFPackage was not found.'))
+      if (!result) {
+        if (this.store.documentExists(tenantId, '1.1', docId)) {
+          return res.status(409).json(StatusInfoFormatter.internalError(
+            `CFPackage '${docId}' exists in CASE v1p1. Use GET /ims/case/v1p1/CFPackages/${docId} (and related v1p1 endpoints).`
+          ))
+        }
+        return res.status(404).json(StatusInfoFormatter.notFound('The requested CFPackage was not found.'))
+      }
 
       const baseUrl = getBaseUrl(req)
       const body = absolutizeCaseUris(result, baseUrl)

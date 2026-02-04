@@ -659,6 +659,18 @@ export class FileFrameworkStore {
     return entry?.docSourcedId ?? null
   }
 
+  documentExists (tenantId: TenantId, version: CaseVersion, docId: string): boolean {
+    return Boolean(this.documents.get(tenantId)?.get(version)?.get(docId))
+  }
+
+  itemExists (tenantId: TenantId, version: CaseVersion, itemId: string): boolean {
+    return Boolean(this.itemsIndex.get(tenantId)?.get(version)?.get(itemId))
+  }
+
+  associationExists (tenantId: TenantId, version: CaseVersion, assocId: string): boolean {
+    return Boolean(this.assocIndex.get(tenantId)?.get(version)?.get(assocId))
+  }
+
   getAllDocuments (tenantId: TenantId, version: CaseVersion): DocumentMetadata[] {
     const versionMap = this.documents.get(tenantId)?.get(version)
     if (!versionMap) return []
@@ -754,51 +766,64 @@ export class FileFrameworkStore {
     for (const a of bundle.associations ?? []) add((a?.sourcedId ?? a?.identifier) as string | undefined, 'CFAssociation')
     for (const r of bundle.rubrics ?? []) add((r?.identifier ?? r?.id ?? r?.sourcedId) as string | undefined, 'CFRubric')
 
+    const other = version === '1.1' ? '1.0' : '1.1'
+
     const itemsMap = this.itemsIndex.get(tenantId)?.get(version) ?? new Map()
     const assocMap = this.assocIndex.get(tenantId)?.get(version) ?? new Map()
     const rubricsMap = this.rubricsIndex.get(tenantId)?.get(version) ?? new Map()
     const docsMap = this.documents.get(tenantId)?.get(version) ?? new Map()
 
+    const itemsMapOther = this.itemsIndex.get(tenantId)?.get(other) ?? new Map()
+    const assocMapOther = this.assocIndex.get(tenantId)?.get(other) ?? new Map()
+    const rubricsMapOther = this.rubricsIndex.get(tenantId)?.get(other) ?? new Map()
+    const docsMapOther = this.documents.get(tenantId)?.get(other) ?? new Map()
+
+    // Disallow creating the "same" document id in the other CASE partition.
+    // This keeps framework identity consistent irrespective of CASE version.
+    if (docsMapOther.get(docId)) {
+      throw new Error(`CFDocument id '${docId}' already exists in CASE ${other}; cannot create it again in CASE ${version}`)
+    }
+
     for (const [id, kind] of ids.entries()) {
       if (kind === 'CFDocument') {
         // Allowed: docId already exists (publishing new version).
         // Disallowed: docId is used by any other entity.
-        if (itemsMap.get(id) || assocMap.get(id) || rubricsMap.get(id)) {
+        if (itemsMap.get(id) || assocMap.get(id) || rubricsMap.get(id) || itemsMapOther.get(id) || assocMapOther.get(id) || rubricsMapOther.get(id)) {
           throw new Error(`ID '${id}' is already used by another entity and cannot be used as a CFDocument id`)
         }
         continue
       }
 
       // Prevent collisions with document IDs
-      if (docsMap.get(id)) {
+      if (docsMap.get(id) || docsMapOther.get(id)) {
         throw new Error(`ID '${id}' is already used as a CFDocument id and cannot be reused for ${kind}`)
       }
 
       if (kind === 'CFItem') {
-        const existing = itemsMap.get(id)
+        const existing = itemsMap.get(id) ?? itemsMapOther.get(id)
         if (existing && (existing as any).docSourcedId !== docId) {
           throw new Error(`CFItem id '${id}' is already used in a different framework (docId=${(existing as any).docSourcedId})`)
         }
-        if (assocMap.get(id)) throw new Error(`ID '${id}' is already used as a CFAssociation id and cannot be reused for CFItem`)
-        if (rubricsMap.get(id)) throw new Error(`ID '${id}' is already used as a CFRubric id and cannot be reused for CFItem`)
+        if (assocMap.get(id) || assocMapOther.get(id)) throw new Error(`ID '${id}' is already used as a CFAssociation id and cannot be reused for CFItem`)
+        if (rubricsMap.get(id) || rubricsMapOther.get(id)) throw new Error(`ID '${id}' is already used as a CFRubric id and cannot be reused for CFItem`)
       }
 
       if (kind === 'CFAssociation') {
-        const existing = assocMap.get(id)
+        const existing = assocMap.get(id) ?? assocMapOther.get(id)
         if (existing && (existing as any).docSourcedId !== docId) {
           throw new Error(`CFAssociation id '${id}' is already used in a different framework (docId=${(existing as any).docSourcedId})`)
         }
-        if (itemsMap.get(id)) throw new Error(`ID '${id}' is already used as a CFItem id and cannot be reused for CFAssociation`)
-        if (rubricsMap.get(id)) throw new Error(`ID '${id}' is already used as a CFRubric id and cannot be reused for CFAssociation`)
+        if (itemsMap.get(id) || itemsMapOther.get(id)) throw new Error(`ID '${id}' is already used as a CFItem id and cannot be reused for CFAssociation`)
+        if (rubricsMap.get(id) || rubricsMapOther.get(id)) throw new Error(`ID '${id}' is already used as a CFRubric id and cannot be reused for CFAssociation`)
       }
 
       if (kind === 'CFRubric') {
-        const existing = rubricsMap.get(id)
+        const existing = rubricsMap.get(id) ?? rubricsMapOther.get(id)
         if (existing && (existing as any).docSourcedId !== docId) {
           throw new Error(`CFRubric id '${id}' is already used in a different framework (docId=${(existing as any).docSourcedId})`)
         }
-        if (itemsMap.get(id)) throw new Error(`ID '${id}' is already used as a CFItem id and cannot be reused for CFRubric`)
-        if (assocMap.get(id)) throw new Error(`ID '${id}' is already used as a CFAssociation id and cannot be reused for CFRubric`)
+        if (itemsMap.get(id) || itemsMapOther.get(id)) throw new Error(`ID '${id}' is already used as a CFItem id and cannot be reused for CFRubric`)
+        if (assocMap.get(id) || assocMapOther.get(id)) throw new Error(`ID '${id}' is already used as a CFAssociation id and cannot be reused for CFRubric`)
       }
     }
   }

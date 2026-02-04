@@ -40,13 +40,14 @@ export class CFDocument {
   }
 
   static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any): CFDocument {
-    // Generate URI if not provided (required field)
-    const uri = raw.uri || this.generateURI(tenantId, caseVersion, raw.sourcedId || raw.identifier);
+    // Always generate URI based on requested CASE version (do not persist versioned URIs in storage)
+    const identifier = raw.sourcedId || raw.identifier
+    const uri = this.generateURI(tenantId, caseVersion, identifier)
     
     return CFDocument.create({
       tenantId,
       caseVersion,
-      sourcedId: raw.sourcedId || raw.identifier,
+      sourcedId: identifier,
       uri,
       title: raw.title,
       creator: raw.creator || 'Unknown', // Default for backward compatibility

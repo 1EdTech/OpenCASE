@@ -29,26 +29,29 @@ export class CFAssociation {
   }
 
   static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any): CFAssociation {
-    // Generate URI if not provided (required field)
-    const uri = raw.uri || this.generateURI(tenantId, caseVersion, raw.sourcedId || raw.identifier);
+    const identifier = raw.sourcedId || raw.identifier
+    // Always generate URI based on requested CASE version (do not persist versioned URIs in storage)
+    const uri = this.generateURI(tenantId, caseVersion, identifier)
     
     // Convert originNode/destinationNode strings to LinkData if needed
-    const originNodeURI = raw.originNodeURI || (raw.originNode ? this.createLinkDataFromString(raw.originNode, tenantId, caseVersion) : {
-      title: 'Origin',
-      identifier: 'unknown',
-      uri: this.generateItemURI(tenantId, caseVersion, raw.originNode || 'unknown')
-    });
+    const originId = raw.originNodeURI?.identifier ?? raw.originNode ?? 'unknown'
+    const destinationId = raw.destinationNodeURI?.identifier ?? raw.destinationNode ?? 'unknown'
+    const originNodeURI = {
+      title: raw.originNodeURI?.title ?? String(originId),
+      identifier: originId,
+      uri: this.generateItemURI(tenantId, caseVersion, originId)
+    }
     
-    const destinationNodeURI = raw.destinationNodeURI || (raw.destinationNode ? this.createLinkDataFromString(raw.destinationNode, tenantId, caseVersion) : {
-      title: 'Destination',
-      identifier: 'unknown',
-      uri: this.generateItemURI(tenantId, caseVersion, raw.destinationNode || 'unknown')
-    });
+    const destinationNodeURI = {
+      title: raw.destinationNodeURI?.title ?? String(destinationId),
+      identifier: destinationId,
+      uri: this.generateItemURI(tenantId, caseVersion, destinationId)
+    }
     
     return CFAssociation.create({
       tenantId,
       caseVersion,
-      sourcedId: raw.sourcedId || raw.identifier,
+      sourcedId: identifier,
       uri,
       associationType: raw.associationType,
       originNodeURI,

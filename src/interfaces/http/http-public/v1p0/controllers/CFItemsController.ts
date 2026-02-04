@@ -3,9 +3,13 @@ import { GetCFItem } from '../../../../../application/case/endpoints/GetCFItem'
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
 import { absolutizeCaseUris, applyFieldSelectionToEntity, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified } from '../utils/httpUtils'
 import { getParam } from '../../../utils/expressParams'
+import type { FileFrameworkStore } from '../../../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export class CFItemsControllerV1p0 {
-  constructor (private readonly getCFItem: GetCFItem) {}
+  constructor (
+    private readonly getCFItem: GetCFItem,
+    private readonly store: FileFrameworkStore
+  ) {}
 
   getById = async (req: Request, res: Response) => {
     try {
@@ -25,7 +29,14 @@ export class CFItemsControllerV1p0 {
         sourcedId
       })
 
-      if (!result) return res.status(404).json(StatusInfoFormatter.notFound('The requested CFItem was not found.'))
+      if (!result) {
+        if (this.store.itemExists(tenantId, '1.1', sourcedId)) {
+          return res.status(409).json(StatusInfoFormatter.internalError(
+            `CFItem '${sourcedId}' exists in CASE v1p1. Use GET /ims/case/v1p1/CFItems/${sourcedId} (and related v1p1 endpoints).`
+          ))
+        }
+        return res.status(404).json(StatusInfoFormatter.notFound('The requested CFItem was not found.'))
+      }
 
       const baseUrl = getBaseUrl(req)
       const wrapped = { ...result } as any

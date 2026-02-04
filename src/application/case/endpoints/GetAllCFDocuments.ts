@@ -20,8 +20,11 @@ export class GetAllCFDocuments {
   async execute (query: GetAllCFDocumentsQuery) {
     //logger.info({ query }, 'Executing GetAllCFDocuments')
 
-    // Get all documents
-    let documents = this.store.getAllDocuments(query.tenantId, query.caseVersion)
+    // List endpoints should return all frameworks, irrespective of which CASE version path is used.
+    // Each entry includes its CASE version and versioned URIs point to the correct API surface.
+    const v10 = this.store.getAllDocuments(query.tenantId, '1.0').map(d => ({ meta: d, caseVersion: '1.0' as const }))
+    const v11 = this.store.getAllDocuments(query.tenantId, '1.1').map(d => ({ meta: d, caseVersion: '1.1' as const }))
+    let documents = [...v10, ...v11]
 
     // Apply filtering (basic implementation - can be enhanced)
     if (query.filter) {
@@ -30,9 +33,9 @@ export class GetAllCFDocuments {
         // Basic string matching for now
         const filterLower = query.filter!.toLowerCase()
         return (
-          doc.title.toLowerCase().includes(filterLower) ||
-          doc.sourcedId.toLowerCase().includes(filterLower) ||
-          (doc.subject && doc.subject.toLowerCase().includes(filterLower))
+          doc.meta.title.toLowerCase().includes(filterLower) ||
+          doc.meta.sourcedId.toLowerCase().includes(filterLower) ||
+          (doc.meta.subject && doc.meta.subject.toLowerCase().includes(filterLower))
         )
       })
     }
@@ -46,16 +49,16 @@ export class GetAllCFDocuments {
 
         switch (query.sort) {
           case 'title':
-            aVal = a.title
-            bVal = b.title
+            aVal = a.meta.title
+            bVal = b.meta.title
             break
           case 'lastChangeDateTime':
-            aVal = a.lastChangeDateTime.getTime()
-            bVal = b.lastChangeDateTime.getTime()
+            aVal = a.meta.lastChangeDateTime.getTime()
+            bVal = b.meta.lastChangeDateTime.getTime()
             break
           default:
-            aVal = a.sourcedId
-            bVal = b.sourcedId
+            aVal = a.meta.sourcedId
+            bVal = b.meta.sourcedId
         }
 
         if (aVal < bVal) return orderBy === 'asc' ? -1 : 1
@@ -71,8 +74,8 @@ export class GetAllCFDocuments {
     const paginatedDocs = limit ? documents.slice(offset, offset + limit) : documents.slice(offset)
 
     // Generate CFDocument objects with proper structure
-    const basePath = query.caseVersion === '1.1' ? '/ims/case/v1p1' : '/ims/case/v1p0'
-    const cfDocuments = paginatedDocs.map(docMeta => {
+    const cfDocuments = paginatedDocs.map(({ meta: docMeta, caseVersion }) => {
+      const basePath = caseVersion === '1.1' ? '/ims/case/v1p1' : '/ims/case/v1p0'
       const packageURI: LinkData = {
         title: 'CFPackage',
         identifier: docMeta.sourcedId,
@@ -84,6 +87,7 @@ export class GetAllCFDocuments {
         uri: `${basePath}/CFDocuments/${docMeta.sourcedId}`,
         title: docMeta.title,
         lastChangeDateTime: docMeta.lastChangeDateTime.toISOString(),
+        caseVersion,
         CFPackageURI: packageURI
       }
 

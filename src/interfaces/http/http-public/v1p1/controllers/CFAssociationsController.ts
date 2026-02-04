@@ -3,9 +3,13 @@ import { GetCFAssociation } from '../../../../../application/case/endpoints/GetC
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
 import { absolutizeCaseUris, applyFieldSelectionToEntity, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified } from '../utils/httpUtils'
 import { getParam } from '../../../utils/expressParams'
+import type { FileFrameworkStore } from '../../../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export class CFAssociationsControllerV1p1 {
-  constructor (private readonly getCFAssociation: GetCFAssociation) {}
+  constructor (
+    private readonly getCFAssociation: GetCFAssociation,
+    private readonly store: FileFrameworkStore
+  ) {}
 
   getById = async (req: Request, res: Response) => {
     try {
@@ -26,6 +30,11 @@ export class CFAssociationsControllerV1p1 {
       })
 
       if (!result) {
+        if (this.store.associationExists(tenantId, '1.0', sourcedId)) {
+          return res.status(409).json(StatusInfoFormatter.internalError(
+            `CFAssociation '${sourcedId}' exists in CASE v1p0. Use GET /ims/case/v1p0/CFAssociations/${sourcedId} (and related v1p0 endpoints).`
+          ))
+        }
         return res.status(404).json(StatusInfoFormatter.notFound('The requested CFAssociation was not found.'))
       }
 
