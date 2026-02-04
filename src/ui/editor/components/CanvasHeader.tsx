@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
-import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightOnRectangleIcon, UserCircleIcon, ChevronLeftIcon } from '@heroicons/react/24/solid'
+import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightOnRectangleIcon, ChevronLeftIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
 
 type MenuItem = {
@@ -95,6 +95,78 @@ function initials(name?: string) {
   return chars.length ? chars.join('') : '👤'
 }
 
+/** Avatar button that opens an account menu */
+function AvatarMenu({
+  userName,
+  items,
+}: Readonly<{
+  userName?: string
+  items: (MenuItem | 'divider')[]
+}>) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const avatarText = useMemo(() => initials(userName), [userName])
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (!rootRef.current) return
+      if (!rootRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    globalThis.addEventListener('pointerdown', onPointerDown)
+    return () => globalThis.removeEventListener('pointerdown', onPointerDown)
+  }, [open])
+
+  return (
+    <div className="relative" ref={rootRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={userName ?? 'Account'}
+        className="grid h-9 w-9 cursor-pointer select-none place-items-center rounded-full border border-black/10 bg-white text-xs font-bold text-slate-700 transition-all hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+      >
+        {avatarText}
+      </button>
+
+      {open ? (
+        <div
+          role="menu"
+          className="absolute right-0 z-40 mt-2 w-52 overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg"
+        >
+          <div className="p-1">
+            {items.map((it, idx) => {
+              if (it === 'divider') return <div key={`d_${idx}`} className="my-1 h-px bg-black/10" />
+
+              const ItemIcon = it.icon
+              return (
+                <button
+                  key={it.label}
+                  role="menuitem"
+                  type="button"
+                  disabled={it.disabled}
+                  className={[
+                    'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm',
+                    it.disabled ? 'cursor-not-allowed text-slate-400' : 'text-slate-800 hover:bg-slate-900/5',
+                  ].join(' ')}
+                  onClick={() => {
+                    it.onClick?.()
+                    setOpen(false)
+                  }}
+                >
+                  {ItemIcon ? <ItemIcon className="h-4 w-4 text-slate-600" aria-hidden /> : null}
+                  <span className="truncate">{it.label}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export default function CanvasHeader({
   frameworkTitle,
   frameworkSubtitle,
@@ -114,8 +186,6 @@ export default function CanvasHeader({
   onSignOut?: () => void
   onOpenSettings?: () => void
 }) {
-  const avatarText = useMemo(() => initials(userName), [userName])
-
   return (
     <div
       className="pointer-events-none absolute top-3 z-10"
@@ -153,9 +223,8 @@ export default function CanvasHeader({
             ]}
           />
 
-          <PopoverMenu
-            label="Account"
-            icon={UserCircleIcon}
+          <AvatarMenu
+            userName={userName}
             items={[
               { label: userName ? `Signed in as ${userName}` : 'Not signed in', disabled: true },
               'divider',
@@ -164,14 +233,6 @@ export default function CanvasHeader({
                 : { label: 'Sign in', icon: ArrowRightOnRectangleIcon, onClick: onSignIn, disabled: !onSignIn },
             ]}
           />
-
-          <div
-            className="ml-1 grid h-9 w-9 select-none place-items-center rounded-full border border-black/10 bg-white text-xs font-bold text-slate-700"
-            title={userName ?? 'Account'}
-            aria-hidden="true"
-          >
-            {avatarText}
-          </div>
         </div>
       </div>
     </div>
