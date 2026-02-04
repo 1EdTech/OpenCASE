@@ -346,3 +346,26 @@ There is no dedicated `POST /CFItems` or `POST /CFAssociations` management endpo
 - Persistence is file-based; if you want isolated environments, use separate `CASE_DATA_DIR` values or separate tenantIds.
 - CORS is permissive in `src/interfaces/http/server.ts` (useful for local dev from a separate editor app).
 
+---
+
+## Email-first sign-in (tenant discovery)
+
+### Goal
+Remove the explicit tenant picker in the SPA. Instead, implement a 2-step login:
+
+1) user enters email
+2) SPA calls OpenCASE **public tenant lookup** endpoint to discover `tenantId`
+3) SPA starts Keycloak OIDC redirect using `client_id = tenant-<tenantId>` (or whatever prefix you configured)
+
+This preserves the client-per-tenant Keycloak model while improving UX.
+
+### Public lookup endpoint
+
+- **Endpoint (no auth)**: `GET /public/tenant-lookup?email=<email>`
+- **Anti-enumeration behavior**:
+  - Always responds with **`202 Accepted`**
+  - Response body **may** include `{ "tenantId": "..." }` if the email maps to a tenant
+  - If no mapping exists (or lookup fails), response omits `tenantId`
+
+### Manual flow (SPA)
+Start at Home → enter email → click Continue → call lookup → if `tenantId` returned, redirect to Keycloak → return to app → store token → OpenCASE calls succeed.
