@@ -56,6 +56,7 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [externalFwDialogOpen, setExternalFwDialogOpen] = useState(false)
+  const [externalFwViewportCenter, setExternalFwViewportCenter] = useState<{ x: number; y: number } | undefined>(undefined)
   
   // Track the edge being reconnected
   const edgeReconnectSuccessful = useRef(true)
@@ -132,6 +133,61 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
     isFrameworkDelete: boolean
     resolve: (allowDelete: boolean) => void
   }>(null)
+  
+  // Helper function to get the center of the current viewport in flow coordinates
+  const getViewportCenter = useCallback(() => {
+    const instance = reactFlowRef.current
+    const wrap = reactFlowWrapRef.current
+    if (!instance || !wrap) return undefined
+    
+    const viewport = instance.getViewport()
+    const wrapRect = wrap.getBoundingClientRect()
+    
+    // Convert screen center to flow coordinates
+    const centerX = (wrapRect.width / 2 - viewport.x) / viewport.zoom
+    const centerY = (wrapRect.height / 2 - viewport.y) / viewport.zoom
+    
+    return { x: centerX, y: centerY }
+  }, [])
+  
+  // Keyboard shortcuts for adding items and external frameworks
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if user is typing in an input field
+      const target = e.target as HTMLElement
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      ) {
+        return
+      }
+      
+      // Check for Cmd/Ctrl modifier
+      const isMod = e.metaKey || e.ctrlKey
+      if (!isMod) return
+      
+      // Cmd/Ctrl + C: Add new item
+      if (e.key.toLowerCase() === 'c') {
+        e.preventDefault()
+        const viewportCenter = getViewportCenter()
+        addDetachedItem(viewportCenter)
+        return
+      }
+      
+      // Cmd/Ctrl + F: Add external framework
+      if (e.key.toLowerCase() === 'f') {
+        e.preventDefault()
+        const viewportCenter = getViewportCenter()
+        setExternalFwViewportCenter(viewportCenter)
+        setExternalFwDialogOpen(true)
+        return
+      }
+    }
+    
+    globalThis.addEventListener('keydown', handleKeyDown)
+    return () => globalThis.removeEventListener('keydown', handleKeyDown)
+  }, [addDetachedItem, getViewportCenter])
 
   const onBeforeDelete: OnBeforeDelete<CaseEditorNodeType> = useCallback(
     async ({ nodes, edges: deletedEdges }) => {
@@ -513,17 +569,28 @@ export default function EditorCanvas({ onBack }: Readonly<{ onBack?: () => void 
       />
 
       <FloatingAddButton
-        onAddItem={addDetachedItem}
-        onAddExternalFramework={() => setExternalFwDialogOpen(true)}
+        onAddItem={() => {
+          const viewportCenter = getViewportCenter()
+          addDetachedItem(viewportCenter)
+        }}
+        onAddExternalFramework={() => {
+          const viewportCenter = getViewportCenter()
+          setExternalFwViewportCenter(viewportCenter)
+          setExternalFwDialogOpen(true)
+        }}
         sidePanelOpen={Boolean(selectedNode || selectedEdge)}
       />
 
       <AddExternalFrameworkDialog
         open={externalFwDialogOpen}
-        onCancel={() => setExternalFwDialogOpen(false)}
+        onCancel={() => {
+          setExternalFwDialogOpen(false)
+          setExternalFwViewportCenter(undefined)
+        }}
         onCreate={(draft) => {
           setExternalFwDialogOpen(false)
-          addExternalFramework(draft)
+          addExternalFramework(draft, externalFwViewportCenter)
+          setExternalFwViewportCenter(undefined)
         }}
       />
     </div>

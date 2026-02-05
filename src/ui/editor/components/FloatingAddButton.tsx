@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { PlusIcon, DocumentPlusIcon, LinkIcon } from '@heroicons/react/24/solid'
 
 type AddOption = {
@@ -6,20 +6,26 @@ type AddOption = {
   label: string
   description: string
   icon: typeof PlusIcon
+  shortcut: string
 }
 
-const ADD_OPTIONS: AddOption[] = [
+/** Detect if running on Mac for keyboard shortcut display */
+const isMac = typeof globalThis.navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(globalThis.navigator.platform)
+
+const getAddOptions = (): AddOption[] => [
   {
     id: 'item',
     label: 'Add Item',
     description: 'Create a new detached CASE item',
     icon: DocumentPlusIcon,
+    shortcut: isMac ? '⌘C' : 'Ctrl+C',
   },
   {
     id: 'external',
     label: 'Add External Framework',
     description: 'Reference an external framework',
     icon: LinkIcon,
+    shortcut: isMac ? '⌘F' : 'Ctrl+F',
   },
 ]
 
@@ -33,6 +39,7 @@ type Props = {
 export default function FloatingAddButton({ onAddItem, onAddExternalFramework, sidePanelOpen }: Readonly<Props>) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const addOptions = useMemo(() => getAddOptions(), [])
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -75,9 +82,9 @@ export default function FloatingAddButton({ onAddItem, onAddExternalFramework, s
     >
       {/* Menu */}
       {open && (
-        <div className="absolute bottom-16 right-0 mb-2 w-64 overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg">
+        <div className="absolute bottom-16 right-0 mb-2 w-72 overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg">
           <div className="p-1">
-            {ADD_OPTIONS.map((option) => {
+            {addOptions.map((option) => {
               const Icon = option.icon
               return (
                 <button
@@ -90,7 +97,12 @@ export default function FloatingAddButton({ onAddItem, onAddExternalFramework, s
                     <Icon className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-slate-900">{option.label}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-slate-900">{option.label}</span>
+                      <kbd className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+                        {option.shortcut}
+                      </kbd>
+                    </div>
                     <div className="text-xs text-slate-500">{option.description}</div>
                   </div>
                 </button>

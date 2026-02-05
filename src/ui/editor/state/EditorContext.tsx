@@ -158,8 +158,8 @@ type Action =
   | { type: 'edge/flip'; edgeId: string }
   | { type: 'edge/reconnect'; edgeId: string; newSource: string; newTarget: string; newSourceHandle?: string; newTargetHandle?: string }
   | { type: 'node/addChild'; parentId: string; childId: string; cfItem: CFItem }
-  | { type: 'node/addDetachedItem'; nodeId: string; cfItem: CFItem }
-  | { type: 'node/addExternalFramework'; nodeId: string; data: ExternalFrameworkNodeData }
+  | { type: 'node/addDetachedItem'; nodeId: string; cfItem: CFItem; viewportCenter?: { x: number; y: number } }
+  | { type: 'node/addExternalFramework'; nodeId: string; data: ExternalFrameworkNodeData; viewportCenter?: { x: number; y: number } }
   | { type: 'graph/delete'; nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }
   | { type: 'layout/apply'; positions: Record<string, { x: number; y: number }> }
   | { type: 'graph/load'; graph: EditorGraph }
@@ -490,13 +490,24 @@ function reducer(state: EditorState, action: Action): EditorState {
       return { ...state, nodes: nextNodes, edges: nextEdges, selectedNodeId: childId, selectedEdgeId: null, dirty: true }
     }
     case 'node/addDetachedItem': {
-      // Find a good position for the new detached item (bottom-right of existing nodes)
+      // Find a good position for the new detached item
+      // If viewportCenter provided, use that; otherwise use bottom-right of existing nodes
       const existingNodes = state.nodes
-      const maxX = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.x)) : 0
-      const maxY = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.y)) : HEADER_SAFE_Y
-
-      const desiredPosition = { x: maxX + DEFAULT_NODE_WIDTH + 60, y: maxY }
       const nodeSize = { w: DEFAULT_NODE_WIDTH, h: DEFAULT_NODE_HEIGHT }
+      
+      let desiredPosition: { x: number; y: number }
+      if (action.viewportCenter) {
+        // Center the node on the viewport center
+        desiredPosition = {
+          x: action.viewportCenter.x - nodeSize.w / 2,
+          y: action.viewportCenter.y - nodeSize.h / 2,
+        }
+      } else {
+        const maxX = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.x)) : 0
+        const maxY = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.y)) : HEADER_SAFE_Y
+        desiredPosition = { x: maxX + DEFAULT_NODE_WIDTH + 60, y: maxY }
+      }
+      
       const nextPosition = findNonOverlappingPosition(desiredPosition, nodeSize, state.nodes)
 
       const newNode: CaseItemNodeType = {
@@ -513,12 +524,23 @@ function reducer(state: EditorState, action: Action): EditorState {
     }
     case 'node/addExternalFramework': {
       // Find a good position for the external framework node
+      // If viewportCenter provided, use that; otherwise use bottom-right of existing nodes
       const existingNodes = state.nodes
-      const maxX = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.x)) : 0
-      const maxY = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.y)) : HEADER_SAFE_Y
-
-      const desiredPosition = { x: maxX + 280 + 60, y: maxY }
       const nodeSize = { w: 280, h: 120 }
+      
+      let desiredPosition: { x: number; y: number }
+      if (action.viewportCenter) {
+        // Center the node on the viewport center
+        desiredPosition = {
+          x: action.viewportCenter.x - nodeSize.w / 2,
+          y: action.viewportCenter.y - nodeSize.h / 2,
+        }
+      } else {
+        const maxX = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.x)) : 0
+        const maxY = existingNodes.length ? Math.max(...existingNodes.map((n) => n.position.y)) : HEADER_SAFE_Y
+        desiredPosition = { x: maxX + 280 + 60, y: maxY }
+      }
+      
       const nextPosition = findNonOverlappingPosition(desiredPosition, nodeSize, state.nodes)
 
       const newNode: ExternalFrameworkNodeType = {
@@ -648,11 +670,12 @@ type EditorContextValue = {
   flipEdge: (_edgeId: string) => void
   reconnectEdge: (_edgeId: string, _newSource: string, _newTarget: string, _newSourceHandle?: string, _newTargetHandle?: string) => void
   addChild: (_parentId: string) => void
-  addDetachedItem: () => void
-  addExternalFramework: (_data: ExternalFrameworkNodeData) => void
+  addDetachedItem: (_viewportCenter?: { x: number; y: number }) => void
+  addExternalFramework: (_data: ExternalFrameworkNodeData, _viewportCenter?: { x: number; y: number }) => void
   addItemDialog: {
     open: boolean
     parentId: string | null
+    viewportCenter?: { x: number; y: number }
     draft: AddItemDraft
   }
   setAddItemDraft: (_patch: Partial<AddItemDraft>) => void
@@ -671,9 +694,15 @@ export function EditorProvider({
   const seed = useMemo(() => initialGraph ?? DEFAULT_GRAPH, [initialGraph])
   const [state, dispatch] = useReducer(reducer, { nodes: seed.nodes, edges: seed.edges, selectedNodeId: null, selectedEdgeId: null, layoutVersion: 0, dirty: false })
   const didInitialLayout = useRef(false)
-  const [addItemDialog, setAddItemDialog] = useState<{ open: boolean; parentId: string | null; draft: AddItemDraft }>({
+  const [addItemDialog, setAddItemDialog] = useState<{ 
+    open: boolean
+    parentId: string | null
+    viewportCenter?: { x: number; y: number }
+    draft: AddItemDraft 
+  }>({
     open: false,
     parentId: null,
+    viewportCenter: undefined,
     draft: { fullStatement: '' },
   })
 
@@ -795,27 +824,25 @@ export function EditorProvider({
   }, [state.nodes, state.edges])
 
   const addChild = useCallback((parentId: string) => {
-    setAddItemDialog({ open: true, parentId, draft: { fullStatement: '' } })
+    setAddItemDialog({ open: true, parentId, viewportCenter: undefined, draft: { fullStatement: '' } })
   }, [])
 
-  const addDetachedItem = useCallback(() => {
-    const uuid = globalThis.crypto?.randomUUID?.()
-    const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
-    const nodeId = `tu_${uuid ?? fallbackId}`
-    
-    const cfItem = makeCfItem(nodeId, 'New Item', {
-      CFItemType: 'Item',
+  const addDetachedItem = useCallback((viewportCenter?: { x: number; y: number }) => {
+    // Open the dialog for adding a detached item (no parent)
+    setAddItemDialog({ 
+      open: true, 
+      parentId: null, 
+      viewportCenter,
+      draft: { fullStatement: '' } 
     })
-    
-    dispatch({ type: 'node/addDetachedItem', nodeId, cfItem })
   }, [])
 
-  const addExternalFramework = useCallback((data: ExternalFrameworkNodeData) => {
+  const addExternalFramework = useCallback((data: ExternalFrameworkNodeData, viewportCenter?: { x: number; y: number }) => {
     const uuid = globalThis.crypto?.randomUUID?.()
     const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
     const nodeId = `ext_${uuid ?? fallbackId}`
     
-    dispatch({ type: 'node/addExternalFramework', nodeId, data })
+    dispatch({ type: 'node/addExternalFramework', nodeId, data, viewportCenter })
   }, [])
 
   const setAddItemDraft = useCallback((patch: Partial<AddItemDraft>) => {
@@ -823,18 +850,16 @@ export function EditorProvider({
   }, [])
 
   const cancelAddItem = useCallback(() => {
-    setAddItemDialog({ open: false, parentId: null, draft: { fullStatement: '' } })
+    setAddItemDialog({ open: false, parentId: null, viewportCenter: undefined, draft: { fullStatement: '' } })
   }, [])
 
   const confirmAddItem = useCallback(() => {
-    if (!addItemDialog.parentId) return
-
     const fullStatement = addItemDialog.draft.fullStatement.trim()
     if (!fullStatement) return
 
     const uuid = globalThis.crypto?.randomUUID?.()
     const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
-    const childId = `tu_${uuid ?? fallbackId}`
+    const nodeId = `tu_${uuid ?? fallbackId}`
 
     const parseCsv = (raw?: string) =>
       (raw ?? '')
@@ -853,14 +878,27 @@ export function EditorProvider({
       notes: addItemDialog.draft.notes?.trim() || undefined,
     }
 
-    dispatch({
-      type: 'node/addChild',
-      parentId: addItemDialog.parentId,
-      childId,
-      cfItem: makeCfItem(childId, fullStatement, cfItemExtras),
-    })
+    const cfItem = makeCfItem(nodeId, fullStatement, cfItemExtras)
 
-    setAddItemDialog({ open: false, parentId: null, draft: { fullStatement: '' } })
+    if (addItemDialog.parentId) {
+      // Adding as child of a parent node
+      dispatch({
+        type: 'node/addChild',
+        parentId: addItemDialog.parentId,
+        childId: nodeId,
+        cfItem,
+      })
+    } else {
+      // Adding as detached item (no parent)
+      dispatch({
+        type: 'node/addDetachedItem',
+        nodeId,
+        cfItem,
+        viewportCenter: addItemDialog.viewportCenter,
+      })
+    }
+
+    setAddItemDialog({ open: false, parentId: null, viewportCenter: undefined, draft: { fullStatement: '' } })
   }, [addItemDialog])
 
   const deleteElements = useCallback((params: { nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }) => {
