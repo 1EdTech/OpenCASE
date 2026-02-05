@@ -4,6 +4,7 @@ import { CFPackage } from '../../../../domain/case/entities/CFPackage';
 import { CFDocument } from '../../../../domain/case/entities/CFDocument';
 import { CFItem } from '../../../../domain/case/entities/CFItem';
 import { CFAssociation } from '../../../../domain/case/entities/CFAssociation';
+import { CFRubric } from '../../../../domain/case/entities/CFRubric';
 
 describe('FileCFPackageRepository', () => {
   let repository: FileCFPackageRepository;
@@ -68,7 +69,8 @@ describe('FileCFPackageRepository', () => {
       expect(result?.items[0].sourcedId).toBe('item-1');
       expect(result?.associations).toHaveLength(1);
       expect(result?.associations[0].sourcedId).toBe('assoc-1');
-      expect(result?.rubrics).toEqual([{ id: 'rubric-1' }]);
+      expect(result?.rubrics).toHaveLength(1);
+      expect(result?.rubrics[0].identifier).toBe('rubric-1');
     });
 
     it('should handle empty items and associations', async () => {
@@ -161,11 +163,16 @@ describe('FileCFPackageRepository', () => {
         lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
       });
 
+      const rubric = CFRubric.fromRaw(tenantId, version, {
+        identifier: 'rubric-1',
+        uri: `/ims/case/${version}/CFRubrics/rubric-1`,
+        lastChangeDateTime: '2024-01-01T00:00:00Z'
+      });
       const pkg = new CFPackage({
         document,
         items: [item],
         associations: [association],
-        rubrics: [{ id: 'rubric-1' }]
+        rubrics: [rubric]
       });
 
       const relativePath = 'frameworks/doc-123/doc-123_v0001.json';
@@ -181,7 +188,7 @@ describe('FileCFPackageRepository', () => {
           document: document.toJSON(),
           items: [item.toJSON()],
           associations: [association.toJSON()],
-          rubrics: [{ id: 'rubric-1' }]
+          rubrics: [rubric.toJSON()]
         }
       );
       expect(mockStore.updateIndexesForBundle).toHaveBeenCalledWith(
@@ -191,7 +198,7 @@ describe('FileCFPackageRepository', () => {
           document: document.toJSON(),
           items: [item.toJSON()],
           associations: [association.toJSON()],
-          rubrics: [{ id: 'rubric-1' }]
+          rubrics: [rubric.toJSON()]
         },
         relativePath
       );

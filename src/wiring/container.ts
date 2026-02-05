@@ -160,7 +160,24 @@ export async function buildContainer(): Promise<Container> {
       throw new Error('Could not find schemas directory')
     }
     
-    const cfPackageSchemaV1p1 = JSON.parse(readFileSync(join(schemasDir, 'case-v1p1-cfpackage.json'), 'utf-8'))
+    // Use official schema for CASE v1p1 CFPackage (from 1EdTech)
+    let officialSchemasDir: string | null = null
+    for (const path of possiblePaths) {
+      try {
+        const testFile = join(path, 'official/case-v1p1-cfpackage.json')
+        readFileSync(testFile, 'utf-8')
+        officialSchemasDir = path
+        break
+      } catch {
+        // Try next path
+      }
+    }
+    
+    // Use official schema if available, otherwise fall back to regular schema
+    const cfPackageSchemaV1p1 = officialSchemasDir
+      ? JSON.parse(readFileSync(join(officialSchemasDir, 'official/case-v1p1-cfpackage.json'), 'utf-8'))
+      : JSON.parse(readFileSync(join(schemasDir, 'case-v1p1-cfpackage.json'), 'utf-8'))
+    
     const cfDocumentSchemaV1p1 = JSON.parse(readFileSync(join(schemasDir, 'case-v1p1-cfdocument.json'), 'utf-8'))
     const cfItemSchemaV1p1 = JSON.parse(readFileSync(join(schemasDir, 'case-v1p1-cfitem.json'), 'utf-8'))
     const cfAssociationSchemaV1p1 = JSON.parse(readFileSync(join(schemasDir, 'case-v1p1-cfassociation.json'), 'utf-8'))

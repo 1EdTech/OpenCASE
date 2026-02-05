@@ -5,6 +5,7 @@ import { CaseVersion, TenantId } from '../../../domain/case/value-objects/Identi
 import { CFDocument } from '../../../domain/case/entities/CFDocument'
 import { CFItem } from '../../../domain/case/entities/CFItem'
 import { CFAssociation } from '../../../domain/case/entities/CFAssociation'
+import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { logger } from '../../../infrastructure/logging/Logger'
 
@@ -57,7 +58,9 @@ export class ImportFrameworkFromEndpoint {
     const associations = (payload.associations ?? []).map(a =>
       CFAssociation.fromRaw(tenantId, caseVersion, a)
     )
-    const rubrics = payload.rubrics ?? []
+    const rubrics = (payload.rubrics ?? []).map(r =>
+      CFRubric.fromRaw(tenantId, caseVersion, r)
+    )
 
     const pkg = new CFPackage({ document, items, associations, rubrics })
 

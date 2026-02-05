@@ -13,6 +13,29 @@ export interface LinkData {
 
 export class LinkDataHelper {
   /**
+   * Validates that an identifier is a valid UUID format
+   * UUID format: 8-4-4-4-12 hexadecimal characters (lowercase preferred)
+   */
+  static isValidUUID(identifier: string): boolean {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    return uuidRegex.test(identifier)
+  }
+
+  /**
+   * Validates that a LinkData object conforms to LinkURI requirements (UUID identifier)
+   * Throws an error if validation fails
+   */
+  static validateLinkURI(linkData: LinkData, fieldName: string): void {
+    if (!this.isValidUUID(linkData.identifier)) {
+      throw new Error(
+        `${fieldName} must use LinkURI format with a valid UUID identifier. ` +
+        `Got identifier: "${linkData.identifier}". ` +
+        `Expected format: 8-4-4-4-12 hexadecimal characters (e.g., 550e8400-e29b-41d4-a716-446655440000)`
+      )
+    }
+  }
+
+  /**
    * Creates a link data object from a URI string
    * If full link data is provided, uses it; otherwise constructs from URI
    */

@@ -3,6 +3,7 @@ import { CFPackageRepository } from '../../ports/CFPackageRepository'
 import { CFDocument } from '../../../../domain/case/entities/CFDocument'
 import { CFItem } from '../../../../domain/case/entities/CFItem'
 import { CFAssociation } from '../../../../domain/case/entities/CFAssociation'
+import { CFRubric } from '../../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../../domain/case/entities/CFPackage'
 
 describe('CreateFramework', () => {
@@ -62,7 +63,8 @@ describe('CreateFramework', () => {
       expect(savedPkg.items[1].sourcedId).toBe('item-2')
       expect(savedPkg.associations).toHaveLength(1)
       expect(savedPkg.associations[0].sourcedId).toBe('assoc-1')
-      expect(savedPkg.rubrics).toEqual([{ id: 'rubric-1', type: 'test' }])
+      expect(savedPkg.rubrics).toHaveLength(1)
+      expect(savedPkg.rubrics[0].identifier).toBe('rubric-1')
     })
 
     it('should handle missing optional arrays', async () => {
@@ -117,14 +119,21 @@ describe('CreateFramework', () => {
         },
         items: [{ sourcedId: 'item-1', fullStatement: 'Statement 1' }],
         associations: [],
-        rubrics: [{ id: 'rubric-1', type: 'test' }]
+        rubrics: [{ id: 'rubric-1', lastChangeDateTime: '2024-01-01T00:00:00Z' }]
       }
 
+      // Create the existing package exactly as CreateFramework would create it
+      // This simulates what CreateFramework does internally
       const doc = CFDocument.fromRaw(tenantId, caseVersion as any, payload.document)
-      const docURI = doc.toJSON().uri
-      const items = payload.items.map(i => CFItem.fromRaw(tenantId, caseVersion as any, i, doc.sourcedId, docURI))
+      const docId = doc.sourcedId
+      const docJSON = doc.toJSON()
+      const docURI = docJSON.uri
+      const items = payload.items.map(i => CFItem.fromRaw(tenantId, caseVersion as any, i, docId, docURI))
       const associations = payload.associations.map(a => CFAssociation.fromRaw(tenantId, caseVersion as any, a))
-      const existingPkg = new CFPackage({ document: doc, items, associations, rubrics: payload.rubrics, definitions: null })
+      // CreateFramework calls CFRubric.fromRaw(tenantId, caseVersion, r) where r is the raw rubric
+      // The raw rubric has { id: 'rubric-1', type: 'test' }, but CFRubric.fromRaw handles 'id' and ignores 'type'
+      const rubrics = (payload.rubrics ?? []).map(r => CFRubric.fromRaw(tenantId, caseVersion as any, r))
+      const existingPkg = new CFPackage({ document: doc, items, associations, rubrics, definitions: null })
       mockRepository.load.mockResolvedValueOnce(existingPkg as any)
 
       const result = await createFramework.execute({ tenantId, caseVersion: caseVersion as any, payload })

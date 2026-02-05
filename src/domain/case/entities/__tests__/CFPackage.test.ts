@@ -2,6 +2,7 @@ import { CFPackage } from '../CFPackage';
 import { CFDocument } from '../CFDocument';
 import { CFItem } from '../CFItem';
 import { CFAssociation } from '../CFAssociation';
+import { CFRubric } from '../CFRubric';
 import { CaseVersion, TenantId } from '../../value-objects/Identifiers';
 
 describe('CFPackage', () => {
@@ -61,7 +62,7 @@ describe('CFPackage', () => {
     const document = createDocument();
     const items = [createItem('item-1'), createItem('item-2')];
     const associations = [createAssociation('assoc-1')];
-    const rubrics = [{ id: 'rubric-1', type: 'test' }];
+    const rubrics = [CFRubric.fromRaw(tenantId, caseVersion, { identifier: 'rubric-1', uri: '/ims/case/v1p1/CFRubrics/rubric-1', lastChangeDateTime: '2024-01-01T00:00:00Z', title: 'test' })];
 
     const pkg = new CFPackage({ document, items, associations, rubrics });
 
@@ -89,7 +90,7 @@ describe('CFPackage', () => {
     const document = createDocument();
     const items = [createItem('item-1')];
     const associations = [createAssociation('assoc-1')];
-    const rubrics = [{ id: 'rubric-1' }];
+    const rubrics = [CFRubric.fromRaw(tenantId, caseVersion, { identifier: 'rubric-1', uri: '/ims/case/v1p1/CFRubrics/rubric-1', lastChangeDateTime: '2024-01-01T00:00:00Z' })];
 
     const pkg = new CFPackage({ document, items, associations, rubrics });
 
@@ -99,6 +100,7 @@ describe('CFPackage', () => {
     expect(pkg.associations.length).toBe(1);
     expect(pkg.associations[0].sourcedId).toBe('assoc-1');
     expect(pkg.rubrics.length).toBe(1);
+    expect(pkg.rubrics[0].identifier).toBe('rubric-1');
   });
 });
 

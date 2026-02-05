@@ -2,6 +2,7 @@ import { type CFPackageRepository } from '../ports/CFPackageRepository'
 import { type CaseVersion, type SourcedId, type TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { logger } from '../../../infrastructure/logging/Logger'
 import { type FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
+import { CFRubric } from '../../../domain/case/entities/CFRubric'
 
 export interface GetCFRubricQuery {
   tenantId: TenantId
@@ -25,14 +26,13 @@ export class GetCFRubric {
       const pkg = await this.pkgRepo.load(query.tenantId, query.caseVersion, docMeta.sourcedId)
       if (!pkg) continue
 
-      const rubric = pkg.rubrics.find((r: any) => {
-        const rubricId = r.identifier ?? r.id ?? r.sourcedId
-        return rubricId === query.sourcedId
+      const rubric = pkg.rubrics.find((r: CFRubric) => {
+        return r.identifier === query.sourcedId
       })
 
       if (rubric) {
         return {
-          CFRubric: rubric
+          CFRubric: rubric.toJSON()
         }
       }
     }

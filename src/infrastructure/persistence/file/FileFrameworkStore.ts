@@ -764,7 +764,11 @@ export class FileFrameworkStore {
     add(docId, 'CFDocument')
     for (const it of bundle.items ?? []) add((it?.sourcedId ?? it?.identifier) as string | undefined, 'CFItem')
     for (const a of bundle.associations ?? []) add((a?.sourcedId ?? a?.identifier) as string | undefined, 'CFAssociation')
-    for (const r of bundle.rubrics ?? []) add((r?.identifier ?? r?.id ?? r?.sourcedId) as string | undefined, 'CFRubric')
+    for (const r of bundle.rubrics ?? []) {
+      // Handle both CFRubric entities and raw objects
+      const rubricId = (r as any)?.identifier ?? (r as any)?.id ?? (r as any)?.sourcedId
+      add(rubricId as string | undefined, 'CFRubric')
+    }
 
     const other = version === '1.1' ? '1.0' : '1.1'
 

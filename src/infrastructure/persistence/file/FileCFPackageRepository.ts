@@ -5,6 +5,7 @@ import { type FileFrameworkStore } from './FileFrameworkStore'
 import { CFDocument } from '../../../domain/case/entities/CFDocument'
 import { CFItem } from '../../../domain/case/entities/CFItem'
 import { CFAssociation } from '../../../domain/case/entities/CFAssociation'
+import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { logger } from '../../logging/Logger'
 
 export class FileCFPackageRepository implements CFPackageRepository {
@@ -28,7 +29,9 @@ export class FileCFPackageRepository implements CFPackageRepository {
     const associations = (bundle.associations ?? []).map((a: unknown) =>
       CFAssociation.fromRaw(tenantId, version, a)
     )
-    const rubrics = bundle.rubrics ?? []
+    const rubrics = (bundle.rubrics ?? []).map((r: unknown) =>
+      CFRubric.fromRaw(tenantId, version, r)
+    )
     const definitions = bundle.definitions ?? null
 
     return new CFPackage({ document, items, associations, rubrics, definitions })
@@ -44,7 +47,7 @@ export class FileCFPackageRepository implements CFPackageRepository {
       document: pkg.document.toJSON(),
       items: pkg.items.map(i => i.toJSON()),
       associations: pkg.associations.map(a => a.toJSON()),
-      rubrics: pkg.rubrics ?? []
+      rubrics: (pkg.rubrics ?? []).map(r => r.toJSON())
     }
 
     if (pkg.definitions) {

@@ -4,6 +4,7 @@ import { CFPackage } from '../../../../domain/case/entities/CFPackage';
 import { CFDocument } from '../../../../domain/case/entities/CFDocument';
 import { CFItem } from '../../../../domain/case/entities/CFItem';
 import { CFAssociation } from '../../../../domain/case/entities/CFAssociation';
+import { CFRubric } from '../../../../domain/case/entities/CFRubric';
 import { FileFrameworkStore } from '../../../../infrastructure/persistence/file/FileFrameworkStore'
 
 describe('GetCFPackage', () => {
@@ -104,7 +105,12 @@ describe('GetCFPackage', () => {
         lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
       });
 
-      const rubrics = [{ id: 'rubric-1', type: 'test' }];
+      const rubrics = [CFRubric.fromRaw(tenantId, caseVersion, {
+        identifier: 'rubric-1',
+        uri: '/ims/case/v1p1/CFRubrics/rubric-1',
+        lastChangeDateTime: '2024-01-01T00:00:00Z',
+        title: 'test'
+      })];
 
       const pkg = new CFPackage({
         document,
@@ -133,7 +139,14 @@ describe('GetCFPackage', () => {
           CFAssociations: expect.arrayContaining([
             expect.objectContaining({ identifier: 'assoc-1' })
           ]),
-          CFRubrics: rubrics
+          CFRubrics: expect.arrayContaining([
+            expect.objectContaining({
+              identifier: 'rubric-1',
+              uri: '/ims/case/v1p1/CFRubrics/rubric-1',
+              lastChangeDateTime: '2024-01-01T00:00:00.000Z',
+              title: 'test'
+            })
+          ])
         }
       });
     });

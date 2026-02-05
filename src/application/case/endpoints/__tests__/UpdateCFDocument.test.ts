@@ -4,6 +4,7 @@ import { CFPackage } from '../../../../domain/case/entities/CFPackage'
 import { CFDocument } from '../../../../domain/case/entities/CFDocument'
 import { CFItem } from '../../../../domain/case/entities/CFItem'
 import { CFAssociation } from '../../../../domain/case/entities/CFAssociation'
+import { CFRubric } from '../../../../domain/case/entities/CFRubric'
 
 describe('UpdateCFDocument', () => {
   let mockRepository: jest.Mocked<CFPackageRepository>
@@ -172,7 +173,7 @@ describe('UpdateCFDocument', () => {
         document: existingDocument,
         items: [existingItem],
         associations: [existingAssoc],
-        rubrics: [{ id: 'rubric-1' }]
+        rubrics: [CFRubric.fromRaw(tenantId, caseVersion, { identifier: 'rubric-1', uri: `/ims/case/v1p1/CFRubrics/rubric-1`, lastChangeDateTime: '2024-01-01T00:00:00Z' })]
       })
 
       mockRepository.load.mockResolvedValue(existingPkg)
@@ -193,7 +194,8 @@ describe('UpdateCFDocument', () => {
       const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
       expect(savedPkg.items).toHaveLength(1)
       expect(savedPkg.associations).toHaveLength(1)
-      expect(savedPkg.rubrics).toEqual([{ id: 'rubric-1' }])
+      expect(savedPkg.rubrics).toHaveLength(1)
+      expect(savedPkg.rubrics[0].identifier).toBe('rubric-1')
     })
   })
 })

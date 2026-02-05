@@ -84,8 +84,15 @@ export class CFItem {
     const CFItemTypeURI = this.transformLinkData(raw.CFItemTypeURI, caseVersion)
     const conceptKeywordsURI = this.transformLinkData(raw.conceptKeywordsURI, caseVersion)
     const licenseURI = this.transformLinkData(raw.licenseURI, caseVersion)
+    // subjectURI must use LinkURI format (UUID identifier required)
     const subjectURI = Array.isArray(raw.subjectURI)
-      ? raw.subjectURI.map((s: any) => this.transformLinkData(s, caseVersion)).filter((s: any): s is LinkData => s !== undefined)
+      ? raw.subjectURI.map((s: any) => {
+          const transformed = this.transformLinkData(s, caseVersion)
+          if (transformed) {
+            LinkDataHelper.validateLinkURI(transformed, 'CFItem.subjectURI')
+          }
+          return transformed
+        }).filter((s: any): s is LinkData => s !== undefined)
       : undefined
     
     return CFItem.create({

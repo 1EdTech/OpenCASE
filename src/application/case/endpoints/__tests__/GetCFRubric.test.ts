@@ -3,6 +3,7 @@ import { CFPackageRepository } from '../../ports/CFPackageRepository'
 import { FileFrameworkStore } from '../../../../infrastructure/persistence/file/FileFrameworkStore'
 import { CFPackage } from '../../../../domain/case/entities/CFPackage'
 import { CFDocument } from '../../../../domain/case/entities/CFDocument'
+import { CFRubric } from '../../../../domain/case/entities/CFRubric'
 
 describe('GetCFRubric', () => {
   let mockRepository: jest.Mocked<CFPackageRepository>
@@ -46,11 +47,12 @@ describe('GetCFRubric', () => {
         lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
       })
 
-      const rubric = {
+      const rubric = CFRubric.fromRaw(tenantId, caseVersion, {
         identifier: rubricId,
-        title: 'Test Rubric',
-        type: 'test'
-      }
+        uri: `/ims/case/v1p1/CFRubrics/${rubricId}`,
+        lastChangeDateTime: '2024-01-01T00:00:00Z',
+        title: 'Test Rubric'
+      })
 
       const pkg = new CFPackage({
         document,
@@ -72,7 +74,7 @@ describe('GetCFRubric', () => {
       const result = await getCFRubric.execute({ tenantId, caseVersion, sourcedId: rubricId })
 
       expect(result).toEqual({
-        CFRubric: rubric
+        CFRubric: rubric.toJSON()
       })
     })
   })

@@ -88,7 +88,7 @@ export class GetCFPackage {
 
     // Add CFRubrics if present (optional field [0..*])
     if (pkg.rubrics && pkg.rubrics.length > 0) {
-      result.CFPackage.CFRubrics = pkg.rubrics
+      result.CFPackage.CFRubrics = pkg.rubrics.map(r => r.toJSON())
     }
 
     // Add extensions if present (optional field [0..1])

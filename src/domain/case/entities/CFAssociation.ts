@@ -82,7 +82,11 @@ export class CFAssociation {
     }
     
     // Transform CFAssociationGroupingURI if present
+    // CFAssociationGroupingURI must use LinkURI format (UUID identifier required)
     const CFAssociationGroupingURI = this.transformLinkData(raw.CFAssociationGroupingURI, caseVersion)
+    if (CFAssociationGroupingURI) {
+      LinkDataHelper.validateLinkURI(CFAssociationGroupingURI, 'CFAssociationGroupingURI')
+    }
     
     return CFAssociation.create({
       tenantId,

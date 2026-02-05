@@ -40,7 +40,7 @@ export class DeleteCFDocument {
 
     // Remove rubrics from index
     for (const r of existingPkg.rubrics ?? []) {
-      const rubricId = (r?.identifier ?? r?.id ?? r?.sourcedId) as string | undefined
+      const rubricId = r.identifier
       if (rubricId) this.store.removeRubricFromIndex(tenantId, caseVersion, rubricId)
     }
 
