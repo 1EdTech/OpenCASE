@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CASE v1.0 CFItem Schema",
+  "description": "Schema for validating a CFItem",
+  "$ref": "#/definitions/CFItem",
+  "definitions": {
+    "UUID": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "UUID in format 8-4-4-4-12 hexadecimal characters"
+    },
+    "LinkGenURI": {
+      "type": "object",
+      "required": [
+        "title",
+        "identifier",
+        "uri"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "A human readable title for the associated object"
+        },
+        "identifier": {
+          "type": "string",
+          "description": "An unambiguous, synthetic, globally unique identifier (this may or may not be a UUID) for the associated object"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "A network-resolvable URI pointing to the authoritative reference for the associated object"
+        }
+      }
+    },
+    "CFItem": {
+      "type": "object",
+      "required": [
+        "sourcedId",
+        "uri",
+        "fullStatement",
+        "lastChangeDateTime",
+        "CFDocumentURI"
+      ],
+      "properties": {
+        "sourcedId": {
+          "$ref": "#/definitions/UUID"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "fullStatement": {
+          "type": "string"
+        },
+        "humanCodingScheme": {
+          "type": "string"
+        },
+        "listEnumInSource": {
+          "type": "string"
+        },
+        "listEnumeration": {
+          "type": "string"
+        },
+        "alternativeLabel": {
+          "type": "string"
+        },
+        "abbreviatedStatement": {
+          "type": "string"
+        },
+        "CFItemType": {
+          "type": "string"
+        },
+        "CFItemTypeURI": {
+          "type": "object"
+        },
+        "conceptKeywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conceptKeywordsURI": {
+          "type": "object"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "educationLevel": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "licenseURI": {
+          "type": "object"
+        },
+        "statusStartDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date the CFItem status started"
+        },
+        "statusEndDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date the CFItem status ended or changed to another status"
+        },
+        "lastChangeDateTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "CFDocumentURI": {
+          "$ref": "#/definitions/LinkGenURI"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+version: "3.9"
+
+services:
+  case-provider:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - CASE_DATA_DIR=/app/data
+      - PORT=8080
+      # Keycloak / OIDC (Keycloak-only auth; OpenCASE validates Keycloak JWTs)
+      - OIDC_ISSUER_URL=http://keycloak:8080/realms/opencase
+      # Client-per-tenant audience convention: aud (or azp) must equal "${OIDC_CLIENT_ID_PREFIX}${tenantId}"
+      - OIDC_CLIENT_ID_PREFIX=tenant-
+      # Keycloak Admin API (used for tenant provisioning)
+      - KEYCLOAK_BASE_URL=http://keycloak:8080
+      - KEYCLOAK_REALM=opencase
+      # Use Keycloak master realm admin token (dev default). In production prefer a service-account client.
+      - KEYCLOAK_ADMIN_REALM=master
+      - KEYCLOAK_ADMIN_CLIENT_ID=admin-cli
+      - KEYCLOAK_ADMIN_USERNAME=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      # Default SPA redirect/web origins applied to newly created tenant clients
+      - KEYCLOAK_SPA_REDIRECT_URIS=http://localhost:3000/*,http://localhost:5173/*
+      - KEYCLOAK_SPA_WEB_ORIGINS=http://localhost:3000,http://localhost:5173
+      # Bootstrap a "system" tenant admin for calling /management/tenants (scope: case.admin)
+      - KEYCLOAK_BOOTSTRAP_SYSTEM_ADMIN=true
+      - KEYCLOAK_SYSTEM_ADMIN_EMAIL=system-admin@local
+      - KEYCLOAK_SYSTEM_ADMIN_PASSWORD=admin
+    volumes:
+      # Must be writable for tenant creation and framework persistence
+      - ./data:/app/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    ports:
+      - "8081:8080"
+    environment:
+      - KEYCLOAK_ADMIN=admin
+      - KEYCLOAK_ADMIN_PASSWORD=admin
+      - KC_HTTP_ENABLED=true
+      - KC_HOSTNAME_STRICT=false
+      - KC_HOSTNAME_STRICT_HTTPS=false
+      # Helpful for local dev; consider disabling in hardened environments
+      - KC_HEALTH_ENABLED=true
+      - KC_METRICS_ENABLED=true
+    command: ["start-dev", "--http-port=8080"]
+

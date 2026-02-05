@@ -1,0 +1,45 @@
+{
+  "name": "opencase",
+  "version": "1.0.0",
+  "description": "OpenCASE is a **reference implementation** of a multi-tenant   **1EdTech CASE (Competencies & Academic Standards Exchange) Provider**, supporting:",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "dev": "ts-node-dev --respawn src/main.ts",
+    "lint": "eslint .",
+    "test": "jest --watch",
+    "import-framework": "ts-node src/application/cli/import-framework.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/cors": "^2.8.19",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.5",
+    "express": "^5.2.0",
+    "jsonwebtoken": "^9.0.2",
+    "pino": "^10.1.0",
+    "swagger-jsdoc": "^6.2.8"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/express": "^5.0.5",
+    "@types/jest": "^29.5.14",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.10.1",
+    "@eslint/js": "^9.39.2",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "eslint": "^9.39.2",
+    "globals": "^15.14.0",
+    "typescript-eslint": "^8.54.0",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3"
+  }
+}

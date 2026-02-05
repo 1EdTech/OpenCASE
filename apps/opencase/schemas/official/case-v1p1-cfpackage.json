@@ -1,0 +1,909 @@
+{
+    "$schema" : "https://json-schema.org/draft/2019-09/schema#",
+    "$id" : "https://purl.imsglobal.org/spec/case/v1p1/schema/json/case_v1p1_cfpackage-jsonschema1.json",
+    "title" : "JSON Schema for the CFPackage class.",
+    "description" : "This is the container for all of the data for a Competency Framework Package i.e. the root CFDocument and ALL of the corresponding components i.e. the CFItems, CFAssociations and CFDefinitions.",
+    "type" : "object",
+    "properties" : {
+      "CFDocument" : {
+        "$ref" : "#/$defs/CFPckgDocument"
+      },
+      "CFItems" : {
+        "type" : "array",
+        "items" : {
+          "$ref" : "#/$defs/CFPckgItem"
+        }
+      },
+      "CFAssociations" : {
+        "type" : "array",
+        "items" : {
+          "$ref" : "#/$defs/CFPckgAssociation"
+        }
+      },
+      "CFDefinitions" : {
+        "$ref" : "#/$defs/CFDefinition"
+      },
+      "CFRubrics" : {
+        "type" : "array",
+        "items" : {
+          "$ref" : "#/$defs/CFRubric"
+        }
+      },
+      "extensions" : {
+        "$ref" : "#/$defs/CFPackageExtension"
+      }
+    },
+    "required" : [ "CFDocument" ],
+    "additionalProperties" : false,
+    "$defs" : {
+      "CFRubric" : {
+        "description" : "The container for the definition of a rubric which is addressed by the competency framework. This includes the set of associated CFRubricCriteria and CFRubricCriterionLevels.",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFRubric. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFRubric using a network-resolvable URI.",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "The title of the CFRubric.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "description" : {
+            "description" : "A human readable description of the CFRubric. In Version 1.1 the data-type for this attribute has been changed from NormalizedString. ",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "CFRubricCriteria" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/CFRubricCriterion"
+            }
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFRubricExtension"
+          }
+        },
+        "required" : [ "identifier", "uri", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFPckgItem" : {
+        "description" : "This is the container for the CFItem data within the context of a CFPackage. This is the content that either describes a specific competency (learning objective) or describes a grouping of competencies within the taxonomy of a Competency Framework Document. ",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFItem. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "fullStatement" : {
+            "description" : "The text of the statement. The textual content that either describes a specific competency or describes a less granular group of competencies within the taxonomy of the standards document. In Version 1.1 the data-type was changed from NormalizedString.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "alternativeLabel" : {
+            "description" : "An alternate 'term' for Competency.  Some institutions may want to render their achievements as outcomes, or objectives, etc.  Semantically they are the same as Competencies, but diversity of terms is used.  This allows for the flexibility for the institution to define their own term for 'Competency' and not being locked into it.  ",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "CFItemType" : {
+            "description" : "The textual label identifying the class of the statement as designated by the promulgating body.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFItem using a network-resolvable URI.",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "humanCodingScheme" : {
+            "description" : "A human-referenceable code designated by the publisher to identify the item among learning standard items.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "listEnumeration" : {
+            "description" : "A set of one or more alphanumeric characters and/or symbol denoting the positioning of the statement being described in a sequential listing of statements. Use of the 'sequenceNumber' in the CFPckgAssociation class is preferred over the use of this property for sequencing.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "abbreviatedStatement" : {
+            "description" : "An abbreviated version of the Full Statement.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "conceptKeywords" : {
+            "type" : "array",
+            "items" : {
+              "description" : "The significant topicality of the CFItem using free-text keywords and phrases.",
+              "$comment" : "Origin: NormalizedString (PrimitiveType)",
+              "type" : "string"
+            }
+          },
+          "conceptKeywordsURI" : {
+            "$ref" : "#/$defs/LinkURI"
+          },
+          "notes" : {
+            "description" : "Information about the derivation of a CFItem statement.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "subject" : {
+            "type" : "array",
+            "items" : {
+              "description" : "A new attribute added in Version 1.1. The topic or academic subject of the Item (this should use some appropriate K-12, HE, etc. based vocabulary).",
+              "$comment" : "Origin: NormalizedString (PrimitiveType)",
+              "type" : "string"
+            }
+          },
+          "subjectURI" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/LinkURI"
+            }
+          },
+          "language" : {
+            "description" : "The default language of the text used for the content in the learning standard document (use ISO 639-2 [ISO 639]).",
+            "$comment" : "Origin: Language (PrimitiveType)",
+            "type" : "string"
+          },
+          "educationLevel" : {
+            "type" : "array",
+            "items" : {
+              "description" : "The education level, grade level or primary instructional level at which a CFItem is intended",
+              "$comment" : "Origin: NormalizedString (PrimitiveType)",
+              "type" : "string"
+            }
+          },
+          "CFItemTypeURI" : {
+            "$ref" : "#/$defs/LinkURI"
+          },
+          "licenseURI" : {
+            "$ref" : "#/$defs/LinkURI"
+          },
+          "statusStartDate" : {
+            "description" : "The date the CFItem status started.",
+            "$comment" : "Origin: Date (PrimitiveType)",
+            "type" : "string",
+            "format" : "date"
+          },
+          "statusEndDate" : {
+            "description" : "The date the CFItem status ended or changed to another status.",
+            "$comment" : "Origin: Date (PrimitiveType)",
+            "type" : "string",
+            "format" : "date"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFItemExtension"
+          }
+        },
+        "required" : [ "identifier", "fullStatement", "uri", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFRubricExtension" : {
+        "description" : "The container for the proprietary extensions to the CFRubric class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFRubricCriterion" : {
+        "description" : "The container for the definition of a rubric criterion which is addressed by the competency framework.",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFRubricCriterion. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFRubricCriterion using a network-resolvable URI.",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "category" : {
+            "description" : "A textual label for category by which CFRubricCriterion may be grouped.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "description" : {
+            "description" : "A human readable description of the CFRubricCriterion.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "CFItemURI" : {
+            "$ref" : "#/$defs/LinkURI"
+          },
+          "weight" : {
+            "description" : "A numeric weight assigned to this CFRubricCriterion, used for scored rubrics.",
+            "$comment" : "Origin: Float (PrimitiveType)",
+            "type" : "number"
+          },
+          "position" : {
+            "description" : "A numeric value representing this criterion's position in the criteria list for this CFRubric.",
+            "$comment" : "Origin: Integer (PrimitiveType)",
+            "type" : "integer"
+          },
+          "rubricId" : {
+            "description" : "The UUID for the parent CFRubric. This is included for forwards compatibility to enable access to the CFRubricCriterion without requiring embedding within the CFRubric itself.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "CFRubricCriterionLevels" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/CFRubricCriterionLevel"
+            }
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFRubricCriterionExtension"
+          }
+        },
+        "required" : [ "identifier", "uri", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFRubricCriterionLevel" : {
+        "description" : "The container for the definition of a criterion level which is addressed by the competency framework.",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFRubricCriterionLevel. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFRubricCriterionLevel using a network-resolvable URI.",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "description" : {
+            "description" : "A human readable description of the CFRubricCriterionLevel.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "quality" : {
+            "description" : "A qualitative description of this degree of achievement used for column headers or row labels in tabular rubrics.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "score" : {
+            "description" : "The points awarded for achieving this level.",
+            "$comment" : "Origin: Float (PrimitiveType)",
+            "type" : "number"
+          },
+          "feedback" : {
+            "description" : "Pre-defined feedback text to be relayed to the person or organization being evaluated. This may include guidance and suggestions for improvement or development.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "position" : {
+            "description" : "A numeric value representing the level's position in the list of levels defined for the CFRubricCriterion.",
+            "$comment" : "Origin: Integer (PrimitiveType)",
+            "type" : "integer"
+          },
+          "rubricCriterionId" : {
+            "description" : "The UUID for the parent CFRubricCriterion. This is included for forwards compatibility to enable access to the CFRubricCriterionLevel without requiring embedding within the CFRubricCriterion itself.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "extensions" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/CFRubricCriterionLevelExtension"
+            }
+          }
+        },
+        "required" : [ "identifier", "uri", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFPackageExtension" : {
+        "description" : "The container for the proprietary extensions to the CFPackage class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFRubricCriterionExtension" : {
+        "description" : "The container for the proprietary extensions to the CFRubricCriterionExtension class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFPckgDocument" : {
+        "description" : "The container for the data about a competency framework document (CFDocument) within a CFPackage. A CFDocument is the root for the creation of a learning standard/competency.",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFDocument. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFDocument using a network-resolvable URI.",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "frameworkType" : {
+            "description" : "This is a new attribute added in version 1.1. This attribute allows framework creators to indicate what type of framework this is, for example course codes. In CASE 1.1. the only predefined type of framework is 'CourseCodes'. Other standardized framework types will be defined.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "caseVersion" : {
+            "description" : "This is a new attribute added in version 1.1. Denotes the version of the CFDocument. If present it MUST have a value of '1.1'.",
+            "$comment" : "Origin: CaseVersionEnum (Enumeration); The set of values permitted to denote which version of the CASE specification is used to validate the content. ",
+            "type" : "string",
+            "enum" : [ "1.1" ]
+          },
+          "creator" : {
+            "description" : "The entity with authority that promulgates the competency framework. This is the entity that authorized or created the competency framework. It could be an education agency, higher education institution, professional body. It is the owner of the competency framework.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "The title of the CFDocument.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "officialSourceURL" : {
+            "description" : "The URL link to the formal citation of the original achievement standards document created for humans.",
+            "$comment" : "Origin: URL (DerivedType); The data-type for establishing a Uniform Resource Locator (URL) as defined by W3C.",
+            "type" : "string"
+          },
+          "publisher" : {
+            "description" : "The entity responsible for making the learning standards document available.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "description" : {
+            "description" : "A human readable description of the CFDocument. In Version 1.1 the data-type has been changed from NormalizedString.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "subject" : {
+            "type" : "array",
+            "items" : {
+              "description" : "The topic or academic subject of the Document (this should use some appropriate K-12, HE, etc. based vocabulary).",
+              "$comment" : "Origin: NormalizedString (PrimitiveType)",
+              "type" : "string"
+            }
+          },
+          "subjectURI" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/LinkURI"
+            }
+          },
+          "language" : {
+            "description" : "The default language of the text used for the content in the learning standard document (use ISO 639-2 [ISO 639]).",
+            "$comment" : "Origin: Language (PrimitiveType)",
+            "type" : "string"
+          },
+          "version" : {
+            "description" : "Defines the revision of the document (the nature of this versioning is an implementation issue).",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "adoptionStatus" : {
+            "description" : "The publication status of the document.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "statusStartDate" : {
+            "description" : "The date the CFDocument status started.",
+            "$comment" : "Origin: Date (PrimitiveType)",
+            "type" : "string",
+            "format" : "date"
+          },
+          "statusEndDate" : {
+            "description" : "The date the CFDocument status ended or changed to another status.",
+            "$comment" : "Origin: Date (PrimitiveType)",
+            "type" : "string",
+            "format" : "date"
+          },
+          "licenseURI" : {
+            "$ref" : "#/$defs/LinkURI"
+          },
+          "notes" : {
+            "description" : "Any text used to comment on the published CFDocument.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFDocumentExtension"
+          }
+        },
+        "required" : [ "identifier", "uri", "creator", "title", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFPckgAssociation" : {
+        "description" : "This is the container for the data about the relationship between two CFDocuments or between two CFItems within the context of a CFPackage.",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFAssociation. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "associationType" : {
+            "description" : "The type of association. This uses an extensible enumerated vocabulary. Changed in CASE 1.1.",
+            "$comment" : "Origin: CFAssociationTypeExtEnum (Union); The data-type for the 'associationType' attribute for the CFPckgAssociation. This is an extensible enumerated vocabulary. Extending the vocabulary makes use of a naming convention. Changed in CASE 1.1.",
+            "oneOf" : [ {
+              "type" : "string",
+              "enum" : [ "isChildOf", "isPeerOf", "isPartOf", "exactMatchOf", "precedes", "isRelatedTo", "replacedBy", "exemplar", "hasSkillLevel", "isTranslationOf" ]
+            }, {
+              "type" : "string",
+              "pattern" : "(ext:)[a-z|A-Z|0-9|.|-|_]+"
+            } ]
+          },
+          "sequenceNumber" : {
+            "description" : "This is used to order associated objects. Associations can be created through mapping rather than strict hierarchy. As such the presentation of the list cannot be ordered by the objects in the list. They may be different based on the parent being viewed. Use of this property for sequencing is preferred over the use of the 'listEnumeration' property in the CFPckgItem class. ",
+            "$comment" : "Origin: Integer (PrimitiveType)",
+            "type" : "integer"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFAssociation using a network-resolvable URI.",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "originNodeURI" : {
+            "$ref" : "#/$defs/LinkGenURI"
+          },
+          "destinationNodeURI" : {
+            "$ref" : "#/$defs/LinkGenURI"
+          },
+          "CFAssociationGroupingURI" : {
+            "$ref" : "#/$defs/LinkURI"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "notes" : {
+            "description" : "A new attribute added in Version 1.1. Information about the CFAssociation.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFAssociationExtension"
+          }
+        },
+        "required" : [ "identifier", "associationType", "uri", "originNodeURI", "destinationNodeURI", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFDefinition" : {
+        "description" : "The container for the set of definitions used for the competency framework i.e. the set of CFSubjects, CFConcepts, CFItemTypes, CFAssociationGroupings and CFLicenses.",
+        "type" : "object",
+        "properties" : {
+          "CFConcepts" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/CFConcept"
+            }
+          },
+          "CFSubjects" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/CFSubject"
+            }
+          },
+          "CFLicenses" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/CFLicense"
+            }
+          },
+          "CFItemTypes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/CFItemType"
+            }
+          },
+          "CFAssociationGroupings" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/$defs/CFAssociationGrouping"
+            }
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFDefinitionExtension"
+          }
+        },
+        "required" : [ ],
+        "additionalProperties" : false
+      },
+      "CFDefinitionExtension" : {
+        "description" : "The container for the proprietary extensions to the CFDefinition class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFLicense" : {
+        "description" : "The container for the information about a license used within the competency framework.",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFLicense. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFLicense using a network-resolvable URI. ",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "The title of the CFLicense.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "description" : {
+            "description" : "A human readable description of the CFLicense.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "licenseText" : {
+            "description" : "Legal license text used by the organization to convey license permissions. This may include the actual license text, or a link to a web location containing the license as a document or as text.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFLicenseExtension"
+          }
+        },
+        "required" : [ "identifier", "uri", "title", "licenseText", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFLicenseExtension" : {
+        "description" : "The container for the proprietary extensions to the CFLicense class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "LinkURI" : {
+        "description" : "A container for the information that is used to achieve the link data reference.",
+        "type" : "object",
+        "properties" : {
+          "title" : {
+            "description" : "A human readable title for the associated object.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier (UUID) for the associated object.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "uri" : {
+            "description" : "A network-resolvable URI pointing to the authoritative reference for the associated object.",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          }
+        },
+        "required" : [ "title", "identifier", "uri" ],
+        "additionalProperties" : false
+      },
+      "LinkGenURI" : {
+        "description" : "A container for the information that is used to achieve the link data reference.",
+        "type" : "object",
+        "properties" : {
+          "title" : {
+            "description" : "A human readable title for the associated object.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier (this may or may not be a UUID) for the associated object.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "uri" : {
+            "description" : "A network-resolvable URI pointing to the authoritative reference for the associated object.",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "targetType" : {
+            "description" : "This is a new attribute added in Version 1.1. It is used to identify the type of the referenced association i.e. this MAY NOT be a CASE Framework.",
+            "$comment" : "Origin: TargetTypeExtEnum (Union); The data-type for the 'targetType' attribute for a generic Link URI. This is an extensible enumerated vocabulary. Extending the vocabulary makes use of a naming convention.",
+            "oneOf" : [ {
+              "type" : "string",
+              "enum" : [ "CASE" ]
+            }, {
+              "type" : "string",
+              "pattern" : "(ext:)[a-z|A-Z|0-9|.|-|_]+"
+            } ]
+          }
+        },
+        "required" : [ "title", "identifier", "uri" ],
+        "additionalProperties" : false
+      },
+      "CFDocumentExtension" : {
+        "description" : "The container for the proprietary extensions to the CFDocument class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFItemType" : {
+        "description" : "The container for the ItemType information use within the competency framework.",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFItemType. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFItemType using a network-resolvable URI. ",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "The title of the CFItemType.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "description" : {
+            "description" : "A human readable description of the CFItemType.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "hierarchyCode" : {
+            "description" : "A human-referenceable code designated by the publisher to identify the item in the hierarchy of ItemTypes.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "typeCode" : {
+            "description" : "Text code used for type identification.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFItemTypeExtension"
+          }
+        },
+        "required" : [ "identifier", "uri", "title", "description", "hierarchyCode", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFItemExtension" : {
+        "description" : "The container for the proprietary extensions to the CFItem class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFRubricCriterionLevelExtension" : {
+        "description" : "The container for the proprietary extensions to the CFRubricCriterionLevel class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFAssociationGrouping" : {
+        "description" : "This is the container for information about a set of associations that have been labelled as a group (the nature of the group being defined by this container).",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFAssociationGrouping. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFAssociationGrouping using a network-resolvable URI. ",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "The title of the CFAssociationGrouping.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "description" : {
+            "description" : "A human readable description of the CFAssociationGrouping.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFAssociationGroupingExtension"
+          }
+        },
+        "required" : [ "identifier", "uri", "title", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFAssociationGroupingExtension" : {
+        "description" : "The container for the proprietary extensions to the CFAssociationGrouping class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFSubject" : {
+        "description" : "The container for the definition of a topic or academic subject which is addressed by the competency framework.",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFSubject. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFSubject using a network-resolvable URI. ",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "The title of the CFSubject.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "hierarchyCode" : {
+            "description" : "A human-referenceable code designated by the publisher to identify the item in the hierarchy of the subjects.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "description" : {
+            "description" : "A human readable description of the CFSubject.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFSubjectExtension"
+          }
+        },
+        "required" : [ "identifier", "uri", "title", "hierarchyCode", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFSubjectExtension" : {
+        "description" : "The container for the proprietary extensions to the CFSubject class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFAssociationExtension" : {
+        "description" : "The container for the proprietary extensions to the CFAssociation class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFConcept" : {
+        "description" : "The container for the definition of a concept which is addressed by the competency framework.",
+        "type" : "object",
+        "properties" : {
+          "identifier" : {
+            "description" : "An unambiguous, synthetic, globally unique identifier for the CFConcept. This is the primary way in which the exchange identification is achieved.",
+            "$comment" : "Origin: UUID (DerivedType); The data-type for establishing a Globally Unique Identifier (GUID). The form of the GUID is a Universally Unique Identifier (UUID) of 16 hexadecimal characters (lower case) in the format 8-4-4-4-12. All permitted versions (1-5) and variants (1-2) are supported.",
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "uri" : {
+            "description" : "An unambiguous reference to the CFConcept using a network-resolvable URI. ",
+            "$comment" : "Origin: AnyURI (PrimitiveType)",
+            "type" : "string"
+          },
+          "title" : {
+            "description" : "The title of the CFConcept.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "keywords" : {
+            "description" : "Defined listing of keywords delimited by '|' that the concept encompasses.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "hierarchyCode" : {
+            "description" : "A human-referenceable code designated by the publisher to identify the item in the hierarchy of the Concepts.",
+            "$comment" : "Origin: NormalizedString (PrimitiveType)",
+            "type" : "string"
+          },
+          "description" : {
+            "description" : "A human readable description of the CFConcept.",
+            "$comment" : "Origin: String (PrimitiveType)",
+            "type" : "string"
+          },
+          "lastChangeDateTime" : {
+            "description" : "A system generated timestamp of the most recent change to this record. This conforms to ISO 8601 dateTime definition [ISO 8601].",
+            "$comment" : "Origin: DateTime (PrimitiveType)",
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "extensions" : {
+            "$ref" : "#/$defs/CFConceptExtension"
+          }
+        },
+        "required" : [ "identifier", "uri", "title", "hierarchyCode", "lastChangeDateTime" ],
+        "additionalProperties" : false
+      },
+      "CFItemTypeExtension" : {
+        "description" : "The container for the proprietary extensions to the CFItemType class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      },
+      "CFConceptExtension" : {
+        "description" : "The container for the proprietary extensions to the CFConcept class.",
+        "type" : "object",
+        "properties" : { },
+        "required" : [ ],
+        "additionalProperties" : true
+      }
+    }
+  }

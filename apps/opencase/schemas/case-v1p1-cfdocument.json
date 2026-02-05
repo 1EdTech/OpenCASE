@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CASE v1.1 CFDocument Schema",
+  "description": "Schema for validating a CFDocument",
+  "$ref": "#/definitions/CFDocument",
+  "definitions": {
+    "UUID": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "UUID in format 8-4-4-4-12 hexadecimal characters"
+    },
+    "CFDocument": {
+      "type": "object",
+      "required": ["sourcedId", "uri", "title", "creator", "lastChangeDateTime"],
+      "properties": {
+        "sourcedId": {
+          "$ref": "#/definitions/UUID"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "title": {
+          "type": "string"
+        },
+        "creator": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "subject": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
+        "language": {
+          "type": "string"
+        },
+        "frameworkType": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "lastChangeDateTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "adoptionStatus": {
+          "type": "string"
+        },
+        "officialSourceURL": {
+          "type": "string",
+          "format": "uri"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "licenseURI": {
+          "type": "object"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "statusStartDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date the CFDocument status started"
+        },
+        "statusEndDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date the CFDocument status ended or changed to another status"
+        },
+        "caseVersion": {
+          "type": "string",
+          "enum": ["1.1"],
+          "description": "Denotes the version of the CFDocument. If present it MUST have a value of '1.1'"
+        },
+        "CFPackageURI": {
+          "type": "object"
+        },
+        "extensions": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}
+

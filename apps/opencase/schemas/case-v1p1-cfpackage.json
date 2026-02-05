@@ -1,0 +1,335 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CASE v1.1 CFPackage Schema",
+  "description": "Schema for validating a complete CASE Framework Package",
+  "type": "object",
+  "required": ["document"],
+  "properties": {
+    "document": {
+      "$ref": "#/definitions/CFDocument"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/CFItem"
+      }
+    },
+    "associations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/CFAssociation"
+      }
+    },
+    "rubrics": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/CFRubric"
+      }
+    },
+    "definitions": {
+      "type": "object",
+      "properties": {
+        "CFConcepts": {
+          "type": "array"
+        },
+        "CFSubjects": {
+          "type": "array"
+        },
+        "CFItemTypes": {
+          "type": "array"
+        },
+        "CFLicenses": {
+          "type": "array"
+        },
+        "CFAssociationGroupings": {
+          "type": "array"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "UUID": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "UUID in format 8-4-4-4-12 hexadecimal characters"
+    },
+    "LinkGenURI": {
+      "type": "object",
+      "required": ["title", "identifier", "uri"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "A human readable title for the associated object"
+        },
+        "identifier": {
+          "type": "string",
+          "description": "An unambiguous, synthetic, globally unique identifier (this may or may not be a UUID) for the associated object"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "A network-resolvable URI pointing to the authoritative reference for the associated object"
+        },
+        "targetType": {
+          "type": "string",
+          "description": "Used to identify the type of the referenced association (new in CASE 1.1). Default is 'CASE'"
+        }
+      }
+    },
+    "LinkURI": {
+      "type": "object",
+      "required": ["title", "identifier", "uri"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "A human readable title for the associated object"
+        },
+        "identifier": {
+          "$ref": "#/definitions/UUID",
+          "description": "An unambiguous, synthetic, globally unique identifier (UUID) for the associated object"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri",
+          "description": "A network-resolvable URI pointing to the authoritative reference for the associated object"
+        }
+      }
+    },
+    "CFDocument": {
+      "type": "object",
+      "required": ["sourcedId", "uri", "title", "creator", "lastChangeDateTime"],
+      "properties": {
+        "sourcedId": {
+          "$ref": "#/definitions/UUID"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "title": {
+          "type": "string"
+        },
+        "creator": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "subject": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
+        "language": {
+          "type": "string"
+        },
+        "frameworkType": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "caseVersion": {
+          "type": "string",
+          "enum": ["1.1"],
+          "description": "Denotes the version of the CFDocument. If present it MUST have a value of '1.1'"
+        },
+        "lastChangeDateTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "adoptionStatus": {
+          "type": "string"
+        },
+        "officialSourceURL": {
+          "type": "string",
+          "format": "uri"
+        },
+        "publisher": {
+          "type": "string"
+        },
+        "licenseURI": {
+          "type": "object"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "statusStartDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date the CFDocument status started"
+        },
+        "statusEndDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date the CFDocument status ended or changed to another status"
+        },
+        "CFPackageURI": {
+          "type": "object"
+        },
+        "extensions": {
+          "type": "object"
+        }
+      }
+    },
+    "CFItem": {
+      "type": "object",
+      "required": ["sourcedId", "uri", "fullStatement", "lastChangeDateTime", "CFDocumentURI"],
+      "properties": {
+        "sourcedId": {
+          "$ref": "#/definitions/UUID"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "fullStatement": {
+          "type": "string"
+        },
+        "humanCodingScheme": {
+          "type": "string"
+        },
+        "listEnumInSource": {
+          "type": "string"
+        },
+        "listEnumeration": {
+          "type": "string"
+        },
+        "alternativeLabel": {
+          "type": "string"
+        },
+        "abbreviatedStatement": {
+          "type": "string"
+        },
+        "CFItemType": {
+          "type": "string"
+        },
+        "CFItemTypeURI": {
+          "type": "object"
+        },
+        "conceptKeywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conceptKeywordsURI": {
+          "type": "object"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "subject": {
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        },
+        "subjectURI": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "educationLevel": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "licenseURI": {
+          "type": "object"
+        },
+        "statusStartDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date the CFItem status started"
+        },
+        "statusEndDate": {
+          "type": "string",
+          "format": "date",
+          "description": "The date the CFItem status ended or changed to another status"
+        },
+        "lastChangeDateTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "CFDocumentURI": {
+          "$ref": "#/definitions/LinkGenURI"
+        },
+        "extensions": {
+          "type": "object"
+        }
+      }
+    },
+    "CFAssociation": {
+      "type": "object",
+      "required": ["sourcedId", "uri", "associationType", "originNodeURI", "destinationNodeURI", "lastChangeDateTime"],
+      "properties": {
+        "sourcedId": {
+          "$ref": "#/definitions/UUID"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "associationType": {
+          "type": "string",
+          "description": "The type of association. Uses an extensible enumerated vocabulary. Standard values include: isChildOf, isParentOf, isPartOf, hasPart, isPeerOf, precedes, isRelatedTo, exactMatchOf, replacedBy, replaces, exemplar, isExemplarOf"
+        },
+        "originNodeURI": {
+          "$ref": "#/definitions/LinkGenURI"
+        },
+        "destinationNodeURI": {
+          "$ref": "#/definitions/LinkGenURI"
+        },
+        "CFDocumentURI": {
+          "$ref": "#/definitions/LinkGenURI"
+        },
+        "sequenceNumber": {
+          "type": "integer"
+        },
+        "lastChangeDateTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "extensions": {
+          "type": "object"
+        }
+      }
+    },
+    "CFRubric": {
+      "type": "object",
+      "properties": {
+        "sourcedId": {
+          "$ref": "#/definitions/UUID"
+        },
+        "uri": {
+          "type": "string",
+          "format": "uri"
+        },
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "lastChangeDateTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "CFRubricCriteria": {
+          "type": "array"
+        },
+        "extensions": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}
+
