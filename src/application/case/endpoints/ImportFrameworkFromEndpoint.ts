@@ -33,12 +33,14 @@ export class ImportFrameworkFromEndpoint {
     // Fetch the CFPackage from the endpoint
     const response = await this.apiClient.fetchCFPackage(endpointUrl, accessToken)
 
-    // Extract the payload structure expected by CreateFramework
+    // Use CFPackage format directly (matches API response format)
     const payload = {
-      document: response.CFPackage.CFDocument,
-      items: response.CFPackage.CFItems ?? [],
-      associations: response.CFPackage.CFAssociations ?? [],
-      rubrics: response.CFPackage.CFRubrics ?? []
+      CFDocument: response.CFPackage.CFDocument,
+      CFItems: response.CFPackage.CFItems ?? [],
+      CFAssociations: response.CFPackage.CFAssociations ?? [],
+      CFRubrics: response.CFPackage.CFRubrics ?? [],
+      CFDefinitions: response.CFPackage.CFDefinitions ?? null,
+      extensions: response.CFPackage.extensions
     }
 
     // Validate against JSON schema if validator is provided
@@ -52,17 +54,21 @@ export class ImportFrameworkFromEndpoint {
       }
     }
 
-    // Create domain entities
-    const document = CFDocument.fromRaw(tenantId, caseVersion, payload.document)
-    const items = (payload.items ?? []).map(i => CFItem.fromRaw(tenantId, caseVersion, i))
-    const associations = (payload.associations ?? []).map(a =>
+    // Create domain entities from CFPackage format
+    const document = CFDocument.fromRaw(tenantId, caseVersion, payload.CFDocument)
+    const docId = document.sourcedId
+    const docJSON = document.toJSON()
+    const docURI = docJSON.uri
+    const items = (payload.CFItems ?? []).map(i => CFItem.fromRaw(tenantId, caseVersion, i, docId, docURI))
+    const associations = (payload.CFAssociations ?? []).map(a =>
       CFAssociation.fromRaw(tenantId, caseVersion, a)
     )
-    const rubrics = (payload.rubrics ?? []).map(r =>
+    const rubrics = (payload.CFRubrics ?? []).map(r =>
       CFRubric.fromRaw(tenantId, caseVersion, r)
     )
+    const definitions = payload.CFDefinitions ?? null
 
-    const pkg = new CFPackage({ document, items, associations, rubrics })
+    const pkg = new CFPackage({ document, items, associations, rubrics, definitions })
 
     // Save the framework
     await this.pkgRepo.saveNewVersion(tenantId, caseVersion, pkg)

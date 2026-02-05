@@ -25,30 +25,60 @@ describe('CreateFramework', () => {
 
     it('should create and save a framework with all components', async () => {
       const payload = {
-        document: {
-          sourcedId: 'doc-123',
+        CFDocument: {
+          identifier: 'doc-123',
+          uri: '/ims/case/v1p1/CFDocuments/doc-123',
           title: 'Test Document',
+          creator: 'Test Creator',
           lastChangeDateTime: '2024-01-01T00:00:00Z'
         },
-        items: [
+        CFItems: [
           {
-            sourcedId: 'item-1',
-            fullStatement: 'Statement 1'
+            identifier: 'item-1',
+            uri: '/ims/case/v1p1/CFItems/item-1',
+            fullStatement: 'Statement 1',
+            lastChangeDateTime: '2024-01-01T00:00:00Z',
+            CFDocumentURI: {
+              title: 'Document',
+              identifier: 'doc-123',
+              uri: '/ims/case/v1p1/CFDocuments/doc-123'
+            }
           },
           {
-            sourcedId: 'item-2',
-            fullStatement: 'Statement 2'
+            identifier: 'item-2',
+            uri: '/ims/case/v1p1/CFItems/item-2',
+            fullStatement: 'Statement 2',
+            lastChangeDateTime: '2024-01-01T00:00:00Z',
+            CFDocumentURI: {
+              title: 'Document',
+              identifier: 'doc-123',
+              uri: '/ims/case/v1p1/CFDocuments/doc-123'
+            }
           }
         ],
-        associations: [
+        CFAssociations: [
           {
-            sourcedId: 'assoc-1',
-            originNode: 'item-1',
-            destinationNode: 'item-2',
-            associationType: 'isChildOf'
+            identifier: 'assoc-1',
+            uri: '/ims/case/v1p1/CFAssociations/assoc-1',
+            associationType: 'isChildOf',
+            originNodeURI: {
+              title: 'Item 1',
+              identifier: 'item-1',
+              uri: '/ims/case/v1p1/CFItems/item-1'
+            },
+            destinationNodeURI: {
+              title: 'Item 2',
+              identifier: 'item-2',
+              uri: '/ims/case/v1p1/CFItems/item-2'
+            },
+            lastChangeDateTime: '2024-01-01T00:00:00Z'
           }
         ],
-        rubrics: [{ id: 'rubric-1', type: 'test' }]
+        CFRubrics: [{
+          identifier: 'rubric-1',
+          uri: '/ims/case/v1p1/CFRubrics/rubric-1',
+          lastChangeDateTime: '2024-01-01T00:00:00Z'
+        }]
       }
 
       const result = await createFramework.execute({ tenantId, caseVersion, payload })
@@ -69,9 +99,11 @@ describe('CreateFramework', () => {
 
     it('should handle missing optional arrays', async () => {
       const payload = {
-        document: {
-          sourcedId: 'doc-123',
+        CFDocument: {
+          identifier: 'doc-123',
+          uri: '/ims/case/v1p1/CFDocuments/doc-123',
           title: 'Test Document',
+          creator: 'Test Creator',
           lastChangeDateTime: '2024-01-01T00:00:00Z'
         }
       }
@@ -89,14 +121,16 @@ describe('CreateFramework', () => {
 
     it('should handle empty arrays', async () => {
       const payload = {
-        document: {
-          sourcedId: 'doc-123',
+        CFDocument: {
+          identifier: 'doc-123',
+          uri: '/ims/case/v1p1/CFDocuments/doc-123',
           title: 'Test Document',
+          creator: 'Test Creator',
           lastChangeDateTime: '2024-01-01T00:00:00Z'
         },
-        items: [],
-        associations: [],
-        rubrics: []
+        CFItems: [],
+        CFAssociations: [],
+        CFRubrics: []
       }
 
       const result = await createFramework.execute({ tenantId, caseVersion, payload })
@@ -112,27 +146,40 @@ describe('CreateFramework', () => {
 
     it('should not publish a new version when payload is unchanged', async () => {
       const payload = {
-        document: {
-          sourcedId: 'doc-123',
+        CFDocument: {
+          identifier: 'doc-123',
+          uri: '/ims/case/v1p1/CFDocuments/doc-123',
           title: 'Test Document',
+          creator: 'Test Creator',
           lastChangeDateTime: '2024-01-01T00:00:00Z'
         },
-        items: [{ sourcedId: 'item-1', fullStatement: 'Statement 1' }],
-        associations: [],
-        rubrics: [{ id: 'rubric-1', lastChangeDateTime: '2024-01-01T00:00:00Z' }]
+        CFItems: [{
+          identifier: 'item-1',
+          uri: '/ims/case/v1p1/CFItems/item-1',
+          fullStatement: 'Statement 1',
+          lastChangeDateTime: '2024-01-01T00:00:00Z',
+          CFDocumentURI: {
+            title: 'Document',
+            identifier: 'doc-123',
+            uri: '/ims/case/v1p1/CFDocuments/doc-123'
+          }
+        }],
+        CFAssociations: [],
+        CFRubrics: [{
+          identifier: 'rubric-1',
+          uri: '/ims/case/v1p1/CFRubrics/rubric-1',
+          lastChangeDateTime: '2024-01-01T00:00:00Z'
+        }]
       }
 
       // Create the existing package exactly as CreateFramework would create it
-      // This simulates what CreateFramework does internally
-      const doc = CFDocument.fromRaw(tenantId, caseVersion as any, payload.document)
+      const doc = CFDocument.fromRaw(tenantId, caseVersion as any, payload.CFDocument)
       const docId = doc.sourcedId
       const docJSON = doc.toJSON()
       const docURI = docJSON.uri
-      const items = payload.items.map(i => CFItem.fromRaw(tenantId, caseVersion as any, i, docId, docURI))
-      const associations = payload.associations.map(a => CFAssociation.fromRaw(tenantId, caseVersion as any, a))
-      // CreateFramework calls CFRubric.fromRaw(tenantId, caseVersion, r) where r is the raw rubric
-      // The raw rubric has { id: 'rubric-1', type: 'test' }, but CFRubric.fromRaw handles 'id' and ignores 'type'
-      const rubrics = (payload.rubrics ?? []).map(r => CFRubric.fromRaw(tenantId, caseVersion as any, r))
+      const items = payload.CFItems.map(i => CFItem.fromRaw(tenantId, caseVersion as any, i, docId, docURI))
+      const associations = payload.CFAssociations.map(a => CFAssociation.fromRaw(tenantId, caseVersion as any, a))
+      const rubrics = payload.CFRubrics.map(r => CFRubric.fromRaw(tenantId, caseVersion as any, r))
       const existingPkg = new CFPackage({ document: doc, items, associations, rubrics, definitions: null })
       mockRepository.load.mockResolvedValueOnce(existingPkg as any)
 
@@ -144,9 +191,11 @@ describe('CreateFramework', () => {
 
     it('should propagate errors from repository', async () => {
       const payload = {
-        document: {
-          sourcedId: 'doc-123',
+        CFDocument: {
+          identifier: 'doc-123',
+          uri: '/ims/case/v1p1/CFDocuments/doc-123',
           title: 'Test Document',
+          creator: 'Test Creator',
           lastChangeDateTime: '2024-01-01T00:00:00Z'
         }
       }
@@ -161,9 +210,11 @@ describe('CreateFramework', () => {
 
     it('should propagate validation errors from domain entities', async () => {
       const payload = {
-        document: {
-          sourcedId: '', // Invalid: empty sourcedId
+        CFDocument: {
+          identifier: '', // Invalid: empty identifier
+          uri: '/ims/case/v1p1/CFDocuments/',
           title: 'Test Document',
+          creator: 'Test Creator',
           lastChangeDateTime: '2024-01-01T00:00:00Z'
         }
       }

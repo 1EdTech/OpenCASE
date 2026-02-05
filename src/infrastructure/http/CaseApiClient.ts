@@ -11,6 +11,8 @@ export interface CFPackageResponse {
     CFItems?: any[]
     CFAssociations?: any[]
     CFRubrics?: any[]
+    CFDefinitions?: any
+    extensions?: any
   }
 }
 
@@ -71,7 +73,9 @@ export class CaseApiClient {
           CFDocument: data.CFDocument,
           CFItems: data.CFItems,
           CFAssociations: data.CFAssociations,
-          CFRubrics: data.CFRubrics
+          CFRubrics: data.CFRubrics,
+          CFDefinitions: data.CFDefinitions,
+          extensions: data.extensions
         }
       } else {
         throw new Error('Invalid CFPackage response: missing CFDocument')

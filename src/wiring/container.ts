@@ -173,10 +173,22 @@ export async function buildContainer(): Promise<Container> {
       }
     }
     
-    // Use official schema if available, otherwise fall back to regular schema
-    const cfPackageSchemaV1p1 = officialSchemasDir
-      ? JSON.parse(readFileSync(join(officialSchemasDir, 'official/case-v1p1-cfpackage.json'), 'utf-8'))
-      : JSON.parse(readFileSync(join(schemasDir, 'case-v1p1-cfpackage.json'), 'utf-8'))
+    // Use official schema for CASE v1p1 - it validates CFPackage format (CFDocument, CFItems, etc.)
+    let cfPackageSchemaV1p1: any
+    if (officialSchemasDir) {
+      try {
+        const officialSchemaPath = join(officialSchemasDir, 'official/case-v1p1-cfpackage.json')
+        logger.info({ path: officialSchemaPath }, 'Loading official CASE v1p1 CFPackage schema')
+        cfPackageSchemaV1p1 = JSON.parse(readFileSync(officialSchemaPath, 'utf-8'))
+        logger.info('Using official CASE v1p1 CFPackage schema for validation')
+      } catch (officialError: any) {
+        logger.warn({ error: officialError.message }, 'Failed to load official schema, using custom schema')
+        cfPackageSchemaV1p1 = JSON.parse(readFileSync(join(schemasDir, 'case-v1p1-cfpackage.json'), 'utf-8'))
+      }
+    } else {
+      logger.warn('Official schema directory not found, using custom schema')
+      cfPackageSchemaV1p1 = JSON.parse(readFileSync(join(schemasDir, 'case-v1p1-cfpackage.json'), 'utf-8'))
+    }
     
     const cfDocumentSchemaV1p1 = JSON.parse(readFileSync(join(schemasDir, 'case-v1p1-cfdocument.json'), 'utf-8'))
     const cfItemSchemaV1p1 = JSON.parse(readFileSync(join(schemasDir, 'case-v1p1-cfitem.json'), 'utf-8'))
@@ -187,19 +199,53 @@ export async function buildContainer(): Promise<Container> {
     const cfItemSchemaV1p0 = JSON.parse(readFileSync(join(schemasDir, 'case-v1p0-cfitem.json'), 'utf-8'))
     const cfAssociationSchemaV1p0 = JSON.parse(readFileSync(join(schemasDir, 'case-v1p0-cfassociation.json'), 'utf-8'))
     
-    jsonSchemaValidator.addSchema('case-v1p1-cfpackage', cfPackageSchemaV1p1)
-    jsonSchemaValidator.addSchema('case-v1p1-cfdocument', cfDocumentSchemaV1p1)
-    jsonSchemaValidator.addSchema('case-v1p1-cfitem', cfItemSchemaV1p1)
-    jsonSchemaValidator.addSchema('case-v1p1-cfassociation', cfAssociationSchemaV1p1)
-
-    jsonSchemaValidator.addSchema('case-v1p0-cfpackage', cfPackageSchemaV1p0)
-    jsonSchemaValidator.addSchema('case-v1p0-cfdocument', cfDocumentSchemaV1p0)
-    jsonSchemaValidator.addSchema('case-v1p0-cfitem', cfItemSchemaV1p0)
-    jsonSchemaValidator.addSchema('case-v1p0-cfassociation', cfAssociationSchemaV1p0)
-    
-    logger.info('Loaded CASE JSON schemas for validation')
+    try {
+      // Register schemas one at a time to identify which one fails
+      const schemasToRegister = [
+        { name: 'case-v1p1-cfpackage', schema: cfPackageSchemaV1p1 },
+        { name: 'case-v1p1-cfdocument', schema: cfDocumentSchemaV1p1 },
+        { name: 'case-v1p1-cfitem', schema: cfItemSchemaV1p1 },
+        { name: 'case-v1p1-cfassociation', schema: cfAssociationSchemaV1p1 },
+        { name: 'case-v1p0-cfpackage', schema: cfPackageSchemaV1p0 },
+        { name: 'case-v1p0-cfdocument', schema: cfDocumentSchemaV1p0 },
+        { name: 'case-v1p0-cfitem', schema: cfItemSchemaV1p0 },
+        { name: 'case-v1p0-cfassociation', schema: cfAssociationSchemaV1p0 }
+      ]
+      
+      for (const { name, schema } of schemasToRegister) {
+        try {
+          jsonSchemaValidator.addSchema(name, schema)
+          logger.debug({ schema: name }, 'Registered schema')
+        } catch (addError: any) {
+          logger.error({ 
+            schema: name, 
+            error: addError.message, 
+            stack: addError.stack 
+          }, `Failed to register schema '${name}'`)
+          throw addError // Re-throw to stop registration
+        }
+      }
+      
+      logger.info({ 
+        registeredSchemas: jsonSchemaValidator.getRegisteredSchemas() 
+      }, 'Loaded CASE JSON schemas for validation')
+    } catch (schemaError: any) {
+      logger.error({ 
+        error: schemaError.message, 
+        stack: schemaError.stack,
+        registeredSchemas: jsonSchemaValidator.getRegisteredSchemas(),
+        attemptedSchemas: ['case-v1p1-cfpackage', 'case-v1p1-cfdocument', 'case-v1p1-cfitem', 'case-v1p1-cfassociation', 'case-v1p0-cfpackage', 'case-v1p0-cfdocument', 'case-v1p0-cfitem', 'case-v1p0-cfassociation']
+      }, 'Failed to add schemas to validator')
+      throw schemaError // Re-throw to be caught by outer catch
+    }
   } catch (error: any) {
-    logger.warn({ error: error.message }, 'Failed to load JSON schemas - validation will be skipped')
+    logger.error({ 
+      error: error.message, 
+      stack: error.stack,
+      registeredSchemas: jsonSchemaValidator.getRegisteredSchemas()
+    }, 'Failed to load JSON schemas - validation will be skipped')
+    // Don't throw - allow application to continue without validation
+    // But log which schemas were successfully registered (if any)
   }
 
   const createFramework = new CreateFramework(pkgRepo, jsonSchemaValidator)

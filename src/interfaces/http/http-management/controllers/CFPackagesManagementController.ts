@@ -39,6 +39,25 @@ export class CFPackagesManagementController {
 
     try {
       if (!tenantId) return res.status(400).json({ error: 'Missing tenantId' })
+      
+      // Check if payload uses old format and provide helpful error
+      if (req.body.document && !req.body.CFDocument) {
+        return res.status(400).json({ 
+          error: 'invalid_format',
+          message: 'Payload uses deprecated format. Please use CFPackage format with CFDocument, CFItems, CFAssociations, CFRubrics, CFDefinitions. See CASE_V1P1_API_MIGRATION_GUIDE.md for details.',
+          receivedFormat: 'old (document, items, associations)',
+          expectedFormat: 'CFPackage (CFDocument, CFItems, CFAssociations, CFRubrics, CFDefinitions)'
+        })
+      }
+      
+      if (!req.body.CFDocument) {
+        return res.status(400).json({ 
+          error: 'missing_required_field',
+          message: 'CFDocument is required in CFPackage format',
+          receivedKeys: Object.keys(req.body)
+        })
+      }
+      
       const result = await this.createFramework.execute({
         tenantId,
         caseVersion,
@@ -48,10 +67,18 @@ export class CFPackagesManagementController {
       const statusCode = result.status === 'unchanged' ? 200 : 201
       return res.status(statusCode).json(result)
     } catch (error: any) {
-      if (error.message?.includes('Schema validation failed')) {
-        return res.status(400).json({ error: 'validation_failed', message: error.message })
+      if (error.message?.includes('Schema validation failed') || error.message?.includes('validation')) {
+        return res.status(400).json({ 
+          error: 'validation_failed', 
+          message: error.message || 'Schema validation failed',
+          details: error.details || error.errors || undefined
+        })
       }
-      return res.status(400).json({ error: 'creation_failed', message: error.message || 'Failed to create CFPackage' })
+      return res.status(400).json({ 
+        error: 'creation_failed', 
+        message: error.message || 'Failed to create CFPackage',
+        details: error.details || undefined
+      })
     }
   }
 

@@ -11,11 +11,12 @@ export interface CreateFrameworkCommand {
   tenantId: TenantId
   caseVersion: CaseVersion
   payload: {
-    document: any
-    items?: any[]
-    associations?: any[]
-    rubrics?: any[]
-    definitions?: any
+    CFDocument: any
+    CFItems?: any[]
+    CFAssociations?: any[]
+    CFRubrics?: any[]
+    CFDefinitions?: any
+    extensions?: any
   }
 }
 
@@ -52,60 +53,123 @@ function sortById (arr: any[]): any[] {
   return [...arr].sort((a, b) => getId(a).localeCompare(getId(b)))
 }
 
+/**
+ * Prepares payload for validation by removing fields that are only present in GET responses
+ * but not allowed in POST requests according to the official CFPackage schema.
+ * 
+ * - CFPackageURI: Added to CFDocument in GET responses, but not in CFPackage POST
+ * - CFDocumentURI: Added to CFItems and CFAssociations in GET responses, but not in CFPackage POST
+ */
+function preparePayloadForValidation (payload: any): any {
+  const cleaned = { ...payload }
+  
+  // Remove CFPackageURI from CFDocument (only in GET responses)
+  if (cleaned.CFDocument) {
+    const { CFPackageURI, ...documentWithoutPackageURI } = cleaned.CFDocument
+    cleaned.CFDocument = documentWithoutPackageURI
+  }
+  
+  // Remove CFDocumentURI from CFItems (only in GET responses)
+  if (cleaned.CFItems && Array.isArray(cleaned.CFItems)) {
+    cleaned.CFItems = cleaned.CFItems.map((item: any) => {
+      const { CFDocumentURI, ...itemWithoutDocumentURI } = item
+      return itemWithoutDocumentURI
+    })
+  }
+  
+  // Remove CFDocumentURI from CFAssociations (only in GET responses)
+  if (cleaned.CFAssociations && Array.isArray(cleaned.CFAssociations)) {
+    cleaned.CFAssociations = cleaned.CFAssociations.map((assoc: any) => {
+      const { CFDocumentURI, ...assocWithoutDocumentURI } = assoc
+      return assocWithoutDocumentURI
+    })
+  }
+  
+  return cleaned
+}
+
 export class CreateFramework {
   constructor (
     private readonly pkgRepo: CFPackageRepository,
     private readonly validator?: JsonSchemaValidator
   ) {}
+  
+  /**
+   * Prepares payload for validation by removing fields that are only present in GET responses
+   * but not allowed in POST requests according to the official CFPackage schema.
+   */
+  private preparePayloadForValidation (payload: any): any {
+    return preparePayloadForValidation(payload)
+  }
 
   async execute (cmd: CreateFrameworkCommand): Promise<CreateFrameworkResult> {
     const { tenantId, caseVersion, payload } = cmd
 
     // Validate against JSON schema if validator is available
+    // Payload should match CFPackage format (CFDocument, CFItems, etc.)
+    // Note: CFPackageURI and CFDocumentURI are added in GET responses but NOT allowed in POST
     if (this.validator) {
+      const schemaName = caseVersion === '1.1' ? 'case-v1p1-cfpackage' : 'case-v1p0-cfpackage'
+      
+      // Check if schema is registered
+      if (!this.validator.hasSchema(schemaName)) {
+        const registeredSchemas = this.validator.getRegisteredSchemas()
+        throw new Error(
+          `Schema '${schemaName}' is not available. ` +
+          `Registered schemas: ${registeredSchemas.length > 0 ? registeredSchemas.join(', ') : 'none'}. ` +
+          `Schema loading may have failed during startup. Check server logs for details.`
+        )
+      }
+      
+      // Prepare payload for validation by removing fields that are only in GET responses
+      const validationPayload = this.preparePayloadForValidation(payload)
+      
       try {
-        const schemaName = caseVersion === '1.1' ? 'case-v1p1-cfpackage' : 'case-v1p0-cfpackage'
-        this.validator.validate(schemaName, payload)
+        this.validator.validate(schemaName, validationPayload)
       } catch (error: any) {
-        throw new Error(`Schema validation failed: ${error.message}`)
+        const validationError: any = new Error(`Schema validation failed: ${error.message}`)
+        validationError.details = error.details || error.errors
+        throw validationError
       }
     }
 
-    const document = CFDocument.fromRaw(tenantId, caseVersion, payload.document)
+    // Extract from CFPackage format and create domain entities
+    const document = CFDocument.fromRaw(tenantId, caseVersion, payload.CFDocument)
     const docId = document.sourcedId
     const docJSON = document.toJSON()
     const docURI = docJSON.uri
     
-    const items = (payload.items ?? []).map(i =>
+    const items = (payload.CFItems ?? []).map(i =>
       CFItem.fromRaw(tenantId, caseVersion, i, docId, docURI)
     )
-    const associations = (payload.associations ?? []).map(a =>
+    const associations = (payload.CFAssociations ?? []).map(a =>
       CFAssociation.fromRaw(tenantId, caseVersion, a)
     )
-    const rubrics = (payload.rubrics ?? []).map(r =>
+    const rubrics = (payload.CFRubrics ?? []).map(r =>
       CFRubric.fromRaw(tenantId, caseVersion, r)
     )
-    const definitions = payload.definitions ?? null
+    const definitions = payload.CFDefinitions ?? null
 
     const pkg = new CFPackage({ document, items, associations, rubrics, definitions })
 
     // Idempotency: if this doc already exists and the resulting stored bundle would be identical,
     // don't create a new version.
+    // Compare using CFPackage format (CFDocument, CFItems, etc.) to match validation format
     const existing = await this.pkgRepo.load(tenantId, caseVersion, docId)
     if (existing) {
       const existingBundle = {
-        document: existing.document.toJSON(),
-        items: sortById(existing.items.map(i => i.toJSON())),
-        associations: sortById(existing.associations.map(a => a.toJSON())),
-        rubrics: sortById((existing.rubrics ?? []).map(r => r.toJSON())),
-        definitions: existing.definitions ?? null
+        CFDocument: existing.document.toJSON(),
+        CFItems: sortById(existing.items.map(i => i.toJSON())),
+        CFAssociations: sortById(existing.associations.map(a => a.toJSON())),
+        CFRubrics: sortById((existing.rubrics ?? []).map(r => r.toJSON())),
+        CFDefinitions: existing.definitions ?? null
       }
       const newBundle = {
-        document: docJSON,
-        items: sortById(items.map(i => i.toJSON())),
-        associations: sortById(associations.map(a => a.toJSON())),
-        rubrics: sortById(rubrics.map(r => r.toJSON())),
-        definitions
+        CFDocument: docJSON,
+        CFItems: sortById(items.map(i => i.toJSON())),
+        CFAssociations: sortById(associations.map(a => a.toJSON())),
+        CFRubrics: sortById(rubrics.map(r => r.toJSON())),
+        CFDefinitions: definitions
       }
 
       if (stableStringify(existingBundle) === stableStringify(newBundle)) {
