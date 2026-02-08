@@ -1,4 +1,4 @@
-import { PlusIcon, CloudArrowDownIcon, ArrowPathIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, ArrowPathIcon } from '@heroicons/react/24/solid'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
 import { FrameworkCard } from '@/ui/shared/components/FrameworkCard'
@@ -18,99 +18,19 @@ import {
   DialogTitle,
 } from '@/ui/shared/components/ui/dialog'
 
-function OpenCaseFrameworksContent({
-  isAuthenticated,
-  isLoading,
-  hasLoadedOnce,
-  error,
-  frameworks,
-  remoteOpenLoading,
-  deletingDocId,
-  onOpenRemote,
-  onDelete,
-}: Readonly<{
-  isAuthenticated: boolean
-  isLoading: boolean
-  hasLoadedOnce: boolean
-  error: string | null
-  frameworks: CfDocumentSummary[]
-  remoteOpenLoading?: boolean
-  deletingDocId?: string | null
-  onOpenRemote: (docId: string) => void
-  onDelete?: (docId: string, title: string) => void
-}>) {
-  if (!isAuthenticated) {
-    return (
-      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        Sign in to view frameworks from OpenCASE.
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-        {error}
-      </div>
-    )
-  }
-
-  if (isLoading && !hasLoadedOnce) {
-    return (
-      <div className="mt-4 flex items-center gap-2 text-sm text-slate-600">
-        <ArrowPathIcon className="h-4 w-4 animate-spin" />
-        Loading frameworks from OpenCASE…
-      </div>
-    )
-  }
-
-  if (frameworks.length === 0) {
-    return (
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-        No frameworks found in OpenCASE.
-      </div>
-    )
-  }
-
-  return (
-    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {frameworks.map((doc) => {
-        const title = doc.title ?? doc.identifier ?? 'Untitled Framework'
-        const hint = remoteOpenLoading ? 'Loading…' : 'Open from OpenCASE'
-        const isDeleting = deletingDocId === doc.identifier
-        const cardClass = remoteOpenLoading || isDeleting ? 'opacity-60 pointer-events-none' : undefined
-        return (
-          <FrameworkCard
-            key={doc.identifier}
-            cfDocument={{
-              title,
-              creator: doc.creator ?? 'Unknown',
-              description: doc.description,
-              frameworkType: doc.frameworkType,
-              adoptionStatus: doc.adoptionStatus,
-            }}
-            rightHint={isDeleting ? 'Archiving…' : hint}
-            onClick={() => onOpenRemote(doc.identifier)}
-            onDelete={onDelete ? () => onDelete(doc.identifier, title) : undefined}
-            deleteDisabled={isDeleting || remoteOpenLoading}
-            className={cardClass}
-          />
-        )
-      })}
-    </div>
-  )
-}
-
 export default function HomeScreen({
-  frameworks,
+  unsavedDrafts,
   onOpenFramework,
   onOpenRemoteFramework,
+  onDeleteDraft,
   remoteOpenLoading,
   onCreateNew,
 }: Readonly<{
-  frameworks: HomeFramework[]
+  /** Locally-created frameworks that have not yet been saved to the server */
+  unsavedDrafts: HomeFramework[]
   onOpenFramework: (_id: string) => void
   onOpenRemoteFramework?: (_docId: string) => Promise<void>
+  onDeleteDraft?: (_id: string) => void
   remoteOpenLoading?: boolean
   onCreateNew: (_draft: CreateFrameworkDraft) => void
 }>) {
@@ -120,81 +40,99 @@ export default function HomeScreen({
 
   const api = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })), [cfg.opencaseBaseUrl, getAccessToken])
 
-  // OpenCASE frameworks state
-  const [openCaseFrameworks, setOpenCaseFrameworks] = useState<CfDocumentSummary[]>([])
-  const [openCaseLoading, setOpenCaseLoading] = useState(false)
-  const [openCaseError, setOpenCaseError] = useState<string | null>(null)
+  // Server frameworks state
+  const [serverFrameworks, setServerFrameworks] = useState<CfDocumentSummary[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
 
-  // Delete confirmation state
+  // Delete confirmation state (for server frameworks)
   const [deleteConfirm, setDeleteConfirm] = useState<{ docId: string; title: string } | null>(null)
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
 
-  // Load OpenCASE frameworks
-  const loadOpenCaseFrameworks = useCallback(async () => {
-    setOpenCaseLoading(true)
-    setOpenCaseError(null)
+  // Delete confirmation state (for unsaved drafts)
+  const [draftDeleteConfirm, setDraftDeleteConfirm] = useState<{ id: string; title: string } | null>(null)
+
+  // Load frameworks from server
+  const loadFrameworks = useCallback(async () => {
+    setLoading(true)
+    setError(null)
     try {
       const docs = await api.listCfDocuments({ caseVersion: 'v1p1' })
-      setOpenCaseFrameworks(docs)
+      setServerFrameworks(docs)
       setHasLoadedOnce(true)
     } catch (e: unknown) {
-      setOpenCaseFrameworks([])
-      setOpenCaseError(e instanceof Error ? e.message : String(e))
+      setServerFrameworks([])
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setOpenCaseLoading(false)
+      setLoading(false)
     }
   }, [api])
 
   // Auto-load when authenticated
   useEffect(() => {
-    if (status === 'authenticated' && !hasLoadedOnce && !openCaseLoading) {
-      void loadOpenCaseFrameworks()
+    if (status === 'authenticated' && !hasLoadedOnce && !loading) {
+      void loadFrameworks()
     }
-  }, [status, hasLoadedOnce, openCaseLoading, loadOpenCaseFrameworks])
+  }, [status, hasLoadedOnce, loading, loadFrameworks])
 
   const openRemote = useCallback(
     (docId: string) => {
       if (!onOpenRemoteFramework) return
-      setOpenCaseError(null)
+      setError(null)
       void onOpenRemoteFramework(docId).catch((e: unknown) => {
-        setOpenCaseError(e instanceof Error ? e.message : String(e))
+        setError(e instanceof Error ? e.message : String(e))
       })
     },
     [onOpenRemoteFramework],
   )
 
-  // Handle delete confirmation
+  // Handle server framework delete (archive)
   const handleDeleteRequest = useCallback((docId: string, title: string) => {
     setDeleteConfirm({ docId, title })
   }, [])
 
-  // Execute delete
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm || !tenantId) return
-    
+
     setDeletingDocId(deleteConfirm.docId)
     setDeleteConfirm(null)
-    setOpenCaseError(null)
-    
+    setError(null)
+
     try {
       await api.deleteCfPackage({
         tenantId,
         docId: deleteConfirm.docId,
         caseVersion: 'v1p1',
       })
-      
+
       // Remove from local list
-      setOpenCaseFrameworks((prev) => prev.filter((f) => f.identifier !== deleteConfirm.docId))
+      setServerFrameworks((prev) => prev.filter((f) => f.identifier !== deleteConfirm.docId))
     } catch (e: unknown) {
-      setOpenCaseError(e instanceof Error ? e.message : String(e))
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
       setDeletingDocId(null)
     }
   }, [api, deleteConfirm, tenantId])
 
+  // Handle unsaved draft delete
+  const handleDraftDeleteConfirm = useCallback(() => {
+    if (!draftDeleteConfirm || !onDeleteDraft) return
+    onDeleteDraft(draftDeleteConfirm.id)
+    setDraftDeleteConfirm(null)
+  }, [draftDeleteConfirm, onDeleteDraft])
+
   const isAuthenticated = status === 'authenticated'
-  const refreshButtonClass = openCaseLoading ? 'animate-spin' : ''
+  const refreshButtonClass = loading ? 'animate-spin' : ''
+
+  // IDs of server frameworks, used to exclude drafts that have since been saved
+  const serverIds = useMemo(() => new Set(serverFrameworks.map((f) => f.identifier)), [serverFrameworks])
+
+  // Unsaved drafts that haven't been saved to the server yet
+  const visibleDrafts = useMemo(
+    () => unsavedDrafts.filter((d) => !serverIds.has(d.id)),
+    [unsavedDrafts, serverIds],
+  )
 
   return (
     <div className="relative min-h-screen w-full bg-slate-50">
@@ -211,66 +149,111 @@ export default function HomeScreen({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-slate-600">Open a framework to create, edit, and publish.</div>
 
-          <Button onClick={() => setCreateOpen(true)}>
-            <PlusIcon className="h-4 w-4" aria-hidden />
-            Create framework
-          </Button>
-        </div>
-
-        {/* OpenCASE Frameworks Section */}
-        <div className="mt-8">
-          <div className="flex items-center gap-3">
-            <CloudArrowDownIcon className="h-5 w-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-slate-900">OpenCASE Frameworks</h2>
+          <div className="flex items-center gap-2">
             {isAuthenticated && (
               <Button
                 variant="ghost"
                 size="sm"
-                disabled={openCaseLoading}
-                onClick={() => void loadOpenCaseFrameworks()}
-                className="ml-auto"
+                disabled={loading}
+                onClick={() => void loadFrameworks()}
               >
                 <ArrowPathIcon className={`h-4 w-4 ${refreshButtonClass}`} />
-                {openCaseLoading ? 'Loading…' : 'Refresh'}
+                {loading ? 'Loading…' : 'Refresh'}
               </Button>
             )}
-          </div>
 
-          <OpenCaseFrameworksContent
-            isAuthenticated={isAuthenticated}
-            isLoading={openCaseLoading}
-            hasLoadedOnce={hasLoadedOnce}
-            error={openCaseError}
-            frameworks={openCaseFrameworks}
-            remoteOpenLoading={remoteOpenLoading}
-            deletingDocId={deletingDocId}
-            onOpenRemote={openRemote}
-            onDelete={tenantId ? handleDeleteRequest : undefined}
-          />
+            <Button onClick={() => setCreateOpen(true)}>
+              <PlusIcon className="h-4 w-4" aria-hidden />
+              Create framework
+            </Button>
+          </div>
         </div>
 
-        {/* Local Frameworks Section */}
-        <div className="mt-8">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-slate-900">Local Frameworks</h2>
-            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">{frameworks.length}</span>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">Drafts and recently opened frameworks stored locally.</p>
-
-          {frameworks.length === 0 ? (
-            <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-              No local frameworks yet. Create a new framework or open one from OpenCASE.
+        {/* Unsaved Drafts */}
+        {visibleDrafts.length > 0 && (
+          <div className="mt-8">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-slate-900">Unsaved Drafts</h2>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                {visibleDrafts.length}
+              </span>
             </div>
-          ) : (
+            <p className="mt-1 text-sm text-slate-500">
+              New frameworks not yet saved to the server. Open to edit, then save to publish.
+            </p>
+
             <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {frameworks.map((fw) => (
+              {visibleDrafts.map((fw) => (
                 <FrameworkCard
                   key={fw.id}
                   cfDocument={fw.cfDocument}
                   rightHint="Open to edit"
                   onClick={() => onOpenFramework(fw.id)}
+                  onDelete={
+                    onDeleteDraft
+                      ? () => setDraftDeleteConfirm({ id: fw.id, title: fw.cfDocument.title ?? 'Untitled' })
+                      : undefined
+                  }
                 />
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Server Frameworks */}
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-slate-900">Frameworks</h2>
+
+          {!isAuthenticated && (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Sign in to view frameworks from OpenCASE.
+            </div>
+          )}
+
+          {isAuthenticated && error && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+              {error}
+            </div>
+          )}
+
+          {isAuthenticated && loading && !hasLoadedOnce && (
+            <div className="mt-4 flex items-center gap-2 text-sm text-slate-600">
+              <ArrowPathIcon className="h-4 w-4 animate-spin" />
+              Loading frameworks…
+            </div>
+          )}
+
+          {isAuthenticated && !loading && hasLoadedOnce && serverFrameworks.length === 0 && !error && (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+              No frameworks found. Create a new framework to get started.
+            </div>
+          )}
+
+          {isAuthenticated && serverFrameworks.length > 0 && (
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {serverFrameworks.map((doc) => {
+                const title = doc.title ?? doc.identifier ?? 'Untitled Framework'
+                const hint = remoteOpenLoading ? 'Loading…' : 'Open'
+                const isDeleting = deletingDocId === doc.identifier
+                const cardClass = remoteOpenLoading || isDeleting ? 'opacity-60 pointer-events-none' : undefined
+                return (
+                  <FrameworkCard
+                    key={doc.identifier}
+                    cfDocument={{
+                      title,
+                      creator: doc.creator ?? 'Unknown',
+                      description: doc.description,
+                      frameworkType: doc.frameworkType,
+                      adoptionStatus: doc.adoptionStatus,
+                    }}
+                    rightHint={isDeleting ? 'Archiving…' : hint}
+                    onClick={() => openRemote(doc.identifier)}
+                    onDelete={tenantId ? () => handleDeleteRequest(doc.identifier, title) : undefined}
+                    deleteDisabled={isDeleting || remoteOpenLoading}
+                    className={cardClass}
+                  />
+                )
+              })}
             </div>
           )}
         </div>
@@ -285,13 +268,13 @@ export default function HomeScreen({
         }}
       />
 
-      {/* Delete Confirmation Dialog */}
+      {/* Archive Confirmation Dialog (server frameworks) */}
       <Dialog open={Boolean(deleteConfirm)} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Archive Framework</DialogTitle>
             <DialogDescription>
-              Are you sure you want to archive "{deleteConfirm?.title}"? 
+              Are you sure you want to archive &ldquo;{deleteConfirm?.title}&rdquo;?
               The framework will be archived on the server and can be restored by an administrator.
             </DialogDescription>
           </DialogHeader>
@@ -301,6 +284,27 @@ export default function HomeScreen({
             </Button>
             <Button variant="destructive" onClick={() => void handleDeleteConfirm()}>
               Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog (unsaved drafts) */}
+      <Dialog open={Boolean(draftDeleteConfirm)} onOpenChange={(open) => !open && setDraftDeleteConfirm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Draft</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete &ldquo;{draftDeleteConfirm?.title}&rdquo;?
+              This draft has not been saved to the server and will be permanently removed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setDraftDeleteConfirm(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDraftDeleteConfirm}>
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

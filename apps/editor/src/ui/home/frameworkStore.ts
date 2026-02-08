@@ -2,7 +2,7 @@ import type { CFDocument } from '@/domain/case/types'
 import type { Framework, FrameworkMetadata, Item, Association } from '@/domain/framework/model/types'
 import type { FrameworkId, ItemId, AssociationId } from '@/domain/shared/types'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
-import { createEmptyFrameworkGraph, createSampleGraph } from '@/ui/editor/state/editorFactories'
+import { createEmptyFrameworkGraph } from '@/ui/editor/state/editorFactories'
 import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 
 /**
@@ -114,49 +114,6 @@ function migrateLegacyHomeFramework(legacy: { id: string; cfDocument: CFDocument
   }
 }
 
-function seedFrameworks(): HomeFramework[] {
-  // Create sample frameworks using the legacy graph functions for now
-  // These will be migrated to domain-first in a future iteration
-  const sample = createSampleGraph()
-  const fwNode = sample.nodes.find((n) => n.type === 'caseFrameworkNode')
-  const cfDocument = (fwNode?.data as { cfDocument?: CFDocument })?.cfDocument
-  const sampleId = cfDocument?.identifier ?? 'fw1'
-
-  const other = createEmptyFrameworkGraph({
-    id: 'fw2',
-    title: 'Science Practices (Draft)',
-    frameworkType: 'K-12',
-    adoptionStatus: 'Draft',
-    description: 'Mock framework to demonstrate Home → Editor navigation.',
-    creator: 'Curriculum Team',
-  })
-  const otherDoc = (other.nodes[0].data as { cfDocument: CFDocument }).cfDocument
-
-  // Create domain frameworks from the legacy data
-  const sampleFramework = createFrameworkFromMetadata({
-    id: sampleId,
-    title: cfDocument?.title ?? 'Sample Framework',
-    description: cfDocument?.description,
-    creator: cfDocument?.creator,
-    frameworkType: cfDocument?.frameworkType,
-    adoptionStatus: cfDocument?.adoptionStatus,
-  })
-
-  const otherFramework = createFrameworkFromMetadata({
-    id: otherDoc.identifier,
-    title: otherDoc.title,
-    description: otherDoc.description,
-    creator: otherDoc.creator,
-    frameworkType: otherDoc.frameworkType,
-    adoptionStatus: otherDoc.adoptionStatus,
-  })
-
-  return [
-    { id: sampleId, framework: sampleFramework, cfDocument: cfDocument!, graph: sample },
-    { id: otherDoc.identifier, framework: otherFramework, cfDocument: otherDoc, graph: other },
-  ].filter((f) => Boolean(f.cfDocument))
-}
-
 type LegacyHomeFramework = { id: string; cfDocument: CFDocument; graph?: EditorGraph; framework?: Framework }
 
 export function loadFrameworks(): HomeFramework[] {
@@ -184,9 +141,7 @@ export function loadFrameworks(): HomeFramework[] {
     })
   }
 
-  const seed = seedFrameworks()
-  saveFrameworks(seed)
-  return seed
+  return []
 }
 
 /**

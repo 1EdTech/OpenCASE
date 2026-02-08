@@ -91,10 +91,29 @@ function AppInner() {
     return frameworks.find((f) => f.id === activeFrameworkId) ?? null
   }, [frameworks, activeFrameworkId])
 
+  // Unsaved drafts: frameworks in the local cache that haven't been published to the server
+  const unsavedDrafts = useMemo(
+    () => frameworks.filter((f) => !publishedFrameworkIds.has(f.id)),
+    [frameworks, publishedFrameworkIds],
+  )
+
   const openFramework = useCallback((id: string) => {
     setActiveFrameworkId(id)
     setScreen('editor')
   }, [])
+
+  const deleteDraft = useCallback((id: string) => {
+    setFrameworks((prev) => {
+      const next = prev.filter((f) => f.id !== id)
+      saveFrameworks(next)
+      return next
+    })
+    // If we're deleting the active framework, go back to home
+    if (activeFrameworkId === id) {
+      setActiveFrameworkId(null)
+      setScreen('home')
+    }
+  }, [activeFrameworkId])
 
   const createNew = useCallback((draft: CreateFrameworkDraft) => {
     const fw = createNewFrameworkDraft(draft)
@@ -245,28 +264,23 @@ function AppInner() {
     return <LoginScreen />
   }
 
+  const homeScreen = (
+    <HomeScreen
+      unsavedDrafts={unsavedDrafts}
+      onOpenFramework={openFramework}
+      onOpenRemoteFramework={openRemoteFramework}
+      onDeleteDraft={deleteDraft}
+      remoteOpenLoading={remoteOpenState === 'loading'}
+      onCreateNew={createNew}
+    />
+  )
+
   if (screen === 'home') {
-    return (
-      <HomeScreen
-        frameworks={frameworks}
-        onOpenFramework={openFramework}
-        onOpenRemoteFramework={openRemoteFramework}
-        remoteOpenLoading={remoteOpenState === 'loading'}
-        onCreateNew={createNew}
-      />
-    )
+    return homeScreen
   }
 
   if (!activeFramework || !activeGraph) {
-    return (
-      <HomeScreen
-        frameworks={frameworks}
-        onOpenFramework={openFramework}
-        onOpenRemoteFramework={openRemoteFramework}
-        remoteOpenLoading={remoteOpenState === 'loading'}
-        onCreateNew={createNew}
-      />
-    )
+    return homeScreen
   }
 
   return (
