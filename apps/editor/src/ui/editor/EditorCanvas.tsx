@@ -25,9 +25,11 @@ import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/
 type EditorCanvasProps = {
   onBack?: () => void
   onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>) => Promise<void>
+  /** Whether the current framework has been published to OpenCASE (loaded from or saved to server) */
+  isPublishedToOpenCase?: boolean
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut } = useAuth()
   const {
     nodes,
@@ -596,6 +598,7 @@ export default function EditorCanvas({ onBack, onSaveToServer }: Readonly<Editor
         onClose={clearSelection}
         onChangeNode={updateNodeData}
         onViewCFPackage={handleViewCFPackage}
+        isPublishedToOpenCase={isPublishedToOpenCase}
       />
 
       <EdgePropertiesPanel

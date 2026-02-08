@@ -17,9 +17,11 @@ type Props = {
   onChangeNode?: (_nodeId: string, _patch: CaseEditorNodeDataPatch) => void
   /** Callback to open the CFPackage viewer (framework node only) */
   onViewCFPackage?: () => void
+  /** Whether the current framework has been published to OpenCASE */
+  isPublishedToOpenCase?: boolean
 }
 
-export default function NodePropertiesPanel({ node, onClose, onChangeNode, onViewCFPackage }: Readonly<Props>) {
+export default function NodePropertiesPanel({ node, onClose, onChangeNode, onViewCFPackage, isPublishedToOpenCase }: Readonly<Props>) {
   const [copied, setCopied] = useState<null | 'code' | 'uri' | 'opencase'>(null)
   useEffect(() => {
     if (!node) return
@@ -496,7 +498,7 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode, onVie
               </div>
             ) : null}
 
-            {isFramework && opencaseUrl ? (
+            {isFramework && isPublishedToOpenCase && opencaseUrl ? (
               <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
                 <div className="mb-3">
                   <div className="flex items-center gap-2">

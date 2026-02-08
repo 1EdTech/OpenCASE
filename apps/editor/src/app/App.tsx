@@ -34,6 +34,10 @@ function AppInner() {
   // Store layouts extracted from CASE extensions (keyed by framework ID)
   const [frameworkLayouts, setFrameworkLayouts] = useState<Record<string, LayoutState>>({})
 
+  // Track which framework IDs have been published to OpenCASE
+  // (either loaded from the server or successfully saved)
+  const [publishedFrameworkIds, setPublishedFrameworkIds] = useState<Set<string>>(new Set())
+
   const [authCallbackState, setAuthCallbackState] = useState<'idle' | 'processing' | 'error'>('idle')
   const [remoteOpenState, setRemoteOpenState] = useState<'idle' | 'loading'>('idle')
 
@@ -144,6 +148,9 @@ function AppInner() {
           return next
         })
 
+        // Mark as published since it was loaded from OpenCASE
+        setPublishedFrameworkIds((prev) => new Set(prev).add(fw.id))
+
         setActiveFrameworkId(fw.id)
         setScreen('editor')
       } finally {
@@ -196,6 +203,11 @@ function AppInner() {
         cfPackage: openCasePackage,
         caseVersion: caseApiVersion,
       })
+      
+      // Mark this framework as published to OpenCASE
+      if (activeFrameworkId) {
+        setPublishedFrameworkIds((prev) => new Set(prev).add(activeFrameworkId))
+      }
       
       console.log('[App] Saved successfully')
     },
@@ -269,6 +281,7 @@ function AppInner() {
           setScreen('home')
         }}
         onSaveToServer={tenantId ? handleSaveToServer : undefined}
+        isPublishedToOpenCase={activeFrameworkId ? publishedFrameworkIds.has(activeFrameworkId) : false}
       />
     </EditorProvider>
   )
