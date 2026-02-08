@@ -1,9 +1,10 @@
 import type { CFDocument } from '@/domain/case/types'
-import type { Framework, FrameworkMetadata, Item, Association } from '@/domain/framework/model/types'
+import type { Framework, FrameworkMetadata, FrameworkStatus, Item, Association } from '@/domain/framework/model/types'
 import type { FrameworkId, ItemId, AssociationId } from '@/domain/shared/types'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
 import { createEmptyFrameworkGraph } from '@/ui/editor/state/editorFactories'
 import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
+import { normalizeAdoptionStatus } from '@/domain/framework/model/adoptionStatus'
 
 /**
  * HomeFramework represents a framework entry in the home screen list.
@@ -40,6 +41,23 @@ function safeParse<T>(raw: string | null): T | null {
 /**
  * Create a minimal domain Framework from display metadata.
  */
+/**
+ * Map CASE adoptionStatus to internal domain FrameworkStatus.
+ *
+ * The domain status controls editability:
+ *   - 'Draft' → editable
+ *   - 'Published' → finalized (loaded from server in a non-draft state)
+ *
+ * Frameworks with adoption status Draft (or empty/unknown) are domain-Draft;
+ * all other recognized statuses (Implemented, Pending Implementation, Retired,
+ * and legacy Adopted/Deprecated) are domain-Published.
+ */
+function adoptionStatusToDomainStatus(adoptionStatus: string | undefined): FrameworkStatus {
+  const normalized = normalizeAdoptionStatus(adoptionStatus)
+  if (!normalized || normalized === 'Draft') return 'Draft'
+  return 'Published'
+}
+
 function createFrameworkFromMetadata(params: {
   id: string
   title: string
@@ -49,12 +67,14 @@ function createFrameworkFromMetadata(params: {
   adoptionStatus?: string
   caseVersion?: string
 }): Framework {
+  const normalized = normalizeAdoptionStatus(params.adoptionStatus) ?? params.adoptionStatus
+
   const metadata: FrameworkMetadata = {
     title: params.title,
     description: params.description,
     creator: params.creator,
     frameworkType: params.frameworkType,
-    adoptionStatus: params.adoptionStatus,
+    adoptionStatus: normalized,
     caseVersion: params.caseVersion ?? '1.1', // Default to CASE 1.1 for new frameworks
     lastChangeDateTime: new Date().toISOString(),
   }
@@ -64,7 +84,7 @@ function createFrameworkFromMetadata(params: {
     metadata,
     items: new Map(),
     associations: new Map(),
-    status: params.adoptionStatus === 'Published' ? 'Published' : 'Draft',
+    status: adoptionStatusToDomainStatus(normalized),
   }
 }
 

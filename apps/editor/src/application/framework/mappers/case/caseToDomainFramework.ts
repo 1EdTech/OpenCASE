@@ -1,6 +1,7 @@
 import type { CasePackageSnapshot } from './CasePackageSnapshot'
 import type { Framework, FrameworkMetadata, Item, Association, AssociationType, ItemType } from '@/domain/framework/model/types'
 import type { FrameworkId, ItemId, AssociationId } from '@/domain/shared/types'
+import { normalizeAdoptionStatus } from '@/domain/framework/model/adoptionStatus'
 
 function mapItemType(rawType?: string): ItemType {
   const raw = (rawType ?? '').toLowerCase()
@@ -41,7 +42,7 @@ export function mapCaseSnapshotToDomainFramework(snapshot: CasePackageSnapshot):
     description: doc.description,
     creator: doc.creator,
     frameworkType: doc.frameworkType,
-    adoptionStatus: doc.adoptionStatus,
+    adoptionStatus: normalizeAdoptionStatus(doc.adoptionStatus) ?? doc.adoptionStatus,
     caseVersion: doc.caseVersion ?? (snapshot.version === 'unknown' ? undefined : snapshot.version),
     lastChangeDateTime: doc.lastChangeDateTime,
     licenseURI: doc.licenseURI,

@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/ui/shared/components/ui/input'
 import { Label } from '@/ui/shared/components/ui/label'
 import { Textarea } from '@/ui/shared/components/ui/textarea'
+import { ComboboxInput } from '@/ui/shared/components/ui/combobox-input'
+import { ADOPTION_STATUS_OPTIONS } from '@/domain/framework/model/adoptionStatus'
 
 export type CreateFrameworkDraft = {
   title: string
@@ -60,7 +62,13 @@ export default function CreateFrameworkDialog({
 
           <div className="grid gap-1.5">
             <Label htmlFor="fw_status">Adoption status (optional)</Label>
-            <Input id="fw_status" value={adoptionStatus} onChange={(e) => setAdoptionStatus(e.target.value)} placeholder="e.g. Draft" />
+            <ComboboxInput
+              id="fw_status"
+              value={adoptionStatus}
+              onChange={setAdoptionStatus}
+              options={ADOPTION_STATUS_OPTIONS}
+              placeholder="Select or type a status"
+            />
           </div>
 
           <div className="grid gap-1.5">

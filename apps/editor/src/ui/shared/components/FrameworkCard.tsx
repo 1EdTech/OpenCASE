@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { CFDocument } from '@/domain/case/types'
 import { Button } from '@/ui/shared/components/ui/button'
 import { cn } from '@/lib/utils'
+import { normalizeAdoptionStatus } from '@/domain/framework/model/adoptionStatus'
 
 type Props = {
   cfDocument: Pick<CFDocument, 'title' | 'creator' | 'description' | 'frameworkType' | 'adoptionStatus'>
@@ -34,7 +35,8 @@ export function FrameworkCard({
   const title = cfDocument.title ?? 'Untitled framework'
   const creator = cfDocument.creator
   const frameworkType = (cfDocument as { frameworkType?: string }).frameworkType
-  const adoptionStatus = (cfDocument as { adoptionStatus?: string }).adoptionStatus
+  const rawAdoptionStatus = (cfDocument as { adoptionStatus?: string }).adoptionStatus
+  const adoptionStatus = normalizeAdoptionStatus(rawAdoptionStatus) ?? rawAdoptionStatus
   const description = (cfDocument as { description?: string }).description
 
   const clickable = Boolean(onClick)
@@ -61,7 +63,14 @@ export function FrameworkCard({
               </div>
             ) : null}
             {adoptionStatus ? (
-              <div className="rounded-full border border-violet-200 bg-white px-2 py-0.5 text-[11px] font-medium text-violet-700">
+              <div className={cn(
+                'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                adoptionStatus === 'Draft' && 'border-amber-200 bg-amber-50 text-amber-700',
+                adoptionStatus === 'Pending Implementation' && 'border-blue-200 bg-blue-50 text-blue-700',
+                adoptionStatus === 'Implemented' && 'border-green-200 bg-green-50 text-green-700',
+                adoptionStatus === 'Retired' && 'border-slate-300 bg-slate-100 text-slate-500',
+                !['Draft', 'Pending Implementation', 'Implemented', 'Retired'].includes(adoptionStatus) && 'border-violet-200 bg-white text-violet-700',
+              )}>
                 {adoptionStatus}
               </div>
             ) : null}

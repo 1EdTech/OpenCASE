@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
+import { ComboboxInput } from '@/ui/shared/components/ui/combobox-input'
+import { ADOPTION_STATUS_OPTIONS } from '@/domain/framework/model/adoptionStatus'
 import type {
   CaseEditorNodeDataPatch,
   CaseEditorNodeType,
@@ -390,17 +392,24 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode, onVie
                   <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="node-educationLevel">
                     {isFramework ? 'Adoption status' : 'Education level(s)'}
                   </label>
-                  <input
-                    id="node-educationLevel"
-                    className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
-                    value={isFramework ? cfDocument?.adoptionStatus ?? '' : joinCsv(cfItem?.educationLevel)}
-                    onChange={(e) =>
-                      isFramework
-                        ? updateDocument({ adoptionStatus: e.target.value })
-                        : updateItem({ educationLevel: parseCsv(e.target.value) })
-                    }
-                    placeholder={isFramework ? 'Example: Draft' : 'Example: Grade 3'}
-                  />
+                  {isFramework ? (
+                    <ComboboxInput
+                      id="node-educationLevel"
+                      value={cfDocument?.adoptionStatus ?? ''}
+                      onChange={(v) => updateDocument({ adoptionStatus: v })}
+                      options={ADOPTION_STATUS_OPTIONS}
+                      placeholder="Select or type a status"
+                      className="w-full"
+                    />
+                  ) : (
+                    <input
+                      id="node-educationLevel"
+                      className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
+                      value={joinCsv(cfItem?.educationLevel)}
+                      onChange={(e) => updateItem({ educationLevel: parseCsv(e.target.value) })}
+                      placeholder="Example: Grade 3"
+                    />
+                  )}
                 </div>
 
                 {!isFramework ? (
