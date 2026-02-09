@@ -11,7 +11,8 @@ services:
       - "--api.dashboard=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=monorepo_casenet"
+      - "--providers.docker.network=opencase_opencasenet"
+      - "--providers.docker.constraints=Label(`traefik.constraint-label`,`opencase_opencasenet`)"
       - "--entrypoints.web.address=:3000"
       - "--log.level=DEBUG"
     ports:
@@ -20,9 +21,10 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - casenet
+      - opencasenet
     labels:
       - "traefik.enable=true"
+      - "traefik.constraint-label=opencase_opencasenet"
 
   # =============================================================================
   # Keycloak - OIDC Identity Provider
@@ -48,9 +50,10 @@ services:
       # Persist Keycloak data (H2 database, realm config)
       - keycloak_data:/opt/keycloak/data
     networks:
-      - casenet
+      - opencasenet
     labels:
       - "traefik.enable=true"
+      - "traefik.constraint-label=opencase_opencasenet"
       # Route /realms/* to Keycloak (OIDC endpoints)
       - "traefik.http.routers.keycloak-realms.rule=PathPrefix(`/realms`)"
       - "traefik.http.routers.keycloak-realms.entrypoints=web"
@@ -111,11 +114,12 @@ services:
     volumes:
       - ./apps/opencase/data:/app/data
     networks:
-      - casenet
+      - opencasenet
     depends_on:
       - keycloak
     labels:
       - "traefik.enable=true"
+      - "traefik.constraint-label=opencase_opencasenet"
       # Route /ims/* to OpenCASE (CASE API)
       - "traefik.http.routers.opencase-ims.rule=PathPrefix(`/ims`)"
       - "traefik.http.routers.opencase-ims.entrypoints=web"
@@ -169,11 +173,12 @@ services:
       # Exclude node_modules from mount
       - editor_node_modules:/app/node_modules
     networks:
-      - casenet
+      - opencasenet
     depends_on:
       - opencase
     labels:
       - "traefik.enable=true"
+      - "traefik.constraint-label=opencase_opencasenet"
       # Catch-all route for editor (lowest priority)
       - "traefik.http.routers.editor.rule=PathPrefix(`/`)"
       - "traefik.http.routers.editor.entrypoints=web"
@@ -183,7 +188,7 @@ services:
       - "traefik.http.services.editor.loadbalancer.server.port=5173"
 
 networks:
-  casenet:
+  opencasenet:
     driver: bridge
 
 volumes:

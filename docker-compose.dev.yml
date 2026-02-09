@@ -28,6 +28,7 @@ services:
       - "--api.dashboard=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=monorepo_casenet"
+      - "--providers.docker.network=opencase_opencasenet"
+      - "--providers.docker.constraints=Label(`traefik.constraint-label`,`opencase_opencasenet`)"
       - "--entrypoints.web.address=:3000"
       - "--log.level=INFO"

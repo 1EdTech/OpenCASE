@@ -1,4 +1,4 @@
-# CASE Monorepo
+# OpenCASE Monorepo
 
 A monorepo containing the full CASE (Competencies & Academic Standards Exchange) development stack:
 
