@@ -9,7 +9,7 @@ import { getAppConfig } from '@/app/config'
 import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
-import { toReactFlowGraph, extractLayoutFromCfPackage } from '@/ui/editor/reactflow/mapping'
+import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage } from '@/ui/editor/reactflow/mapping'
 import type { LayoutState } from '@/ui/editor/reactflow/mapping'
 import type { CaseVersion } from '@/application/framework/mappers/case/CasePackageSnapshot'
 import LoginScreen from '@/ui/auth/LoginScreen'
@@ -33,6 +33,9 @@ function AppInner() {
   
   // Store layouts extracted from CASE extensions (keyed by framework ID)
   const [frameworkLayouts, setFrameworkLayouts] = useState<Record<string, LayoutState>>({})
+
+  // Store per-framework edge type from CASE extensions (keyed by framework ID)
+  const [frameworkEdgeTypes, setFrameworkEdgeTypes] = useState<Record<string, string>>({})
 
   // Track which framework IDs have been published to OpenCASE
   // (either loaded from the server or successfully saved)
@@ -133,8 +136,9 @@ function AppInner() {
         // Fetch the CASE package from the API
         const pkg = await api.getCfPackage({ docId, caseVersion: 'v1p1' })
 
-        // Extract layout from CASE extensions before converting to domain model
+        // Extract layout and editor settings from CASE extensions before converting to domain model
         const layout = extractLayoutFromCfPackage(pkg)
+        const editorSettings = extractEditorSettingsFromCfPackage(pkg)
 
         // Use the FrameworkLoader to map CASE → domain Framework
         // This handles v1p0/v1p1 differences through the normalization layer
@@ -149,6 +153,11 @@ function AppInner() {
         // Store the extracted layout
         if (layout) {
           setFrameworkLayouts((prev) => ({ ...prev, [fw.id]: layout }))
+        }
+
+        // Store the extracted edge type
+        if (editorSettings?.edgeType) {
+          setFrameworkEdgeTypes((prev) => ({ ...prev, [fw.id]: editorSettings.edgeType! }))
         }
 
         setFrameworks((prev) => {
@@ -289,6 +298,7 @@ function AppInner() {
       graphKey={activeFramework.id} 
       caseVersion={activeCaseVersion}
       skipAutoLayout={Boolean(frameworkLayouts[activeFramework.id])}
+      initialEdgeType={frameworkEdgeTypes[activeFramework.id]}
     >
       <EditorCanvas
         onBack={() => {

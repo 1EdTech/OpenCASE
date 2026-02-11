@@ -105,7 +105,7 @@ export function FrameworkCard({
       type={clickable ? 'button' : undefined}
       onClick={clickable ? onClick : undefined}
       className={cn(
-        'group relative flex h-full w-full flex-col rounded-lg border bg-white shadow-sm transition-all hover:shadow-lg',
+        'group relative flex h-full w-full flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all hover:shadow-lg',
         selected ? 'border-[#662F90] shadow-md ring-2 ring-[#662F90]/25' : 'border-gray-200',
         clickable ? 'cursor-pointer focus-visible:outline-2 focus-visible:outline-[#662F90]/40 focus-visible:outline-offset-2' : '',
         className,
@@ -157,19 +157,19 @@ export function FrameworkCard({
       </div>
 
       {/* ── Card body ──────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col px-4 pb-3 pt-3">
-        <div className="line-clamp-2 text-left text-base font-semibold leading-snug text-[#2E2F2F]">{title}</div>
+      <div className="flex min-h-0 flex-1 flex-col px-4 pb-3 pt-3">
+        <div className="shrink-0 line-clamp-2 text-left text-base font-semibold leading-snug text-[#2E2F2F]">{title}</div>
 
         {description ? (
-          <div className="mt-2 text-left text-sm leading-snug text-[#2E2F2F]/70">
+          <div className="mt-2 min-h-0 flex-1 overflow-hidden text-left text-sm leading-snug text-[#2E2F2F]/70">
             <div className="line-clamp-3">{description}</div>
           </div>
         ) : (
-          <div className="mt-2 text-left text-sm text-gray-400 italic">No description</div>
+          <div className="mt-2 min-h-0 flex-1 text-left text-sm text-gray-400 italic">No description</div>
         )}
 
         {/* ── Status + meta footer ─────────────────────────────── */}
-        <div className="mt-auto flex items-center justify-between gap-2 pt-4">
+        <div className="mt-auto shrink-0 flex items-center justify-between gap-2 pt-4">
           <div className="flex items-center gap-2">
             {adoptionStatus && statusInfo ? (
               <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold', statusInfo.bg, statusInfo.text)}>

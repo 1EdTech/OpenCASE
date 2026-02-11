@@ -235,14 +235,15 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
 
   const defaultLabelStyle = { fill: '#94a3b8', fontSize: 11, fontWeight: 500 }
   
-  // Build a position map for calculating closest handles
+  // Build a position map for calculating closest handles (use actual node sizes)
   const nodePositions = new Map<string, { x: number; y: number; w: number; h: number }>()
   for (const node of nodes) {
+    const styleAny = node.style as { width?: number; height?: number } | undefined
     nodePositions.set(node.id, { 
       x: node.position.x, 
       y: node.position.y,
-      w: DEFAULT_NODE_WIDTH,
-      h: DEFAULT_NODE_HEIGHT
+      w: typeof styleAny?.width === 'number' ? styleAny.width : DEFAULT_NODE_WIDTH,
+      h: typeof styleAny?.height === 'number' ? styleAny.height : DEFAULT_NODE_HEIGHT,
     })
   }
 
@@ -277,6 +278,9 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
           )
         : { sourceHandle: 'bottom', targetHandle: 'top' }) // Default fallback
     
+    // Detect hierarchy layout pattern: bottom→left handles indicate the hierarchy layout was applied
+    const isHierarchyLayout = handles.sourceHandle === 'bottom' && handles.targetHandle === 'left'
+
     edges.push({
       id: `e_${parentId}_${itemId}`,
       source: parentId,      // Visual: edge starts at parent
@@ -288,7 +292,7 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
       style: getEdgeStyle(assocType),
       ...markers,
       data: {
-        cfAssociation: isFrameworkConnection ? undefined : cfAssociation, // No real association for framework root
+        cfAssociation, // Preserve original association data for round-trip persistence
         isHierarchical: true,
         associationType: assocType,
         sequenceNumber: seqNum,
@@ -297,6 +301,8 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
         semanticDestination: parentId,
         // Flag for UI to lock this edge type (framework root connections are visual-only)
         isFrameworkRootConnection: isFrameworkConnection,
+        // Restore per-edge rendering hints when hierarchy layout handles are detected
+        ...(isHierarchyLayout ? { edgeType: 'smoothstep', labelPosition: 'target' as const } : {}),
       },
     })
   }

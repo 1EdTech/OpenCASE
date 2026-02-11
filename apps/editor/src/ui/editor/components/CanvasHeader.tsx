@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
-import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon } from '@heroicons/react/24/solid'
+import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
 
 type MenuItem = {
@@ -184,6 +184,7 @@ export default function CanvasHeader({
   onSignIn,
   onSignOut,
   onOpenSettings,
+  onResetHierarchy,
 }: {
   frameworkTitle: string
   frameworkSubtitle?: string
@@ -203,6 +204,8 @@ export default function CanvasHeader({
   onSignIn?: () => void
   onSignOut?: () => void
   onOpenSettings?: () => void
+  /** Re-layout graph in hierarchy mode (flat column below framework) */
+  onResetHierarchy?: () => void
 }) {
   // Build user menu items
   const userMenuItems: (MenuItem | 'divider')[] = []
@@ -306,6 +309,8 @@ export default function CanvasHeader({
               icon={Cog6ToothIcon}
               items={[
                 { label: 'Settings', icon: Cog6ToothIcon, onClick: onOpenSettings },
+                { label: 'Hierarchy layout', icon: Bars3BottomLeftIcon, onClick: onResetHierarchy, disabled: !onResetHierarchy },
+                'divider',
                 { label: 'Help', icon: QuestionMarkCircleIcon, onClick: () => {} },
               ]}
             />

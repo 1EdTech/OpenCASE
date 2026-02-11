@@ -29,6 +29,10 @@ const TREE_GAP_X = 40
 const TREE_GAP_Y = 100  // Vertical gap between parent/child for edge visibility
 const HEADER_SAFE_Y = 96
 
+// Hierarchy-layout specific constants
+const HIERARCHY_INDENT = 120  // How far right item column is offset from framework center
+const HIERARCHY_GAP_Y = 40   // Vertical gap between items in hierarchy column
+
 const isFrameworkNode = (n: CaseEditorNodeType): n is CaseFrameworkNodeType => n.type === 'caseFrameworkNode'
 const isItemNode = (n: CaseEditorNodeType): n is CaseItemNodeType => n.type === 'caseItemNode'
 
@@ -164,7 +168,9 @@ type Action =
   | { type: 'node/addExternalFramework'; nodeId: string; data: ExternalFrameworkNodeData; viewportCenter?: { x: number; y: number } }
   | { type: 'graph/delete'; nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }
   | { type: 'layout/apply'; positions: Record<string, { x: number; y: number }> }
+  | { type: 'layout/applyHierarchy'; positions: Record<string, { x: number; y: number }>; edgeHandles: Record<string, { sourceHandle: string; targetHandle: string; edgeType?: string; labelPosition?: 'center' | 'target' }> }
   | { type: 'graph/load'; graph: EditorGraph }
+  | { type: 'dirty/mark' }
   | { type: 'dirty/clear' }
 
 function reducer(state: EditorState, action: Action): EditorState {
@@ -732,6 +738,23 @@ function reducer(state: EditorState, action: Action): EditorState {
       })
       return { ...state, nodes: nextNodes, layoutVersion: state.layoutVersion + 1 }
     }
+    case 'layout/applyHierarchy': {
+      const nextNodes = state.nodes.map((n) => {
+        const p = action.positions[n.id]
+        return p ? { ...n, position: { x: p.x, y: p.y } } : n
+      })
+      const nextEdges = state.edges.map((e) => {
+        const h = action.edgeHandles[e.id]
+        if (!h) return e
+        return {
+          ...e,
+          sourceHandle: h.sourceHandle,
+          targetHandle: h.targetHandle,
+          data: { ...e.data, edgeType: h.edgeType ?? e.data?.edgeType, labelPosition: h.labelPosition },
+        } as CaseEditorEdge
+      })
+      return { ...state, nodes: nextNodes, edges: nextEdges, layoutVersion: state.layoutVersion + 1, dirty: true }
+    }
     case 'graph/load': {
       return {
         nodes: action.graph.nodes,
@@ -741,6 +764,9 @@ function reducer(state: EditorState, action: Action): EditorState {
         layoutVersion: 0,
         dirty: false,
       }
+    }
+    case 'dirty/mark': {
+      return state.dirty ? state : { ...state, dirty: true }
     }
     case 'dirty/clear': {
       return { ...state, dirty: false }
@@ -790,6 +816,8 @@ type EditorContextValue = {
   cancelAddItem: () => void
   confirmAddItem: () => void
   deleteElements: (_params: { nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }) => void
+  /** Re-layout the graph as a flat hierarchy: framework on top, items in a column below */
+  applyHierarchyLayout: () => void
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null)
@@ -800,13 +828,16 @@ export function EditorProvider({
   graphKey,
   caseVersion: initialCaseVersion = '1.1',
   skipAutoLayout = false,
+  initialEdgeType,
 }: Readonly<{ 
   children: ReactNode
   initialGraph?: EditorGraph
   graphKey?: string
   caseVersion?: CaseVersion
   /** Skip auto-layout when the graph already has saved positions (e.g., from CASE extensions) */
-  skipAutoLayout?: boolean 
+  skipAutoLayout?: boolean
+  /** Edge type stored in the framework's CFDocument ext:opencase — overrides localStorage default */
+  initialEdgeType?: string
 }>) {
   // Track CASE version for serialization - default to 1.1 for new frameworks
   const [caseVersion, setCaseVersion] = useState<CaseVersion>(initialCaseVersion)
@@ -830,8 +861,11 @@ export function EditorProvider({
     draft: { fullStatement: '' },
   })
 
-  // Editor settings with localStorage persistence
+  // Editor settings: prefer framework-level edgeType, fall back to localStorage, then default
   const [settings, setSettings] = useState<EditorSettings>(() => {
+    if (initialEdgeType) {
+      return { edgeType: initialEdgeType as EditorSettings['edgeType'] }
+    }
     try {
       const saved = globalThis.localStorage?.getItem('case-editor-settings')
       if (saved) return JSON.parse(saved) as EditorSettings
@@ -843,11 +877,9 @@ export function EditorProvider({
 
   const updateSettings = useCallback((newSettings: EditorSettings) => {
     setSettings(newSettings)
-    try {
-      globalThis.localStorage?.setItem('case-editor-settings', JSON.stringify(newSettings))
-    } catch {
-      // Ignore storage errors
-    }
+    // Edge type is now persisted per-framework in ext:opencase (not localStorage).
+    // Mark the editor as dirty so the user knows to save.
+    dispatch({ type: 'dirty/mark' })
   }, [])
 
   useEffect(() => {
@@ -856,6 +888,14 @@ export function EditorProvider({
     // Skip auto-layout if the graph already has saved positions from CASE extensions
     didInitialLayout.current = skipAutoLayout
   }, [graphKey, seed, skipAutoLayout])
+
+  // When switching frameworks, reset edge type to the framework's saved value (or localStorage default)
+  useEffect(() => {
+    if (!graphKey) return
+    if (initialEdgeType) {
+      setSettings((prev) => ({ ...prev, edgeType: initialEdgeType as EditorSettings['edgeType'] }))
+    }
+  }, [graphKey, initialEdgeType])
 
   const selectedNode = useMemo(
     () => (state.selectedNodeId ? state.nodes.find((n) => n.id === state.selectedNodeId) ?? null : null),
@@ -947,6 +987,62 @@ export function EditorProvider({
     dispatch({ type: 'layout/apply', positions })
     didInitialLayout.current = true
   }, [state.nodes, state.edges])
+
+  /**
+   * Apply a hierarchical layout: framework at top, items in a vertical column
+   * below and to the right, connected by smooth-step edges from bottom→left.
+   */
+  const applyHierarchyLayout = useCallback(() => {
+    const frameworkNode = state.nodes.find(isFrameworkNode)
+    if (!frameworkNode) return
+
+    const frameworkSize = getNodeSize(frameworkNode)
+
+    // Find edges from framework to items (__startsFrom / isChildOf with framework as source)
+    const frameworkToItemEdges = state.edges.filter(
+      (e) => e.source === frameworkNode.id && state.nodes.some((n) => n.id === e.target && isItemNode(n)),
+    )
+
+    // Sort items by sequenceNumber from the edge data, then by index as fallback
+    const sortedEdges = [...frameworkToItemEdges].sort((a, b) => {
+      const seqA = a.data?.cfAssociation?.sequenceNumber ?? a.data?.sequenceNumber ?? Number.MAX_SAFE_INTEGER
+      const seqB = b.data?.cfAssociation?.sequenceNumber ?? b.data?.sequenceNumber ?? Number.MAX_SAFE_INTEGER
+      return seqA - seqB
+    })
+
+    // Compute positions
+    const positions: Record<string, { x: number; y: number }> = {}
+    const edgeHandles: Record<string, { sourceHandle: string; targetHandle: string; edgeType?: string }> = {}
+
+    // Framework at top
+    positions[frameworkNode.id] = { x: 0, y: HEADER_SAFE_Y }
+
+    // Items stacked vertically, offset to the right
+    const itemStartX = 0 + frameworkSize.w / 2 + HIERARCHY_INDENT
+    let itemY = HEADER_SAFE_Y + frameworkSize.h + HIERARCHY_GAP_Y
+
+    for (const edge of sortedEdges) {
+      const itemNode = state.nodes.find((n) => n.id === edge.target)
+      if (!itemNode) continue
+
+      const itemSize = getNodeSize(itemNode)
+      positions[edge.target] = { x: itemStartX, y: itemY }
+      itemY += itemSize.h + HIERARCHY_GAP_Y
+
+      // Set edge handles: framework bottom → item left, using smoothstep, label near item
+      edgeHandles[edge.id] = {
+        sourceHandle: 'bottom',
+        targetHandle: 'left',
+        edgeType: 'smoothstep',
+        labelPosition: 'target',
+      }
+    }
+
+    dispatch({ type: 'layout/applyHierarchy', positions, edgeHandles })
+
+    // Switch the framework-level edge style to smoothstep (persisted on next save)
+    updateSettings({ ...settings, edgeType: 'smoothstep' })
+  }, [state.nodes, state.edges, settings, updateSettings])
 
   const addChild = useCallback((parentId: string) => {
     setAddItemDialog({ open: true, parentId, viewportCenter: undefined, draft: { fullStatement: '' } })
@@ -1146,6 +1242,7 @@ export function EditorProvider({
       cancelAddItem,
       confirmAddItem,
       deleteElements,
+      applyHierarchyLayout,
     }),
     [
       state.nodes,
@@ -1180,6 +1277,7 @@ export function EditorProvider({
       cancelAddItem,
       confirmAddItem,
       deleteElements,
+      applyHierarchyLayout,
     ],
   )
 

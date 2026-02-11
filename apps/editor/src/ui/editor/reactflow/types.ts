@@ -102,6 +102,11 @@ export type CaseEdgeData = {
    * May differ from visual source/target for better UX.
    */
   semanticDestination?: string
+  /**
+   * Hint for where to position the edge label along the path.
+   * 'center' (default) = midpoint; 'target' = biased toward the target node.
+   */
+  labelPosition?: 'center' | 'target'
 }
 
 export type CaseEditorEdge = Edge<CaseEdgeData>

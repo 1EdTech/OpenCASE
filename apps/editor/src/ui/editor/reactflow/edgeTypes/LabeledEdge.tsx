@@ -22,6 +22,8 @@ type LabeledEdgeData = {
   associationType?: string
   sequenceNumber?: number
   edgeType?: 'default' | 'straight' | 'step' | 'smoothstep'
+  /** Where to position the label along the edge path */
+  labelPosition?: 'center' | 'target'
 }
 
 export type LabeledEdge = Edge<LabeledEdgeData, 'labeled'>
@@ -78,6 +80,15 @@ function LabeledEdge(props: EdgeProps) {
       targetY,
       targetPosition,
     })
+  }
+
+  // When label should sit near the target, place it on the final edge segment
+  // entering the target handle — vertically centered on targetY, offset left of targetX.
+  // The label uses translate(-50%, -50%) so its center lands on (labelX, labelY).
+  if (edgeData?.labelPosition === 'target') {
+    const LABEL_OFFSET = 60 // px to the left of the target handle
+    labelX = targetX - LABEL_OFFSET
+    labelY = targetY
   }
 
   const associationType = edgeData?.associationType ?? 'isChildOf'

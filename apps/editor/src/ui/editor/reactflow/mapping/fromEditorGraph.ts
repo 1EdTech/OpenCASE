@@ -82,15 +82,49 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
   }
 
   const associations: Framework['associations'] = new Map()
+  const fwNodeId = fwNode?.id ?? (fwId as unknown as string)
+
   for (const e of graph.edges) {
     const source = e.source
     const target = e.target
-    // Skip framework->item edges: those just represent "top-level" items.
-    if (source === (fwNode?.id ?? (fwId as unknown as string))) continue
+
+    const edgeData = e.data as {
+      associationType?: string
+      sequenceNumber?: number
+      cfAssociation?: { identifier?: string; sequenceNumber?: number; associationType?: string; extensions?: Record<string, unknown> }
+    } | undefined
+
+    // Framework→item edges represent top-level isChildOf associations (item isChildOf document).
+    // These must be preserved so sequence numbers and handle positions survive save/reload.
+    if (source === fwNodeId) {
+      if (!items.has(target as unknown as ItemId)) continue
+
+      // Recover original association ID from cfAssociation, or generate a stable one
+      const originalId = edgeData?.cfAssociation?.identifier ?? `isChildOf_${target}_${fwNodeId}`
+
+      // Handle mapping: visual source=framework(parent/destination), visual target=item(child/origin)
+      const originHandle = e.targetHandle ?? undefined      // item's handle
+      const destinationHandle = e.sourceHandle ?? undefined  // framework's handle
+
+      const assoc: Association = {
+        id: originalId as unknown as AssociationId,
+        fromItemId: target as unknown as ItemId,   // child (origin)
+        toItemId: fwNodeId as unknown as ItemId,   // document (destination)
+        associationType: 'isChildOf',
+        metadata: {
+          sequenceNumber: edgeData?.sequenceNumber ?? edgeData?.cfAssociation?.sequenceNumber,
+          originHandle,
+          destinationHandle,
+          extensions: edgeData?.cfAssociation?.extensions,
+        },
+      }
+      associations.set(assoc.id, assoc)
+      continue
+    }
+
     if (!items.has(source as unknown as ItemId)) continue
     if (!items.has(target as unknown as ItemId)) continue
 
-    const edgeData = e.data as { associationType?: string; cfAssociation?: { sequenceNumber?: number; associationType?: string; extensions?: Record<string, unknown> } } | undefined
     const associationType = edgeToAssociationType(e.id, edgeData)
     
     // For hierarchical types (isChildOf, isPartOf), the edge goes from child to parent visually

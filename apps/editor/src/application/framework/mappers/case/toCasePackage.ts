@@ -113,6 +113,8 @@ type OpencaseExtension = {
   originHandle?: string
   /** Persisted handle ID on the destination (to) node — preserves user-defined edge anchors */
   destinationHandle?: string
+  /** Edge rendering style for this framework (e.g. 'default', 'smoothstep', 'straight') */
+  edgeType?: string
 }
 
 /**
@@ -126,7 +128,7 @@ function mergeOpencaseExtension(
   const extensions = { ...base }
   
   // Only add if there's data to store
-  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle) {
+  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType) {
     const existing = (extensions[OPENCASE_EXT_KEY] as OpencaseExtension | undefined) ?? {}
     extensions[OPENCASE_EXT_KEY] = {
       ...existing,
@@ -144,7 +146,7 @@ function frameworkToCfDocument(
   framework: Framework,
   caseVersion: CaseVersion,
   layout?: NodeLayout,
-  options?: { incrementVersion?: boolean }
+  options?: { incrementVersion?: boolean; edgeType?: string }
 ): CFDocument {
   const meta = framework.metadata
   const fwId = String(framework.id)
@@ -180,7 +182,9 @@ function frameworkToCfDocument(
       title: docTitle,
       identifier: fwId,
     },
-    extensions: layout ? mergeOpencaseExtension(undefined, { layout }) : undefined,
+    extensions: (layout || options?.edgeType)
+      ? mergeOpencaseExtension(undefined, { layout, edgeType: options?.edgeType })
+      : undefined,
   }
 
   return document
@@ -338,13 +342,15 @@ export function frameworkToCfPackage(params: {
   caseVersion: CaseVersion
   layout?: LayoutState
   incrementVersion?: boolean
+  /** Edge rendering style to persist with this framework */
+  edgeType?: string
 }): CFPackage {
-  const { framework, caseVersion, layout, incrementVersion } = params
+  const { framework, caseVersion, layout, incrementVersion, edgeType } = params
   const fwId = String(framework.id)
 
   // Build CFDocument
   const documentLayout = layout?.byNodeId?.[fwId]
-  const document = frameworkToCfDocument(framework, caseVersion, documentLayout, { incrementVersion })
+  const document = frameworkToCfDocument(framework, caseVersion, documentLayout, { incrementVersion, edgeType })
 
   // Build CFItems
   const itemIds = Array.from(framework.items.keys()).map(String)

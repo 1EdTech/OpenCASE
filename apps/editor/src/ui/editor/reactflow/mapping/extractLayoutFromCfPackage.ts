@@ -7,6 +7,12 @@ const OPENCASE_EXT_KEY = 'ext:opencase'
 type OpencaseExtension = {
   layout?: NodeLayout
   editorNotes?: string
+  edgeType?: string
+}
+
+/** Editor-level settings stored in CFDocument ext:opencase */
+export type ExtractedEditorSettings = {
+  edgeType?: string
 }
 
 /**
@@ -43,4 +49,22 @@ export function extractLayoutFromCfPackage(cfPackage: CFPackage): LayoutState | 
   }
 
   return hasLayout ? { byNodeId } : undefined
+}
+
+/**
+ * Extract editor-level settings from a CFPackage's CFDocument extensions.
+ *
+ * Currently reads:
+ * - `edgeType` — the edge rendering style stored in `ext:opencase.edgeType`
+ *
+ * @param cfPackage - The CFPackage from the server
+ * @returns Settings object, or undefined if no editor settings are stored
+ */
+export function extractEditorSettingsFromCfPackage(cfPackage: CFPackage): ExtractedEditorSettings | undefined {
+  const docExtensions = cfPackage.CFDocument?.extensions as Record<string, unknown> | undefined
+  const docOpencaseExt = docExtensions?.[OPENCASE_EXT_KEY] as OpencaseExtension | undefined
+
+  if (!docOpencaseExt?.edgeType) return undefined
+
+  return { edgeType: docOpencaseExt.edgeType }
 }

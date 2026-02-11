@@ -63,6 +63,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     updateSettings,
     addDetachedItem,
     addExternalFramework,
+    applyHierarchyLayout,
   } = useEditor()
 
   const reactFlowWrapRef = useRef<HTMLDivElement | null>(null)
@@ -105,11 +106,12 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       caseVersion,
       layout,
       incrementVersion: false,
+      edgeType: settings.edgeType,
     })
     
     setGeneratedCfPackage(cfPackage)
     setCfPackageDialogOpen(true)
-  }, [nodes, editorEdges, caseVersion])
+  }, [nodes, editorEdges, caseVersion, settings.edgeType])
 
   // Save: Generate CFPackage with version increment and POST to server
   const handleSave = useCallback(async () => {
@@ -123,6 +125,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       caseVersion,
       layout,
       incrementVersion: true,
+      edgeType: settings.edgeType,
     })
     
     // Convert to OpenCASE REST API format
@@ -155,14 +158,15 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       // No server callback - just show the dialog for manual validation
       setCfPackageDialogOpen(true)
     }
-  }, [nodes, editorEdges, caseVersion, onSaveToServer, clearDirty])
+  }, [nodes, editorEdges, caseVersion, onSaveToServer, clearDirty, settings.edgeType])
 
-  // Apply the custom labeled edge type to all edges, passing the path style in data
+  // Apply the custom labeled edge type to all edges, passing the path style in data.
+  // Per-edge edgeType (e.g. from hierarchy layout) takes priority over the framework-level setting.
   const edgesWithType = useMemo<CaseEditorEdge[]>(
     () => editorEdges.map((edge) => ({ 
       ...edge, 
       type: 'labeled',
-      data: { ...edge.data, edgeType: settings.edgeType }
+      data: { ...edge.data, edgeType: edge.data?.edgeType ?? settings.edgeType }
     })),
     [editorEdges, settings.edgeType],
   )
@@ -562,6 +566,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
             : undefined
         }
         onOpenSettings={() => setSettingsOpen(true)}
+        onResetHierarchy={applyHierarchyLayout}
       />
 
       <div ref={reactFlowWrapRef} className="h-full w-full">
