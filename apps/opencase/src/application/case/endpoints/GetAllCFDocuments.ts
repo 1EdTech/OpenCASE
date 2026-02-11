@@ -109,11 +109,14 @@ export class GetAllCFDocuments {
 
       // Add optional fields if present
       if (docMeta.description) doc.description = docMeta.description
+      if (docMeta.creator) doc.creator = docMeta.creator
       if (docMeta.language) doc.language = docMeta.language
       if (docMeta.frameworkType) doc.frameworkType = docMeta.frameworkType
       if (docMeta.subject) doc.subject = docMeta.subject
       if (docMeta.version) doc.version = docMeta.version
       if (docMeta.adoptionStatus) doc.adoptionStatus = docMeta.adoptionStatus
+      if (docMeta.sourcePackageURI) doc.sourcePackageURI = docMeta.sourcePackageURI
+      if (docMeta.isModifiedFromSource) doc.isModifiedFromSource = docMeta.isModifiedFromSource
 
       // Apply field selection if specified
       if (query.fields && query.fields.length > 0) {

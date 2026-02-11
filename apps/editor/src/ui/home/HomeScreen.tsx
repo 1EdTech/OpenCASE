@@ -1,9 +1,10 @@
-import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon } from '@heroicons/react/24/solid'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
 import { FrameworkCard } from '@/ui/shared/components/FrameworkCard'
 import type { HomeFramework } from '@/ui/home/frameworkStore'
 import CreateFrameworkDialog, { type CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
+import ImportFrameworkDialog from '@/ui/home/ImportFrameworkDialog'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
 import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/CaseApiClient'
@@ -102,6 +103,7 @@ export default function HomeScreen({
   onCreateNew: (_draft: CreateFrameworkDraft) => void
 }>) {
   const [createOpen, setCreateOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const { status, tenantId, userName, signOut, getAccessToken } = useAuth()
   const cfg = getAppConfig()
 
@@ -193,6 +195,24 @@ export default function HomeScreen({
     onDeleteDraft(draftDeleteConfirm.id)
     setDraftDeleteConfirm(null)
   }, [draftDeleteConfirm, onDeleteDraft])
+
+  // Handle import from external CASE endpoint
+  const handleImport = useCallback(async (endpointUrl: string, accessToken?: string) => {
+    if (!tenantId) throw new Error('Not authenticated')
+    const result = await api.importCfPackage({
+      tenantId,
+      endpointUrl,
+      accessToken,
+    })
+    // Refresh the framework list
+    void loadFrameworks()
+    // Open the imported framework in the editor
+    if (result.id && onOpenRemoteFramework) {
+      void onOpenRemoteFramework(result.id)
+    }
+    setImportOpen(false)
+    return result
+  }, [api, tenantId, loadFrameworks, onOpenRemoteFramework])
 
   const isAuthenticated = status === 'authenticated'
   const refreshButtonClass = loading ? 'animate-spin' : ''
@@ -297,6 +317,12 @@ export default function HomeScreen({
               >
                 <ArrowPathIcon className={`h-4 w-4 ${refreshButtonClass}`} />
                 {loading ? 'Loading\u2026' : 'Refresh'}
+              </Button>
+            )}
+            {isAuthenticated && (
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <CloudArrowDownIcon className="h-4 w-4" aria-hidden />
+                Import framework
               </Button>
             )}
             <Button onClick={() => setCreateOpen(true)}>
@@ -461,6 +487,8 @@ export default function HomeScreen({
                       frameworkType: doc.frameworkType,
                       adoptionStatus: doc.adoptionStatus,
                     }}
+                    sourcePackageURI={doc.sourcePackageURI}
+                    isModifiedFromSource={doc.isModifiedFromSource}
                     rightHint={isDeleting ? 'Archiving\u2026' : hint}
                     lastChanged={doc.lastChangeDateTime}
                     onClick={() => openRemote(doc.identifier)}
@@ -518,6 +546,12 @@ export default function HomeScreen({
           setCreateOpen(false)
           onCreateNew(draft)
         }}
+      />
+
+      <ImportFrameworkDialog
+        open={importOpen}
+        onCancel={() => setImportOpen(false)}
+        onImport={handleImport}
       />
 
       {/* Archive Confirmation Dialog (server frameworks) */}

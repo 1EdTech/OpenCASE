@@ -6,6 +6,7 @@ import { CFAssociation } from '../../../domain/case/entities/CFAssociation'
 import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { JsonSchemaValidator } from '../../../infrastructure/validation/JsonSchemaValidator'
+import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export interface CreateFrameworkCommand {
   tenantId: TenantId
@@ -91,7 +92,8 @@ function preparePayloadForValidation (payload: any): any {
 export class CreateFramework {
   constructor (
     private readonly pkgRepo: CFPackageRepository,
-    private readonly validator?: JsonSchemaValidator
+    private readonly validator?: JsonSchemaValidator,
+    private readonly store?: FileFrameworkStore
   ) {}
   
   /**
@@ -133,8 +135,37 @@ export class CreateFramework {
       }
     }
 
+    // If the framework was previously imported (has sourcePackageURI in metadata),
+    // mark it as modified from source on subsequent saves from the editor.
+    let cfDocPayload = payload.CFDocument
+    if (this.store) {
+      const docId = (cfDocPayload.sourcedId ?? cfDocPayload.identifier) as string | undefined
+      if (docId) {
+        // Check both CASE versions for existing metadata
+        const existingMeta = this.store.getDocumentMetadata(tenantId, caseVersion, docId)
+          ?? this.store.getDocumentMetadata(tenantId, caseVersion === '1.0' ? '1.1' : '1.0', docId)
+        if (existingMeta?.sourcePackageURI) {
+          const existingExt = cfDocPayload.extensions ?? {}
+          const existingOpencase = (existingExt['ext:opencase'] && typeof existingExt['ext:opencase'] === 'object')
+            ? existingExt['ext:opencase']
+            : {}
+          cfDocPayload = {
+            ...cfDocPayload,
+            extensions: {
+              ...existingExt,
+              'ext:opencase': {
+                ...existingOpencase,
+                sourcePackageURI: existingMeta.sourcePackageURI,
+                isModifiedFromSource: true,
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Extract from CFPackage format and create domain entities
-    const document = CFDocument.fromRaw(tenantId, caseVersion, payload.CFDocument)
+    const document = CFDocument.fromRaw(tenantId, caseVersion, cfDocPayload)
     const docId = document.sourcedId
     const docJSON = document.toJSON()
     const docURI = docJSON.uri

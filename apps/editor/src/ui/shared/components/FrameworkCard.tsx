@@ -1,4 +1,4 @@
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, TrashIcon, CloudArrowDownIcon } from '@heroicons/react/24/solid'
 import type { ReactNode } from 'react'
 import type { CFDocument } from '@/domain/case/types'
 import { Button } from '@/ui/shared/components/ui/button'
@@ -65,6 +65,10 @@ type Props = {
   isUnsaved?: boolean
   /** ISO date string for the last change — shown in the card footer */
   lastChanged?: string
+  /** URL the framework was imported from — shows an "Imported" badge when set */
+  sourcePackageURI?: string
+  /** True when an imported framework has been locally modified */
+  isModifiedFromSource?: boolean
 }
 
 export function FrameworkCard({
@@ -81,6 +85,8 @@ export function FrameworkCard({
   children,
   isUnsaved,
   lastChanged,
+  sourcePackageURI,
+  isModifiedFromSource,
 }: Readonly<Props>) {
   const title = cfDocument.title ?? 'Untitled framework'
   const frameworkType = (cfDocument as { frameworkType?: string }).frameworkType
@@ -179,6 +185,20 @@ export function FrameworkCard({
             {isUnsaved ? (
               <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
                 Unsaved
+              </span>
+            ) : null}
+            {sourcePackageURI ? (
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold',
+                  isModifiedFromSource
+                    ? 'bg-violet-100 text-violet-700'
+                    : 'bg-sky-100 text-sky-700',
+                )}
+                title={isModifiedFromSource ? `Imported from ${sourcePackageURI} (modified)` : `Imported from ${sourcePackageURI}`}
+              >
+                <CloudArrowDownIcon className="h-3 w-3" />
+                {isModifiedFromSource ? 'Forked' : 'Imported'}
               </span>
             ) : null}
           </div>

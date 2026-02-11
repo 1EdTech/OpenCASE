@@ -249,7 +249,7 @@ export async function buildContainer(): Promise<Container> {
     // But log which schemas were successfully registered (if any)
   }
 
-  const createFramework = new CreateFramework(pkgRepo, jsonSchemaValidator)
+  const createFramework = new CreateFramework(pkgRepo, jsonSchemaValidator, store)
   const importFramework = new ImportFrameworkFromEndpoint(pkgRepo, caseApiClient, jsonSchemaValidator)
   
   // Initialize CASE endpoints

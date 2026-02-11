@@ -18,6 +18,36 @@ export interface ImportFrameworkFromEndpointCommand {
   schemaName?: string
 }
 
+export interface ImportFrameworkResult {
+  docId: string
+  version: number
+  validationWarnings?: string[]
+}
+
+/**
+ * Merge or create the `ext:opencase` extension on a CFDocument payload,
+ * setting sourcePackageURI and marking it as a pristine import.
+ */
+function injectSourceProvenance (docPayload: any, endpointUrl: string): any {
+  const existing = docPayload.extensions ?? {}
+  const existingOpencase = (existing['ext:opencase'] && typeof existing['ext:opencase'] === 'object')
+    ? existing['ext:opencase']
+    : {}
+
+  return {
+    ...docPayload,
+    extensions: {
+      ...existing,
+      'ext:opencase': {
+        ...existingOpencase,
+        sourcePackageURI: endpointUrl,
+        isModifiedFromSource: false,
+        importedAt: new Date().toISOString(),
+      }
+    }
+  }
+}
+
 export class ImportFrameworkFromEndpoint {
   constructor(
     private readonly pkgRepo: CFPackageRepository,
@@ -25,7 +55,7 @@ export class ImportFrameworkFromEndpoint {
     private readonly validator?: JsonSchemaValidator
   ) {}
 
-  async execute (cmd: ImportFrameworkFromEndpointCommand): Promise<{ docId: string, version: number }> {
+  async execute (cmd: ImportFrameworkFromEndpointCommand): Promise<ImportFrameworkResult> {
     const { tenantId, caseVersion, endpointUrl, accessToken, validateSchema, schemaName } = cmd
 
     logger.info({ tenantId, caseVersion, endpointUrl }, 'Importing framework from endpoint')
@@ -33,9 +63,12 @@ export class ImportFrameworkFromEndpoint {
     // Fetch the CFPackage from the endpoint
     const response = await this.apiClient.fetchCFPackage(endpointUrl, accessToken)
 
+    // Inject source provenance into the CFDocument extensions
+    const enrichedCFDocument = injectSourceProvenance(response.CFPackage.CFDocument, endpointUrl)
+
     // Use CFPackage format directly (matches API response format)
     const payload = {
-      CFDocument: response.CFPackage.CFDocument,
+      CFDocument: enrichedCFDocument,
       CFItems: response.CFPackage.CFItems ?? [],
       CFAssociations: response.CFPackage.CFAssociations ?? [],
       CFRubrics: response.CFPackage.CFRubrics ?? [],
@@ -43,14 +76,18 @@ export class ImportFrameworkFromEndpoint {
       extensions: response.CFPackage.extensions
     }
 
+    // Collect validation warnings (non-fatal) instead of hard failing
+    const validationWarnings: string[] = []
+
     // Validate against JSON schema if validator is provided
     if (validateSchema && this.validator && schemaName) {
       logger.info({ schemaName }, 'Validating framework against schema')
       try {
         this.validator.validate(schemaName, payload)
       } catch (error: any) {
-        logger.error({ error: error.message, details: error.details }, 'Schema validation failed')
-        throw new Error(`Schema validation failed: ${error.message}`)
+        logger.warn({ error: error.message, details: error.details }, 'Schema validation produced warnings during import')
+        validationWarnings.push(error.message)
+        // Continue with import — validation issues are reported as warnings
       }
     }
 
@@ -74,15 +111,14 @@ export class ImportFrameworkFromEndpoint {
     await this.pkgRepo.saveNewVersion(tenantId, caseVersion, pkg)
 
     logger.info(
-      { tenantId, caseVersion, docId: document.sourcedId },
+      { tenantId, caseVersion, docId: document.sourcedId, warnings: validationWarnings.length },
       'Successfully imported framework from endpoint'
     )
 
-    // Return document ID and version info
-    // Note: Version tracking would need to be implemented in FileFrameworkStore
     return {
       docId: document.sourcedId,
-      version: 1 // TODO: Get actual version from store
+      version: 1,
+      validationWarnings: validationWarnings.length > 0 ? validationWarnings : undefined
     }
   }
 }

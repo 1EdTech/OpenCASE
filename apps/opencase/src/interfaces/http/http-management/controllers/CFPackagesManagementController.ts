@@ -105,11 +105,15 @@ export class CFPackagesManagementController {
         schemaName
       })
 
-      return res.status(201).json({
+      const response: any = {
         status: 'imported',
         id: result.docId,
         version: result.version
-      })
+      }
+      if (result.validationWarnings && result.validationWarnings.length > 0) {
+        response.validationWarnings = result.validationWarnings
+      }
+      return res.status(201).json(response)
     } catch (error: any) {
       return res.status(400).json({ error: 'import_failed', message: error.message })
     }

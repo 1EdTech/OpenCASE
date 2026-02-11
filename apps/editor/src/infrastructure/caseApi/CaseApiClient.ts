@@ -28,6 +28,10 @@ export type CfDocumentSummary = {
   adoptionStatus?: string
   lastChangeDateTime?: string
   caseVersion?: string
+  /** URL the framework was imported from (set during import via backend). */
+  sourcePackageURI?: string
+  /** True when an imported framework has been locally modified after import. */
+  isModifiedFromSource?: boolean
 }
 
 export class CaseApiClient {
@@ -116,6 +120,39 @@ export class CaseApiClient {
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages/${encodeURIComponent(params.docId)}`
     
     await this._http.delete(url)
+  }
+
+  /**
+   * Import a CFPackage from an external CASE endpoint via the OpenCASE backend.
+   *
+   * The backend fetches the package (avoiding CORS), validates it, injects
+   * source provenance metadata, and stores it in the tenant's framework store.
+   */
+  async importCfPackage(params: {
+    tenantId: string
+    endpointUrl: string
+    caseVersion?: 'v1p0' | 'v1p1'
+    accessToken?: string
+  }): Promise<{ status: string; id: string; version: number; validationWarnings?: string[] }> {
+    const v = params.caseVersion ?? 'v1p1'
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages/import`
+
+    const body: Record<string, unknown> = { endpointUrl: params.endpointUrl }
+    if (params.accessToken) body.accessToken = params.accessToken
+
+    const res = (await this._http.post(url, body)) as unknown
+
+    if (res && typeof res === 'object') {
+      const obj = res as { status?: string; id?: string; version?: number; validationWarnings?: string[] }
+      return {
+        status: obj.status ?? 'imported',
+        id: obj.id ?? '',
+        version: obj.version ?? 1,
+        validationWarnings: obj.validationWarnings,
+      }
+    }
+
+    throw new Error('Unexpected import response shape')
   }
 
   /**

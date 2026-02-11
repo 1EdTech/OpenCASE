@@ -12,6 +12,7 @@ export interface DocumentMetadata {
   sourcedId: string
   title: string
   description?: string
+  creator?: string
   language?: string
   frameworkType?: string
   subject?: string
@@ -20,6 +21,10 @@ export interface DocumentMetadata {
   currentFile: string // relative to tenant/version root
   adoptionStatus?: string // For filtering archived/retired documents
   licenseIdentifier?: string // UUID of the assigned CFLicense (for public-access checks)
+  /** URL this framework was imported from (set during import). */
+  sourcePackageURI?: string
+  /** True when an imported framework has been locally modified after import. */
+  isModifiedFromSource?: boolean
 }
 
 export interface DocumentVersionInfo {
@@ -134,6 +139,7 @@ export class FileFrameworkStore {
           sourcedId: d.sourcedId,
           title: d.title,
           description: d.description,
+          creator: d.creator,
           language: d.language,
           frameworkType: d.frameworkType,
           subject: d.subject,
@@ -142,6 +148,8 @@ export class FileFrameworkStore {
           currentFile: d.currentFile,
           adoptionStatus: d.adoptionStatus,
           licenseIdentifier: d.licenseIdentifier,
+          sourcePackageURI: d.sourcePackageURI,
+          isModifiedFromSource: d.isModifiedFromSource,
         })
       }
     } catch {
@@ -357,10 +365,24 @@ export class FileFrameworkStore {
       licenseIdentifier = lic.identifier
     }
 
+    // Extract sourcePackageURI and isModifiedFromSource from ext:opencase extension
+    let sourcePackageURI: string | undefined
+    let isModifiedFromSource: boolean | undefined
+    const extOpencase = doc.extensions?.['ext:opencase']
+    if (extOpencase && typeof extOpencase === 'object') {
+      if (typeof (extOpencase as any).sourcePackageURI === 'string') {
+        sourcePackageURI = (extOpencase as any).sourcePackageURI
+      }
+      if (typeof (extOpencase as any).isModifiedFromSource === 'boolean') {
+        isModifiedFromSource = (extOpencase as any).isModifiedFromSource
+      }
+    }
+
     versionMap.set(docId, {
       sourcedId: docId,
       title: doc.title as string,
       description: doc.description as string | undefined,
+      creator: doc.creator as string | undefined,
       language: doc.language as string | undefined,
       frameworkType: doc.frameworkType as string | undefined,
       subject: doc.subject as string | undefined,
@@ -369,6 +391,8 @@ export class FileFrameworkStore {
       currentFile: relativePath,
       adoptionStatus: doc.adoptionStatus as string | undefined,
       licenseIdentifier,
+      sourcePackageURI,
+      isModifiedFromSource,
     })
   }
 
@@ -554,6 +578,7 @@ export class FileFrameworkStore {
       sourcedId: meta.sourcedId,
       title: meta.title,
       description: meta.description,
+      creator: meta.creator,
       language: meta.language,
       frameworkType: meta.frameworkType,
       subject: meta.subject,
@@ -562,6 +587,8 @@ export class FileFrameworkStore {
       currentFile: meta.currentFile,
       adoptionStatus: meta.adoptionStatus,
       licenseIdentifier: meta.licenseIdentifier,
+      sourcePackageURI: meta.sourcePackageURI,
+      isModifiedFromSource: meta.isModifiedFromSource,
     }))
 
     await fs.writeFile(
@@ -709,6 +736,10 @@ export class FileFrameworkStore {
 
   associationExists (tenantId: TenantId, version: CaseVersion, assocId: string): boolean {
     return Boolean(this.assocIndex.get(tenantId)?.get(version)?.get(assocId))
+  }
+
+  getDocumentMetadata (tenantId: TenantId, version: CaseVersion, docId: string): DocumentMetadata | null {
+    return this.documents.get(tenantId)?.get(version)?.get(docId) ?? null
   }
 
   getAllDocuments (tenantId: TenantId, version: CaseVersion): DocumentMetadata[] {
