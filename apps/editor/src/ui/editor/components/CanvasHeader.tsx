@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
-import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightOnRectangleIcon, ChevronLeftIcon } from '@heroicons/react/24/solid'
+import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
 
 type MenuItem = {
@@ -36,17 +36,17 @@ function PopoverMenu({
 
   return (
     <div className="relative" ref={rootRef}>
-      <Button
-        variant="secondary"
-        size="sm"
+      <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
         title={label}
+        className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[#2E2F2F]/60 transition-colors hover:bg-[#662F90]/8 hover:text-[#662F90] focus:outline-none focus:ring-2 focus:ring-[#662F90]/30"
       >
         {Icon ? <Icon className="h-4 w-4" aria-hidden={true} /> : null}
         <span className="sr-only">{label}</span>
-      </Button>
+      </button>
 
       {open ? (
         <div
@@ -125,7 +125,7 @@ function AvatarMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         title={userName ?? 'Account'}
-        className="grid h-9 w-9 cursor-pointer select-none place-items-center rounded-full border border-black/10 bg-white text-xs font-bold text-slate-700 transition-all hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 focus:outline-none focus:ring-2 focus:ring-violet-500/30"
+        className="grid h-8 w-8 cursor-pointer select-none place-items-center rounded-full border border-[#2E2F2F]/15 bg-white/80 text-xs font-bold text-[#2E2F2F]/70 transition-all hover:border-[#662F90]/40 hover:bg-[#662F90]/10 hover:text-[#662F90] focus:outline-none focus:ring-2 focus:ring-[#662F90]/30"
       >
         {avatarText}
       </button>
@@ -223,9 +223,9 @@ export default function CanvasHeader({
   
   // Sign in/out action
   if (userName) {
-    userMenuItems.push({ label: 'Sign out', icon: ArrowRightOnRectangleIcon, onClick: onSignOut, disabled: !onSignOut })
+    userMenuItems.push({ label: 'Sign out', icon: ArrowRightStartOnRectangleIcon, onClick: onSignOut, disabled: !onSignOut })
   } else {
-    userMenuItems.push({ label: 'Sign in', icon: ArrowRightOnRectangleIcon, onClick: onSignIn, disabled: !onSignIn })
+    userMenuItems.push({ label: 'Sign in', icon: ArrowRightStartOnRectangleIcon, onClick: onSignIn, disabled: !onSignIn })
   }
 
   return (
@@ -239,52 +239,57 @@ export default function CanvasHeader({
       <div className="pointer-events-auto flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-3 py-2 shadow-sm backdrop-blur">
         <div className="flex min-w-0 items-center gap-3">
           {onBack ? (
-            <Button variant="ghost" size="sm" onClick={onBack} title="Back to Home">
+            <button
+              type="button"
+              onClick={onBack}
+              title="Back to Home"
+              className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm font-medium text-[#2E2F2F]/60 transition-colors hover:bg-[#662F90]/8 hover:text-[#662F90]"
+            >
               <ChevronLeftIcon className="h-4 w-4" aria-hidden />
               Home
-            </Button>
+            </button>
           ) : null}
 
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 text-sm font-extrabold tracking-tight text-white">
-            CASE
-          </div>
+          <span className="font-heading text-base font-bold uppercase tracking-[0.04em] text-[#2E2F2F]">OpenCASE</span>
+
+          <div className="h-5 w-px bg-gray-200" />
 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="truncate text-sm font-semibold text-slate-900">{frameworkTitle}</span>
+              <span className="truncate text-sm font-semibold text-[#2E2F2F]">{frameworkTitle}</span>
             </div>
-            {frameworkSubtitle ? <div className="truncate text-xs text-slate-600">{frameworkSubtitle}</div> : null}
+            {frameworkSubtitle ? <div className="truncate text-xs text-gray-500">{frameworkSubtitle}</div> : null}
           </div>
 
           {/* Save button - shows status during save operations */}
           {onSave ? (
             <div className="flex items-center gap-2">
-              <Button
-                variant={isDirty ? 'default' : 'secondary'}
-                size="sm"
-                onClick={onSave}
-                disabled={!isDirty || saveStatus === 'saving'}
-                className={isDirty ? '' : 'opacity-50'}
-                title={saveError ?? undefined}
-              >
-                {saveStatus === 'saving' ? (
-                  <>
-                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Saving…
-                  </>
-                ) : saveStatus === 'success' ? (
-                  '✓ Saved!'
-                ) : saveStatus === 'error' ? (
-                  '✗ Error'
-                ) : isDirty ? (
-                  'Save'
-                ) : (
-                  'Saved'
-                )}
-              </Button>
+              {isDirty ? (
+                <Button
+                  size="sm"
+                  onClick={onSave}
+                  disabled={saveStatus === 'saving'}
+                  title={saveError ?? undefined}
+                >
+                  {saveStatus === 'saving' ? (
+                    <>
+                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Saving…
+                    </>
+                  ) : saveStatus === 'error' ? (
+                    '✗ Error'
+                  ) : (
+                    'Save'
+                  )}
+                </Button>
+              ) : (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
+                  {saveStatus === 'success' ? '✓ Saved' : 'Saved'}
+                </span>
+              )}
               {saveStatus === 'error' && saveError ? (
                 <span className="text-xs text-red-600" title={saveError}>
                   {saveError.length > 30 ? `${saveError.slice(0, 30)}…` : saveError}

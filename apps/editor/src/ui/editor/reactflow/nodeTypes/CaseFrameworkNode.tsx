@@ -49,7 +49,7 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
           width: 8, 
           height: 8, 
           borderRadius: 4, 
-          backgroundColor: 'rgb(139, 92, 246)',
+          backgroundColor: '#662F90',
           borderColor: 'white',
           borderWidth: 2,
         }}
@@ -63,7 +63,7 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
       >
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-violet-300 bg-white px-3 py-1 text-xs font-semibold text-violet-700 shadow-sm hover:bg-violet-50 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-[#662F90]/30 bg-white px-3 py-1 text-xs font-semibold text-[#662F90] shadow-sm hover:bg-[#662F90]/5 focus-visible:outline-2 focus-visible:outline-[#662F90]/40 focus-visible:outline-offset-2"
           onClick={(e) => {
             e.stopPropagation()
             typedData?.onAddChild?.(id)
@@ -120,10 +120,10 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
           type="source"
           isConnectableStart={true}
           isConnectableEnd={!isInvalidTarget}
-          className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
+          className={`h-2.5! w-2.5! rounded-full! border-2! transition-colors ${
             isInvalidTarget 
-              ? '!border-red-300 !bg-red-100' 
-              : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
+              ? 'border-red-300! bg-red-100!' 
+              : 'border-[#662F90]/40! bg-[#662F90]/10! hover:border-[#662F90]! hover:bg-[#662F90]/20!'
           }`}
         />
         <Handle
@@ -132,10 +132,10 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
           type="source"
           isConnectableStart={true}
           isConnectableEnd={!isInvalidTarget}
-          className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
+          className={`h-2.5! w-2.5! rounded-full! border-2! transition-colors ${
             isInvalidTarget 
-              ? '!border-red-300 !bg-red-100' 
-              : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
+              ? 'border-red-300! bg-red-100!' 
+              : 'border-[#662F90]/40! bg-[#662F90]/10! hover:border-[#662F90]! hover:bg-[#662F90]/20!'
           }`}
         />
         <Handle
@@ -144,10 +144,10 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
           type="source"
           isConnectableStart={true}
           isConnectableEnd={!isInvalidTarget}
-          className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
+          className={`h-2.5! w-2.5! rounded-full! border-2! transition-colors ${
             isInvalidTarget 
-              ? '!border-red-300 !bg-red-100' 
-              : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
+              ? 'border-red-300! bg-red-100!' 
+              : 'border-[#662F90]/40! bg-[#662F90]/10! hover:border-[#662F90]! hover:bg-[#662F90]/20!'
           }`}
         />
         <Handle
@@ -156,10 +156,10 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
           type="source"
           isConnectableStart={true}
           isConnectableEnd={!isInvalidTarget}
-          className={`!h-2.5 !w-2.5 !rounded-full !border-2 transition-colors ${
+          className={`h-2.5! w-2.5! rounded-full! border-2! transition-colors ${
             isInvalidTarget 
-              ? '!border-red-300 !bg-red-100' 
-              : '!border-violet-400 !bg-violet-100 hover:!border-violet-600 hover:!bg-violet-200'
+              ? 'border-red-300! bg-red-100!' 
+              : 'border-[#662F90]/40! bg-[#662F90]/10! hover:border-[#662F90]! hover:bg-[#662F90]/20!'
           }`}
         />
       </FrameworkCard>

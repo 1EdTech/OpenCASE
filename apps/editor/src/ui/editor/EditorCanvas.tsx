@@ -596,7 +596,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
             setRfReady(true)
           }}
         >
-          <Background color="#ccc" variant={BackgroundVariant.Dots} />
+          <Background color="#c8c8ca" gap={20} size={1.5} variant={BackgroundVariant.Dots} style={{ backgroundColor: '#f0f0f2' }} />
           <Controls />
           <MiniMap
             position="bottom-left"
