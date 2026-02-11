@@ -11,6 +11,37 @@ const DEFAULT_NODE_WIDTH = 280
 const DEFAULT_NODE_HEIGHT = 140
 const HEADER_SAFE_Y = 96
 const NODE_VERTICAL_GAP = 120  // Gap between nodes for edge visibility
+const OPENCASE_EXT_KEY = 'ext:opencase'
+
+/** Valid handle IDs on our nodes */
+const VALID_HANDLES = new Set(['top', 'bottom', 'left', 'right'])
+
+/**
+ * Extract persisted handle positions from a CFAssociation's ext:opencase extension.
+ * Returns undefined if no saved handles exist.
+ */
+function getSavedHandles(
+  cfAssociation: CFAssociation | undefined,
+  isHierarchical: boolean
+): { sourceHandle: string; targetHandle: string } | undefined {
+  if (!cfAssociation?.extensions) return undefined
+  const ext = (cfAssociation.extensions as Record<string, unknown>)[OPENCASE_EXT_KEY] as
+    | { originHandle?: string; destinationHandle?: string }
+    | undefined
+  if (!ext) return undefined
+
+  const { originHandle, destinationHandle } = ext
+  if (!originHandle || !destinationHandle) return undefined
+  if (!VALID_HANDLES.has(originHandle) || !VALID_HANDLES.has(destinationHandle)) return undefined
+
+  // Map semantic (origin/destination) handles back to visual (source/target) handles.
+  // Hierarchical: visual source = destination node, visual target = origin node
+  // Non-hierarchical: visual source = origin node, visual target = destination node
+  if (isHierarchical) {
+    return { sourceHandle: destinationHandle, targetHandle: originHandle }
+  }
+  return { sourceHandle: originHandle, targetHandle: destinationHandle }
+}
 
 /**
  * Calculate the best handles for connecting two nodes based on their positions.
@@ -102,6 +133,13 @@ function mapDomainAssociationToCfAssociation(framework: Framework, association: 
   const s = (k: string) => (typeof md[k] === 'string' ? (md[k] as string) : undefined)
   const n = (k: string) => (typeof md[k] === 'number' ? (md[k] as number) : undefined)
 
+  // Reconstruct extensions: caseToDomainFramework spreads extensions directly into metadata
+  // (e.g. metadata["ext:opencase"] = {...}), while fromEditorGraph stores them as metadata.extensions.
+  // Handle both patterns.
+  const rawExtensions = md.extensions as Record<string, unknown> | undefined
+  const opencaseExt = md[OPENCASE_EXT_KEY] as Record<string, unknown> | undefined
+  const extensions = rawExtensions ?? (opencaseExt ? { [OPENCASE_EXT_KEY]: opencaseExt } : undefined)
+
   return {
     identifier: assocId,
     uri: s('caseUri') ?? `urn:case:association:${assocId}`,
@@ -118,7 +156,7 @@ function mapDomainAssociationToCfAssociation(framework: Framework, association: 
     notes: s('notes'),
     lastChangeDateTime: s('lastChangeDateTime') ?? nowIso(),
     CFDocumentURI: { uri: `urn:case:document:${fwId}` },
-    extensions: (md.extensions as Record<string, unknown> | undefined) ?? undefined,
+    extensions,
   }
 }
 
@@ -225,17 +263,19 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
     const seqNum = typeof md.sequenceNumber === 'number' ? md.sequenceNumber : undefined
     const markers = getEdgeMarkers(assocType)
     
-    // Calculate closest handles based on node positions
+    // Use persisted handle positions if available, otherwise auto-calculate
+    const savedHandles = getSavedHandles(cfAssociation, true)
     const parentPos = nodePositions.get(parentId)
     const childPos = nodePositions.get(itemId)
-    const handles = parentPos && childPos
-      ? getClosestHandles(
-          { x: parentPos.x, y: parentPos.y },
-          { w: parentPos.w, h: parentPos.h },
-          { x: childPos.x, y: childPos.y },
-          { w: childPos.w, h: childPos.h }
-        )
-      : { sourceHandle: 'bottom', targetHandle: 'top' } // Default fallback
+    const handles = savedHandles
+      ?? (parentPos && childPos
+        ? getClosestHandles(
+            { x: parentPos.x, y: parentPos.y },
+            { w: parentPos.w, h: parentPos.h },
+            { x: childPos.x, y: childPos.y },
+            { w: childPos.w, h: childPos.h }
+          )
+        : { sourceHandle: 'bottom', targetHandle: 'top' }) // Default fallback
     
     edges.push({
       id: `e_${parentId}_${itemId}`,
@@ -273,17 +313,19 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
     const seqNum = typeof md.sequenceNumber === 'number' ? md.sequenceNumber : undefined
     const markers = getEdgeMarkers(a.associationType)
     
-    // Calculate closest handles based on node positions
+    // Use persisted handle positions if available, otherwise auto-calculate
+    const savedNhHandles = getSavedHandles(cfAssociation, false)
     const fromPos = nodePositions.get(fromId)
     const toPos = nodePositions.get(toId)
-    const handles = fromPos && toPos
-      ? getClosestHandles(
-          { x: fromPos.x, y: fromPos.y },
-          { w: fromPos.w, h: fromPos.h },
-          { x: toPos.x, y: toPos.y },
-          { w: toPos.w, h: toPos.h }
-        )
-      : { sourceHandle: 'right', targetHandle: 'left' } // Default fallback
+    const handles = savedNhHandles
+      ?? (fromPos && toPos
+        ? getClosestHandles(
+            { x: fromPos.x, y: fromPos.y },
+            { w: fromPos.w, h: fromPos.h },
+            { x: toPos.x, y: toPos.y },
+            { w: toPos.w, h: toPos.h }
+          )
+        : { sourceHandle: 'right', targetHandle: 'left' }) // Default fallback
     
     edges.push({
       id: a.id as unknown as string,

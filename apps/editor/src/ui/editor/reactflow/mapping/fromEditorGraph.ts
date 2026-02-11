@@ -90,12 +90,18 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     if (!items.has(source as unknown as ItemId)) continue
     if (!items.has(target as unknown as ItemId)) continue
 
-    const edgeData = e.data as { associationType?: string; cfAssociation?: { sequenceNumber?: number; associationType?: string } } | undefined
+    const edgeData = e.data as { associationType?: string; cfAssociation?: { sequenceNumber?: number; associationType?: string; extensions?: Record<string, unknown> } } | undefined
     const associationType = edgeToAssociationType(e.id, edgeData)
     
     // For hierarchical types (isChildOf, isPartOf), the edge goes from child to parent visually
     // but the association semantically means "child isChildOf parent"
     const isHierarchical = associationType === 'isChildOf' || associationType === 'isPartOf'
+    
+    // Map visual edge handles to semantic origin/destination handles.
+    // Hierarchical: visual source=parent=destination, visual target=child=origin
+    // Non-hierarchical: visual source=origin, visual target=destination
+    const originHandle = (isHierarchical ? e.targetHandle : e.sourceHandle) ?? undefined
+    const destinationHandle = (isHierarchical ? e.sourceHandle : e.targetHandle) ?? undefined
     
     const assoc: Association = {
       id: e.id as unknown as AssociationId,
@@ -104,6 +110,9 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
       associationType,
       metadata: {
         sequenceNumber: edgeData?.cfAssociation?.sequenceNumber,
+        originHandle,
+        destinationHandle,
+        extensions: edgeData?.cfAssociation?.extensions,
       },
     }
     associations.set(assoc.id, assoc)

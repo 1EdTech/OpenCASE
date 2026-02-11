@@ -64,6 +64,14 @@ export function getEdgeMarkers(associationType: string) {
     }
   }
 
+  // exactMatchOf is bidirectional - arrows on both ends (A ↔ B)
+  if (associationType === 'exactMatchOf') {
+    return {
+      markerStart: DEFAULT_EDGE_MARKER,
+      markerEnd: DEFAULT_EDGE_MARKER,
+    }
+  }
+
   // isPartOf: arrow points to origin (the whole that the part belongs to)
   // Uses small outline arrow style
   if (associationType === 'isPartOf') {
@@ -86,6 +94,14 @@ export function getEdgeStyle(associationType: string): CSSProperties {
   if (associationType === FRAMEWORK_ROOT_ASSOCIATION_TYPE) {
     return {
       strokeDasharray: '3,3',
+      strokeWidth: 1.5,
+    }
+  }
+
+  // exactMatchOf uses dotted line style (bidirectional equivalence)
+  if (associationType === 'exactMatchOf') {
+    return {
+      strokeDasharray: '2,4',
       strokeWidth: 1.5,
     }
   }

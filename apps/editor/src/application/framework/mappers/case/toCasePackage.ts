@@ -109,6 +109,10 @@ function incrementVersion(currentVersion?: string): string {
 type OpencaseExtension = {
   layout?: NodeLayout
   notes?: string
+  /** Persisted handle ID on the origin (from) node — preserves user-defined edge anchors */
+  originHandle?: string
+  /** Persisted handle ID on the destination (to) node — preserves user-defined edge anchors */
+  destinationHandle?: string
 }
 
 /**
@@ -122,7 +126,7 @@ function mergeOpencaseExtension(
   const extensions = { ...base }
   
   // Only add if there's data to store
-  if (opencaseData.layout || opencaseData.notes) {
+  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle) {
     const existing = (extensions[OPENCASE_EXT_KEY] as OpencaseExtension | undefined) ?? {}
     extensions[OPENCASE_EXT_KEY] = {
       ...existing,
@@ -281,6 +285,13 @@ function associationToCfAssociation(
 
   const existingExtensions = (md.extensions as CaseExtensions | undefined) ?? undefined
 
+  // Persist user-defined edge handle positions in ext:opencase
+  const originHandle = s('originHandle')
+  const destinationHandle = s('destinationHandle')
+  const extensions = (originHandle || destinationHandle)
+    ? mergeOpencaseExtension(existingExtensions, { originHandle, destinationHandle })
+    : existingExtensions
+
   const cfAssociation: CFAssociation & { sourcedId: string } = {
     identifier: assocId,
     sourcedId: assocId, // OpenCASE requires sourcedId
@@ -305,7 +316,7 @@ function associationToCfAssociation(
       identifier: fwId,
       title: fwTitle,
     },
-    extensions: existingExtensions,
+    extensions,
   }
 
   return cfAssociation
