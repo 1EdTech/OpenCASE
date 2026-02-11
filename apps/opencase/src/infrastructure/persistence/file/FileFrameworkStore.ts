@@ -11,6 +11,7 @@ export interface FileFrameworkStoreConfig {
 export interface DocumentMetadata {
   sourcedId: string
   title: string
+  description?: string
   language?: string
   frameworkType?: string
   subject?: string
@@ -132,6 +133,7 @@ export class FileFrameworkStore {
         map.set(d.sourcedId as string, {
           sourcedId: d.sourcedId,
           title: d.title,
+          description: d.description,
           language: d.language,
           frameworkType: d.frameworkType,
           subject: d.subject,
@@ -358,6 +360,7 @@ export class FileFrameworkStore {
     versionMap.set(docId, {
       sourcedId: docId,
       title: doc.title as string,
+      description: doc.description as string | undefined,
       language: doc.language as string | undefined,
       frameworkType: doc.frameworkType as string | undefined,
       subject: doc.subject as string | undefined,
@@ -550,6 +553,7 @@ export class FileFrameworkStore {
     const documents = Array.from(versionMap.values()).map(meta => ({
       sourcedId: meta.sourcedId,
       title: meta.title,
+      description: meta.description,
       language: meta.language,
       frameworkType: meta.frameworkType,
       subject: meta.subject,
