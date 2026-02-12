@@ -11,6 +11,10 @@ export interface KeycloakTenantProvisionerConfig {
   systemAdminEmail?: string
   systemAdminPassword?: string
   bootstrapSystemAdmin?: boolean
+  /** SMTP host for Keycloak email delivery (e.g. 'mailpit' for dev). When set, realm SMTP is configured. */
+  smtpHost?: string
+  smtpPort?: string
+  smtpFrom?: string
 }
 
 export class KeycloakTenantProvisioner {
@@ -26,6 +30,11 @@ export class KeycloakTenantProvisioner {
     if (!email || !password) return
 
     await this.admin.ensureRealmExists()
+    await this.admin.configureRealmSettings({
+      smtpHost: this.cfg.smtpHost,
+      smtpPort: this.cfg.smtpPort,
+      smtpFrom: this.cfg.smtpFrom,
+    })
 
     const tenantId = 'system'
     const clientId = OidcJwtVerifier.computeTenantClientId(this.cfg.clientIdPrefix, tenantId)

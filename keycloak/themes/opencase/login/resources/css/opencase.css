@@ -1,0 +1,354 @@
+/*
+ * OpenCASE Keycloak Login Theme
+ *
+ * Overrides keycloak.v2 (PatternFly 5) to match the editor app's visual style:
+ *   - Light #f5f5f6 page background (same as HomeScreen)
+ *   - Navy → Plum gradient header banner
+ *   - White rounded card with subtle shadow
+ *   - Plum primary buttons, outline secondary/cancel buttons
+ *   - System font stack (matching Tailwind defaults)
+ */
+
+/* ── Design tokens ──────────────────────────────────────── */
+
+:root {
+  --oc-navy: #000072;
+  --oc-plum: #662F90;
+  --oc-plum-dark: #551f7a;
+  --oc-violet-700: #6d28d9;
+  --oc-bg: #f5f5f6;
+  --oc-slate-100: #f1f5f9;
+  --oc-slate-600: #475569;
+  --oc-slate-700: #334155;
+  --oc-slate-900: #0f172a;
+  --oc-white: #ffffff;
+  --oc-border: #e2e8f0;
+  --oc-radius: 1rem;
+  --oc-radius-sm: 0.75rem;
+}
+
+/* ── Font stack ─────────────────────────────────────────── */
+
+html,
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* ── Page background — remove PF5 dark background ───────── */
+
+/* Override PF5 custom properties */
+.pf-v5-c-login {
+  --pf-v5-c-login--BackgroundColor: var(--oc-bg) !important;
+  --pf-v5-c-login--BackgroundImage: none !important;
+  --pf-v5-c-login--BackgroundImage--sm: none !important;
+  background-color: var(--oc-bg) !important;
+  background-image: none !important;
+}
+
+/* Fallback for PF4 / PF3 if inherited */
+.login-pf,
+.login-pf-page,
+body.login-pf {
+  background-color: var(--oc-bg) !important;
+  background-image: none !important;
+}
+
+/* Prevent the outer wrapper from centering content vertically */
+.pf-v5-c-login {
+  display: block !important;
+  align-items: unset !important;
+  justify-content: unset !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* ── Layout — single-column, top-aligned ────────────────── */
+
+/*
+ * PF5 uses a grid with header on the left and card on the right.
+ * Override to a vertical stack: full-width banner → centered card.
+ */
+.pf-v5-c-login__container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  min-height: 100vh;
+  margin: 0 !important;
+  padding: 0 !important;
+  gap: 0 !important;
+}
+
+/* ── Gradient header banner (matches HomeScreen hero) ───── */
+
+.pf-v5-c-login__header {
+  background: linear-gradient(to right, var(--oc-navy), var(--oc-plum)) !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 2.5rem 1.5rem 2rem !important;
+  text-align: center !important;
+  flex-shrink: 0;
+  grid-area: unset !important;
+}
+
+/* Also target the legacy #kc-header selector */
+#kc-header {
+  background: linear-gradient(to right, var(--oc-navy), var(--oc-plum)) !important;
+}
+
+#kc-header-wrapper {
+  font-size: 1.75rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--oc-white) !important;
+  max-width: none !important;
+  padding: 0 !important;
+}
+
+/* ── Main card ──────────────────────────────────────────── */
+
+.pf-v5-c-login__main {
+  background: var(--oc-white) !important;
+  border: 1px solid var(--oc-border) !important;
+  border-radius: var(--oc-radius) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  max-width: 28rem !important;
+  width: 100% !important;
+  margin: 2rem auto !important;
+  overflow: hidden;
+  grid-area: unset !important;
+  align-self: center;
+}
+
+/* Legacy card-pf fallback */
+.card-pf {
+  background: var(--oc-white) !important;
+  border: 1px solid var(--oc-border) !important;
+  border-radius: var(--oc-radius) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+  max-width: 28rem !important;
+  margin: 2rem auto !important;
+}
+
+/* ── Card header (page title) ───────────────────────────── */
+
+.pf-v5-c-login__main-header {
+  padding: 1.5rem 1.5rem 0.25rem !important;
+  text-align: center;
+}
+
+#kc-page-title,
+.pf-v5-c-title.pf-m-3xl {
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
+  color: var(--oc-slate-900) !important;
+}
+
+/* ── Card body (form area) ──────────────────────────────── */
+
+.pf-v5-c-login__main-body {
+  padding: 1rem 1.5rem 1.5rem !important;
+}
+
+/* ── Card footer ────────────────────────────────────────── */
+
+.pf-v5-c-login__main-footer {
+  text-align: center;
+  padding: 0 1.5rem 1.5rem !important;
+}
+
+/* ── Page footer — hide ─────────────────────────────────── */
+
+.pf-v5-c-login__footer {
+  display: none !important;
+}
+
+/* ── Form labels ────────────────────────────────────────── */
+
+.pf-v5-c-form__label-text,
+.pf-c-form__label-text {
+  font-size: 0.8125rem !important;
+  font-weight: 500 !important;
+  color: var(--oc-slate-700) !important;
+}
+
+/* ── Input fields ───────────────────────────────────────── */
+
+.pf-v5-c-form-control {
+  --pf-v5-c-form-control--BorderRadius: var(--oc-radius-sm) !important;
+  border-radius: var(--oc-radius-sm) !important;
+  font-size: 0.875rem !important;
+}
+
+.pf-v5-c-form-control:focus-within {
+  --pf-v5-c-form-control--after--BorderBottomColor: var(--oc-violet-700) !important;
+}
+
+/* Legacy PF4 inputs */
+input[type="text"].pf-c-form-control,
+input[type="password"].pf-c-form-control,
+input[type="email"].pf-c-form-control {
+  border-radius: var(--oc-radius-sm) !important;
+  font-size: 0.875rem !important;
+}
+
+/* ── Primary buttons (Sign In, Submit) ──────────────────── */
+
+.pf-v5-c-button.pf-m-primary {
+  --pf-v5-c-button--m-primary--BackgroundColor: var(--oc-plum) !important;
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: var(--oc-plum-dark) !important;
+  background-color: var(--oc-plum) !important;
+  color: var(--oc-white) !important;
+  border: none !important;
+  border-radius: var(--oc-radius-sm) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  padding: 0.625rem 1.25rem !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.pf-v5-c-button.pf-m-primary:hover {
+  background-color: var(--oc-plum-dark) !important;
+}
+
+/* Legacy PF4 primary buttons */
+.pf-c-button.pf-m-primary,
+input[type="submit"].pf-c-button {
+  background-color: var(--oc-plum) !important;
+  color: var(--oc-white) !important;
+  border: none !important;
+  border-radius: var(--oc-radius-sm) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+.pf-c-button.pf-m-primary:hover,
+input[type="submit"].pf-c-button:hover {
+  background-color: var(--oc-plum-dark) !important;
+}
+
+/* ── Cancel / Link buttons ──────────────────────────────── */
+
+/*
+ * Keycloak renders the Cancel button for app-initiated actions
+ * as a pf-m-link button. Style it as an outlined secondary.
+ */
+.pf-v5-c-button.pf-m-link,
+.pf-v5-c-button.pf-m-secondary,
+button[name="cancel-aia"] {
+  background-color: transparent !important;
+  color: var(--oc-slate-600) !important;
+  border: 1px solid var(--oc-border) !important;
+  border-radius: var(--oc-radius-sm) !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+  padding: 0.625rem 1.25rem !important;
+  transition: background-color 0.15s ease, color 0.15s ease !important;
+}
+
+.pf-v5-c-button.pf-m-link:hover,
+.pf-v5-c-button.pf-m-secondary:hover,
+button[name="cancel-aia"]:hover {
+  background-color: var(--oc-slate-100) !important;
+  color: var(--oc-slate-900) !important;
+}
+
+/* ── Password visibility toggle ─────────────────────────── */
+
+.pf-v5-c-button.pf-m-control,
+.pf-c-button.pf-m-control {
+  border: none !important;
+  background: transparent !important;
+  color: var(--oc-slate-600) !important;
+  box-shadow: none !important;
+}
+
+.pf-v5-c-button.pf-m-control:hover,
+.pf-c-button.pf-m-control:hover {
+  color: var(--oc-slate-900) !important;
+}
+
+/* ── Links ──────────────────────────────────────────────── */
+
+a:not(.pf-v5-c-button):not(.pf-c-button) {
+  color: var(--oc-violet-700) !important;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+a:not(.pf-v5-c-button):not(.pf-c-button):hover {
+  text-decoration: underline;
+}
+
+/* ── Checkbox (remember me, sign out from other devices) ── */
+
+.pf-v5-c-check__label,
+.pf-c-check__label,
+.checkbox label {
+  font-size: 0.875rem !important;
+  color: var(--oc-slate-600) !important;
+}
+
+/* ── Alert messages ─────────────────────────────────────── */
+
+.pf-v5-c-alert {
+  border-radius: var(--oc-radius-sm) !important;
+  font-size: 0.875rem;
+}
+
+/* ── Instruction / info text ────────────────────────────── */
+
+.instruction,
+#kc-info-message,
+.kc-feedback-text {
+  font-size: 0.875rem;
+  color: var(--oc-slate-600);
+  line-height: 1.5;
+}
+
+/* ── Form action spacing ────────────────────────────────── */
+
+.pf-v5-c-form__actions {
+  gap: 0.5rem !important;
+}
+
+/* ── Tried another way link ─────────────────────────────── */
+
+#kc-form-options {
+  margin-top: 1rem;
+  text-align: center;
+}
+
+/* ── Misc PatternFly cleanup ────────────────────────────── */
+
+/* Remove any remaining PF background patterns */
+.login-pf .container,
+.login-pf-page .login-pf-page-header {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .pf-v5-c-login__main,
+  .card-pf {
+    max-width: calc(100% - 2rem) !important;
+    margin: 1rem auto !important;
+  }
+
+  .pf-v5-c-login__header {
+    padding: 2rem 1rem 1.5rem !important;
+  }
+
+  #kc-header-wrapper {
+    font-size: 1.375rem !important;
+  }
+}

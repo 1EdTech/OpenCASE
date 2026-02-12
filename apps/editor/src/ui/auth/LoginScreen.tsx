@@ -68,6 +68,15 @@ export default function LoginScreen() {
             </Button>
           </div>
 
+          <div className="mt-4 text-center">
+            <a
+              href={`${cfg.oidcAuthority}/login-actions/reset-credentials`}
+              className="text-sm text-violet-700 hover:underline"
+            >
+              Forgot password?
+            </a>
+          </div>
+
           <div className="mt-4 text-xs text-slate-500">API: {cfg.opencaseBaseUrl}</div>
         </div>
       </div>

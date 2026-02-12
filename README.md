@@ -36,7 +36,12 @@ Access the application at: **http://localhost:3000**
     ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐
     │  Editor   │   │ OpenCASE  │   │ Keycloak  │
     │  (Vite)   │   │ (Express) │   │  (OIDC)   │
-    └───────────┘   └───────────┘   └───────────┘
+    └───────────┘   └───────────┘   └─────┬─────┘
+                                          │ SMTP
+                                    ┌─────▼─────┐
+                                    │  Mailpit  │
+                                    │  (:8025)  │
+                                    └───────────┘
 ```
 
 ## Services
@@ -48,6 +53,7 @@ Access the application at: **http://localhost:3000**
 | Editor | 5173 | React frontend with hot-reload |
 | OpenCASE | 8080 | CASE API backend |
 | Keycloak | 8080 | OIDC identity provider |
+| Mailpit | 8025 / 1025 | Dev email capture (Web UI / SMTP) |
 
 ## URLs
 
@@ -58,6 +64,7 @@ Access the application at: **http://localhost:3000**
 | http://localhost:3000/health | API health check |
 | http://localhost:3000/admin/ | Keycloak Admin Console |
 | http://localhost:8080 | Traefik Dashboard |
+| http://localhost:8025 | Mailpit UI (dev emails) |
 
 ## Default Credentials
 
@@ -65,6 +72,25 @@ Access the application at: **http://localhost:3000**
 |---------|----------|----------|
 | Keycloak Admin | admin | admin |
 | System Admin | system-admin@local | admin |
+
+## Email & Password Management
+
+### Mailpit (Dev Email)
+
+All transactional emails (password resets, etc.) are captured by [Mailpit](https://github.com/axllent/mailpit) in development. No emails leave the local environment.
+
+- **Web UI**: http://localhost:8025 — view all captured emails
+- **SMTP**: `mailpit:1025` (internal Docker network)
+
+Mailpit starts automatically with `docker-compose up`. The OpenCASE backend configures Keycloak's SMTP settings to point at Mailpit on startup.
+
+### Forgot Password
+
+Click **"Forgot password?"** on the login screen. This redirects to Keycloak's reset-credentials page, which sends a password reset email. In development, the email is captured by Mailpit — open http://localhost:8025 to find the reset link.
+
+### Change Password
+
+Authenticated users can change their password via the user menu (available on both the home screen and the editor). Clicking **"Change password"** opens the Keycloak account console in a new tab.
 
 ## Development
 

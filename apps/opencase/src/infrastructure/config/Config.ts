@@ -34,6 +34,11 @@ export interface AppConfig {
   keycloakBootstrapSystemAdmin: boolean;
   keycloakSystemAdminEmail: string;
   keycloakSystemAdminPassword: string;
+
+  // SMTP for Keycloak email delivery (forgot-password, etc.)
+  smtpHost?: string;
+  smtpPort?: string;
+  smtpFrom?: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -67,7 +72,12 @@ export function loadConfig(): AppConfig {
     // Default to true for local/dev so a usable initial client+user exists without extra env setup.
     keycloakBootstrapSystemAdmin: (process.env.KEYCLOAK_BOOTSTRAP_SYSTEM_ADMIN ?? (isProduction ? 'false' : 'true')) === 'true',
     keycloakSystemAdminEmail: process.env.KEYCLOAK_SYSTEM_ADMIN_EMAIL ?? 'system-admin@local',
-    keycloakSystemAdminPassword: process.env.KEYCLOAK_SYSTEM_ADMIN_PASSWORD ?? 'admin'
+    keycloakSystemAdminPassword: process.env.KEYCLOAK_SYSTEM_ADMIN_PASSWORD ?? 'admin',
+
+    // SMTP — defaults to 'mailpit' for Docker Compose dev environment
+    smtpHost: process.env.SMTP_HOST ?? (isProduction ? undefined : 'mailpit'),
+    smtpPort: process.env.SMTP_PORT ?? '1025',
+    smtpFrom: process.env.SMTP_FROM ?? 'noreply@opencase.local',
   };
 }
 

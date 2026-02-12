@@ -35,7 +35,7 @@ type EditorCanvasProps = {
 }
 
 export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework }: Readonly<EditorCanvasProps>) {
-  const { status: authStatus, userName, tenantId, signOut, getAccessToken } = useAuth()
+  const { status: authStatus, userName, tenantId, signOut, getAccessToken, changePassword } = useAuth()
   const {
     nodes,
     nodesWithCallbacks,
@@ -565,6 +565,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         frameworkSubtitle={frameworkInfo.subtitle}
         userName={userName ?? undefined}
         tenantId={tenantId ?? undefined}
+        onChangePassword={authStatus === 'authenticated' ? () => void changePassword() : undefined}
         reserveRightForPanel={Boolean(selectedNode || selectedEdge)}
         showSettings
         isDirty={isDirty}
@@ -757,6 +758,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         cfPackage={generatedCfPackage}
         caseVersion={caseVersion}
       />
+
     </div>
   )
 }

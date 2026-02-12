@@ -322,7 +322,10 @@ export async function buildContainer(): Promise<Container> {
     spaWebOrigins: config.keycloakSpaWebOrigins,
     bootstrapSystemAdmin: config.keycloakBootstrapSystemAdmin,
     systemAdminEmail: config.keycloakSystemAdminEmail,
-    systemAdminPassword: config.keycloakSystemAdminPassword
+    systemAdminPassword: config.keycloakSystemAdminPassword,
+    smtpHost: config.smtpHost,
+    smtpPort: config.smtpPort,
+    smtpFrom: config.smtpFrom,
   })
 
   // Keycloak bootstrap with retry logic (wait for Keycloak to be ready)

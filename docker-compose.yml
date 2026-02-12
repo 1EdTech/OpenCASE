@@ -49,6 +49,8 @@ services:
     volumes:
       # Persist Keycloak data (H2 database, realm config)
       - keycloak_data:/opt/keycloak/data
+      # Mount custom OpenCASE login theme
+      - ./keycloak/themes/opencase:/opt/keycloak/themes/opencase
     networks:
       - opencasenet
     labels:
@@ -83,6 +85,18 @@ services:
       - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
 
   # =============================================================================
+  # Mailpit - Local SMTP for dev (catches all emails)
+  # Web UI: http://localhost:8025
+  # =============================================================================
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "8025:8025"   # Web UI for viewing captured emails
+      - "1025:1025"   # SMTP server
+    networks:
+      - opencasenet
+
+  # =============================================================================
   # OpenCASE - CASE API Backend
   # =============================================================================
   opencase:
@@ -110,6 +124,10 @@ services:
       - KEYCLOAK_BOOTSTRAP_SYSTEM_ADMIN=true
       - KEYCLOAK_SYSTEM_ADMIN_EMAIL=system-admin@local
       - KEYCLOAK_SYSTEM_ADMIN_PASSWORD=admin
+      # SMTP for Keycloak email delivery (forgot password, etc.)
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_FROM=noreply@opencase.local
     restart: on-failure
     volumes:
       - ./apps/opencase/data:/app/data
@@ -117,6 +135,7 @@ services:
       - opencasenet
     depends_on:
       - keycloak
+      - mailpit
     labels:
       - "traefik.enable=true"
       - "traefik.constraint-label=opencase_opencasenet"

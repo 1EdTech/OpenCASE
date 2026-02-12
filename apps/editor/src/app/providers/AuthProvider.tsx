@@ -16,6 +16,8 @@ type AuthContextValue = {
   completeSignIn: (_callbackUrl?: string) => Promise<void>
   signOut: () => Promise<void>
   getAccessToken: () => Promise<string | null>
+  /** Redirect to Keycloak's password change form via kc_action=UPDATE_PASSWORD */
+  changePassword: () => Promise<void>
 }
 
 const STORAGE_KEY_TENANT = 'case-editor:auth:tenantId'
@@ -202,6 +204,12 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     return u.access_token
   }, [userManager])
 
+  const changePassword = useCallback(async () => {
+    await userManager.signinRedirect({
+      extraQueryParams: { kc_action: 'UPDATE_PASSWORD' },
+    })
+  }, [userManager])
+
   const value: AuthContextValue = useMemo(
     () => ({
       status,
@@ -215,8 +223,9 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       completeSignIn,
       signOut,
       getAccessToken,
+      changePassword,
     }),
-    [status, tenantId, user, userName, accessToken, error, setTenantId, signIn, completeSignIn, signOut, getAccessToken],
+    [status, tenantId, user, userName, accessToken, error, setTenantId, signIn, completeSignIn, signOut, getAccessToken, changePassword],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
-import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
+import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
 
 type MenuItem = {
@@ -183,6 +183,7 @@ export default function CanvasHeader({
   onBack,
   onSignIn,
   onSignOut,
+  onChangePassword,
   onOpenSettings,
   onResetHierarchy,
   onResetStar,
@@ -204,6 +205,8 @@ export default function CanvasHeader({
   onBack?: () => void
   onSignIn?: () => void
   onSignOut?: () => void
+  /** Opens the change password dialog */
+  onChangePassword?: () => void
   onOpenSettings?: () => void
   /** Re-layout graph in hierarchy mode (flat column below framework) */
   onResetHierarchy?: () => void
@@ -226,6 +229,15 @@ export default function CanvasHeader({
   }
   
   userMenuItems.push('divider')
+
+  // Change password
+  if (userName && onChangePassword) {
+    userMenuItems.push({
+      label: 'Change password',
+      icon: KeyIcon,
+      onClick: onChangePassword,
+    })
+  }
   
   // Sign in/out action
   if (userName) {

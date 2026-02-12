@@ -1,4 +1,4 @@
-import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon, KeyIcon } from '@heroicons/react/24/solid'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
 import { FrameworkCard } from '@/ui/shared/components/FrameworkCard'
@@ -29,7 +29,7 @@ import {
 } from '@/ui/shared/components/ui/dialog'
 
 /** Minimal user avatar dropdown for the hero */
-function UserAvatarMenu({ userName, tenantId, isAuthenticated, onSignOut }: Readonly<{ userName?: string; tenantId?: string; isAuthenticated: boolean; onSignOut?: () => void }>) {
+function UserAvatarMenu({ userName, tenantId, isAuthenticated, onSignOut, onChangePassword }: Readonly<{ userName?: string; tenantId?: string; isAuthenticated: boolean; onSignOut?: () => void; onChangePassword?: () => void }>) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const avatarText = useMemo(() => initials(userName), [userName])
@@ -68,6 +68,17 @@ function UserAvatarMenu({ userName, tenantId, isAuthenticated, onSignOut }: Read
               <div className="px-2 py-1.5 text-xs text-gray-400">Tenant: {tenantId}</div>
             ) : null}
             <div className="my-1 h-px bg-gray-100" />
+            {isAuthenticated && onChangePassword ? (
+              <button
+                role="menuitem"
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-[#2E2F2F] hover:bg-gray-50"
+                onClick={() => { onChangePassword(); setOpen(false) }}
+              >
+                <KeyIcon className="h-4 w-4 text-gray-500" aria-hidden />
+                Change password
+              </button>
+            ) : null}
             {isAuthenticated && onSignOut ? (
               <button
                 role="menuitem"
@@ -107,7 +118,7 @@ export default function HomeScreen({
 }>) {
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
-  const { status, tenantId, userName, signOut, getAccessToken } = useAuth()
+  const { status, tenantId, userName, signOut, getAccessToken, changePassword } = useAuth()
   const cfg = getAppConfig()
 
   const api = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })), [cfg.opencaseBaseUrl, getAccessToken])
@@ -372,7 +383,7 @@ export default function HomeScreen({
       {/* ── Hero Section ── Navy → Plum gradient ─────────────────── */}
       <div className="relative bg-linear-to-r from-[#000072] to-[#662F90]">
         {/* User button — top right */}
-        <UserAvatarMenu userName={userName ?? undefined} tenantId={tenantId ?? undefined} isAuthenticated={isAuthenticated} onSignOut={isAuthenticated ? () => void signOut() : undefined} />
+        <UserAvatarMenu userName={userName ?? undefined} tenantId={tenantId ?? undefined} isAuthenticated={isAuthenticated} onSignOut={isAuthenticated ? () => void signOut() : undefined} onChangePassword={isAuthenticated ? () => void changePassword() : undefined} />
 
         <div className="mx-auto max-w-6xl px-5 pb-10 pt-14">
           <h1 className="font-heading text-[48px] font-bold uppercase tracking-[0.06em] text-white sm:text-[56px]">
@@ -797,6 +808,7 @@ export default function HomeScreen({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   )
 }

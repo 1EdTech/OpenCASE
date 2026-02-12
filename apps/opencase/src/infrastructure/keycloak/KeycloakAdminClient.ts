@@ -33,6 +33,37 @@ export class KeycloakAdminClient {
     await this.requestJson('POST', '/admin/realms', { realm, enabled: true })
   }
 
+  /**
+   * Configure realm-level settings (idempotent — safe to call on every startup).
+   * Enables forgot-password flow, email-based login, and SMTP for dev mail capture.
+   */
+  async configureRealmSettings (opts?: { smtpHost?: string, smtpPort?: string, smtpFrom?: string, smtpFromDisplayName?: string, loginTheme?: string }): Promise<void> {
+    const realm = this.cfg.realm
+    const body: Record<string, unknown> = {
+      realm,
+      resetPasswordAllowed: true,
+      loginWithEmailAllowed: true,
+      registrationAllowed: false,
+      loginTheme: opts?.loginTheme ?? 'opencase',
+    }
+
+    // Configure SMTP if a mail host is provided (needed for forgot-password emails)
+    if (opts?.smtpHost) {
+      body.smtpServer = {
+        host: opts.smtpHost,
+        port: opts.smtpPort ?? '1025',
+        from: opts.smtpFrom ?? 'noreply@opencase.local',
+        fromDisplayName: opts.smtpFromDisplayName ?? 'OpenCASE',
+        ssl: 'false',
+        starttls: 'false',
+        auth: 'false',
+      }
+    }
+
+    await this.requestJson('PUT', `/admin/realms/${encodeURIComponent(realm)}`, body)
+    logger.info({ realm }, 'Configured realm settings (resetPassword, loginWithEmail, SMTP)')
+  }
+
   async ensureClient (client: {
     clientId: string
     publicClient: boolean
