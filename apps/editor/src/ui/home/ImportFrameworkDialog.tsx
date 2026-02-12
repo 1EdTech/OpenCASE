@@ -175,7 +175,7 @@ export default function ImportFrameworkDialog({
             {importing ? (
               <>
                 <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                Importing\u2026
+                Importing
               </>
             ) : (
               'Import'

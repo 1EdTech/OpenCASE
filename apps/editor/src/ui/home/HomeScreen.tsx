@@ -382,7 +382,7 @@ export default function HomeScreen({
                 }}
               >
                 <ArrowPathIcon className={`h-4 w-4 ${loading || archivedLoading ? 'animate-spin' : ''}`} />
-                {loading || archivedLoading ? 'Loading\u2026' : 'Refresh'}
+                {loading || archivedLoading ? 'Loading' : 'Refresh'}
               </Button>
             )}
             {isAuthenticated && viewMode === 'active' && (
@@ -442,7 +442,7 @@ export default function HomeScreen({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by title, creator, or description\u2026"
+              placeholder="Search by title, creator, or description"
               className="w-full rounded-md border border-gray-200 bg-white py-2.5 pl-10 pr-4 text-sm text-[#2E2F2F] shadow-sm placeholder:text-gray-400 focus:border-[#662F90] focus:outline-none focus:ring-2 focus:ring-[#662F90]/20"
             />
           </div>
@@ -555,7 +555,7 @@ export default function HomeScreen({
               {isAuthenticated && loading && !hasLoadedOnce && (
                 <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
                   <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                  Loading frameworks\u2026
+                  Loading frameworks
                 </div>
               )}
 
@@ -579,7 +579,7 @@ export default function HomeScreen({
                 <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {filteredServerFrameworks.map((doc) => {
                     const title = doc.title ?? doc.identifier ?? 'Untitled Framework'
-                    const hint = remoteOpenLoading ? 'Loading\u2026' : 'Open'
+                    const hint = remoteOpenLoading ? 'Loading' : 'Open'
                     const isArchiving = archivingDocId === doc.identifier
                     const cardClass = remoteOpenLoading || isArchiving ? 'opacity-60 pointer-events-none' : undefined
                     return (
@@ -594,7 +594,7 @@ export default function HomeScreen({
                         }}
                         sourcePackageURI={doc.sourcePackageURI}
                         isModifiedFromSource={doc.isModifiedFromSource}
-                        rightHint={isArchiving ? 'Archiving\u2026' : hint}
+                        rightHint={isArchiving ? 'Archiving' : hint}
                         lastChanged={doc.lastChangeDateTime}
                         onClick={() => openRemote(doc.identifier)}
                         onDelete={tenantId ? () => handleArchiveRequest(doc.identifier, title) : undefined}
@@ -615,7 +615,7 @@ export default function HomeScreen({
               {isAuthenticated && archivedLoading && (
                 <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
                   <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                  Loading archived frameworks\u2026
+                  Loading archived frameworks
                 </div>
               )}
 
@@ -643,7 +643,7 @@ export default function HomeScreen({
                         }}
                         sourcePackageURI={doc.sourcePackageURI}
                         isModifiedFromSource={doc.isModifiedFromSource}
-                        rightHint={isDeleting ? 'Deleting\u2026' : undefined}
+                        rightHint={isDeleting ? 'Deleting' : undefined}
                         lastChanged={doc.lastChangeDateTime}
                         onDelete={tenantId ? () => handleHardDeleteRequest(doc.identifier, title) : undefined}
                         deleteDisabled={isDeleting}

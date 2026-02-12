@@ -687,7 +687,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         }
         confirmLabel={
           archiving
-            ? 'Archiving\u2026'
+            ? 'Archiving'
             : pendingAction?.isFrameworkArchive
               ? 'Archive framework'
               : 'Remove'
