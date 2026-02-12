@@ -223,11 +223,6 @@ export default function CanvasHeader({
     userMenuItems.push({ label: 'Not signed in', disabled: true })
   }
   
-  // Show tenant if available
-  if (tenantId) {
-    userMenuItems.push({ label: `Tenant: ${tenantId}`, disabled: true })
-  }
-  
   userMenuItems.push('divider')
 
   // Change password
@@ -268,7 +263,7 @@ export default function CanvasHeader({
             </button>
           ) : null}
 
-          <span className="font-heading text-base font-bold uppercase tracking-[0.04em] text-[#2E2F2F]">OpenCASE</span>
+          <span className="font-[Outfit] text-base font-bold uppercase tracking-[0.06em] text-[#2E2F2F]">OpenCASE</span>
 
           <div className="h-5 w-px bg-gray-200" />
 

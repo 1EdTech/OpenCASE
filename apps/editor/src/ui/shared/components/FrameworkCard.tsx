@@ -120,7 +120,7 @@ export function FrameworkCard({
       )}
     >
       {/* ── Card header with gradient accent ───────────────────── */}
-      <div className="flex items-center justify-between gap-2 rounded-t-[7px] bg-linear-to-r from-[#000072] to-[#662F90] px-4 py-2.5">
+      <div className="flex items-center justify-between gap-2 rounded-t-[7px] bg-linear-to-br from-[#000072] via-[#3d1a9b] to-[#662F90] px-4 py-2.5">
         <div className="flex items-center gap-2">
           {frameworkType ? (
             <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-medium text-white">

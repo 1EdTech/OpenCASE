@@ -64,9 +64,6 @@ function UserAvatarMenu({ userName, tenantId, isAuthenticated, onSignOut, onChan
             ) : (
               <div className="px-2 py-2 text-sm text-gray-400">Not signed in</div>
             )}
-            {tenantId ? (
-              <div className="px-2 py-1.5 text-xs text-gray-400">Tenant: {tenantId}</div>
-            ) : null}
             <div className="my-1 h-px bg-gray-100" />
             {isAuthenticated && onChangePassword ? (
               <button
@@ -380,18 +377,84 @@ export default function HomeScreen({
   return (
     <div className="relative flex min-h-screen flex-col bg-[#f5f5f6]">
 
-      {/* ── Hero Section ── Navy → Plum gradient ─────────────────── */}
-      <div className="relative bg-linear-to-r from-[#000072] to-[#662F90]">
+      {/* ── Hero Section ─────────────────────────────────────────── */}
+      <div
+        className="relative overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, #000072 0%, #1a0f80 25%, #3d1a9b 50%, #662F90 80%)' }}
+      >
+        {/* Subtle radial glow accents */}
+        <div className="pointer-events-none absolute inset-0" aria-hidden>
+          <div className="absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-[#662F90]/15 blur-3xl" />
+          <div className="absolute -bottom-20 -left-20 h-80 w-80 rounded-full bg-[#3d1a9b]/10 blur-3xl" />
+        </div>
+        {/* Network graph pattern — right side */}
+        <svg
+          className="pointer-events-none absolute right-0 top-0 hidden h-full w-[55%] sm:block"
+          viewBox="0 0 600 200"
+          preserveAspectRatio="xMaxYMid slice"
+          aria-hidden
+        >
+          <defs>
+            <linearGradient id="hero-fade" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="white" stopOpacity="0" />
+              <stop offset="35%" stopColor="white" stopOpacity="0.04" />
+              <stop offset="100%" stopColor="white" stopOpacity="0.07" />
+            </linearGradient>
+          </defs>
+          <g stroke="url(#hero-fade)" strokeWidth="1" fill="none">
+            {/* Edges — associations between items */}
+            <line x1="180" y1="40" x2="280" y2="70" />
+            <line x1="280" y1="70" x2="370" y2="35" />
+            <line x1="280" y1="70" x2="320" y2="140" />
+            <line x1="320" y1="140" x2="430" y2="120" />
+            <line x1="370" y1="35" x2="480" y2="55" />
+            <line x1="480" y1="55" x2="430" y2="120" />
+            <line x1="430" y1="120" x2="540" y2="100" />
+            <line x1="480" y1="55" x2="560" y2="40" />
+            <line x1="540" y1="100" x2="560" y2="40" />
+            <line x1="320" y1="140" x2="250" y2="170" />
+            <line x1="250" y1="170" x2="360" y2="180" />
+            <line x1="360" y1="180" x2="430" y2="120" />
+            <line x1="540" y1="100" x2="580" y2="160" />
+            <line x1="360" y1="180" x2="480" y2="170" />
+            <line x1="480" y1="170" x2="580" y2="160" />
+            <line x1="180" y1="40" x2="200" y2="120" />
+            <line x1="200" y1="120" x2="250" y2="170" />
+            <line x1="200" y1="120" x2="320" y2="140" />
+          </g>
+          <g fill="url(#hero-fade)">
+            {/* Nodes — framework items */}
+            <circle cx="180" cy="40" r="3" />
+            <circle cx="280" cy="70" r="4" />
+            <circle cx="370" cy="35" r="3" />
+            <circle cx="320" cy="140" r="4" />
+            <circle cx="430" cy="120" r="5" />
+            <circle cx="480" cy="55" r="3.5" />
+            <circle cx="540" cy="100" r="3" />
+            <circle cx="560" cy="40" r="2.5" />
+            <circle cx="250" cy="170" r="3" />
+            <circle cx="360" cy="180" r="3.5" />
+            <circle cx="580" cy="160" r="2.5" />
+            <circle cx="200" cy="120" r="3" />
+            <circle cx="480" cy="170" r="3" />
+          </g>
+        </svg>
+
         {/* User button — top right */}
         <UserAvatarMenu userName={userName ?? undefined} tenantId={tenantId ?? undefined} isAuthenticated={isAuthenticated} onSignOut={isAuthenticated ? () => void signOut() : undefined} onChangePassword={isAuthenticated ? () => void changePassword() : undefined} />
 
-        <div className="mx-auto max-w-6xl px-5 pb-10 pt-14">
-          <h1 className="font-heading text-[48px] font-bold uppercase tracking-[0.06em] text-white sm:text-[56px]">
-            OpenCASE
-          </h1>
-          <p className="mt-2 max-w-xl text-base leading-relaxed text-white/80 sm:text-lg">
-            Create, manage, and publish your competency and standards frameworks
-            — all in one place.
+        <div className="relative mx-auto max-w-6xl px-5 pb-12 pt-14">
+          <div className="flex items-baseline gap-3">
+            <h1 className="font-[Outfit] text-[44px] font-extrabold tracking-[0.04em] text-white drop-shadow-sm sm:text-[52px]">
+              Open<span className="uppercase">case</span>
+            </h1>
+            <span className="hidden rounded-full border border-white/25 bg-white/10 px-2.5 py-0.5 text-[11px] font-medium tracking-wider text-white/70 backdrop-blur-sm sm:inline-block">
+              1EdTech CASE&reg;
+            </span>
+          </div>
+          <p className="mt-3 max-w-lg text-[15px] leading-relaxed tracking-wide text-white/80 sm:text-base">
+            Author, manage, and publish interoperable competency frameworks
+            &mdash; built on the 1EdTech CASE&reg; standard.
           </p>
         </div>
       </div>
@@ -399,24 +462,10 @@ export default function HomeScreen({
       {/* ── Main content area ──────────────────────────────────────── */}
       <div className="mx-auto w-full max-w-6xl flex-1 px-5 py-8">
 
-        {/* ── Action bar (Refresh + Create) ───────────────────────── */}
+        {/* ── Action bar (Title + Create) ────────────────────────── */}
         <div className="mb-6 flex items-center justify-between">
           <h2 className="font-heading text-2xl font-normal tracking-[0.02em] text-[#2E2F2F]">Your Frameworks</h2>
           <div className="flex items-center gap-3">
-            {isAuthenticated && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={loading || archivedLoading}
-                onClick={() => {
-                  if (viewMode === 'archived') void loadArchivedFrameworks()
-                  else void loadFrameworks()
-                }}
-              >
-                <ArrowPathIcon className={`h-4 w-4 ${loading || archivedLoading ? 'animate-spin' : ''}`} />
-                {loading || archivedLoading ? 'Loading' : 'Refresh'}
-              </Button>
-            )}
             {isAuthenticated && viewMode === 'active' && (
               <Button variant="outline" onClick={() => setImportOpen(true)}>
                 <CloudArrowDownIcon className="h-4 w-4" aria-hidden />
@@ -432,35 +481,49 @@ export default function HomeScreen({
           </div>
         </div>
 
-        {/* ── Active / Archived tabs ─────────────────────────────── */}
+        {/* ── Active / Archived tabs + Refresh icon ───────────────── */}
         {isAuthenticated && (
-          <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1">
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
+              <button
+                type="button"
+                onClick={() => setViewMode('active')}
+                className={[
+                  'rounded-md px-4 py-2 text-sm font-medium transition-colors',
+                  viewMode === 'active'
+                    ? 'bg-white text-[#2E2F2F] shadow-sm'
+                    : 'text-gray-500 hover:text-[#2E2F2F]',
+                ].join(' ')}
+              >
+                Active
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMode('archived')
+                  void loadArchivedFrameworks()
+                }}
+                className={[
+                  'rounded-md px-4 py-2 text-sm font-medium transition-colors',
+                  viewMode === 'archived'
+                    ? 'bg-white text-[#2E2F2F] shadow-sm'
+                    : 'text-gray-500 hover:text-[#2E2F2F]',
+                ].join(' ')}
+              >
+                Archived
+              </button>
+            </div>
             <button
               type="button"
-              onClick={() => setViewMode('active')}
-              className={[
-                'rounded-md px-4 py-2 text-sm font-medium transition-colors',
-                viewMode === 'active'
-                  ? 'bg-white text-[#2E2F2F] shadow-sm'
-                  : 'text-gray-500 hover:text-[#2E2F2F]',
-              ].join(' ')}
-            >
-              Active
-            </button>
-            <button
-              type="button"
+              title="Refresh"
+              disabled={loading || archivedLoading}
               onClick={() => {
-                setViewMode('archived')
-                void loadArchivedFrameworks()
+                if (viewMode === 'archived') void loadArchivedFrameworks()
+                else void loadFrameworks()
               }}
-              className={[
-                'rounded-md px-4 py-2 text-sm font-medium transition-colors',
-                viewMode === 'archived'
-                  ? 'bg-white text-[#2E2F2F] shadow-sm'
-                  : 'text-gray-500 hover:text-[#2E2F2F]',
-              ].join(' ')}
+              className="rounded-md p-1.5 text-gray-400 transition-colors hover:text-gray-600 disabled:opacity-50"
             >
-              Archived
+              <ArrowPathIcon className={`h-5 w-5 ${loading || archivedLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         )}

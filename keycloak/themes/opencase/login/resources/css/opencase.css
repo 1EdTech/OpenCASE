@@ -27,11 +27,13 @@
   --oc-radius-sm: 0.75rem;
 }
 
-/* ── Font stack ─────────────────────────────────────────── */
+/* ── Fonts ──────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Nunito:wght@300;400;500;600&display=swap');
 
 html,
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+  font-family: "Nunito", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -87,7 +89,7 @@ body.login-pf {
 /* ── Gradient header banner (matches HomeScreen hero) ───── */
 
 .pf-v5-c-login__header {
-  background: linear-gradient(to right, var(--oc-navy), var(--oc-plum)) !important;
+  background: linear-gradient(135deg, #000072 0%, #1a0f80 40%, #3d1a9b 70%, #662F90 100%) !important;
   width: 100% !important;
   max-width: none !important;
   margin: 0 !important;
@@ -95,21 +97,52 @@ body.login-pf {
   text-align: center !important;
   flex-shrink: 0;
   grid-area: unset !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Radial glow accent */
+.pf-v5-c-login__header::before {
+  content: '';
+  position: absolute;
+  top: -5rem;
+  right: -5rem;
+  width: 18rem;
+  height: 18rem;
+  border-radius: 50%;
+  background: rgba(102, 47, 144, 0.15); /* Plum */
+  filter: blur(48px);
+  pointer-events: none;
+}
+
+.pf-v5-c-login__header::after {
+  content: '';
+  position: absolute;
+  bottom: -4rem;
+  left: 15%;
+  width: 12rem;
+  height: 12rem;
+  border-radius: 50%;
+  background: rgba(61, 26, 155, 0.10); /* Deep violet */
+  filter: blur(48px);
+  pointer-events: none;
 }
 
 /* Also target the legacy #kc-header selector */
 #kc-header {
-  background: linear-gradient(to right, var(--oc-navy), var(--oc-plum)) !important;
+  background: linear-gradient(135deg, #000072 0%, #1a0f80 40%, #3d1a9b 70%, #662F90 100%) !important;
 }
 
 #kc-header-wrapper {
+  font-family: "Outfit", ui-sans-serif, system-ui, sans-serif !important;
   font-size: 1.75rem !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.06em !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em !important;
   text-transform: uppercase !important;
   color: var(--oc-white) !important;
   max-width: none !important;
   padding: 0 !important;
+  position: relative;
 }
 
 /* ── Main card ──────────────────────────────────────────── */
