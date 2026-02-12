@@ -1,10 +1,12 @@
-import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon, KeyIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon, KeyIcon, ArrowUpTrayIcon } from '@heroicons/react/24/solid'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
 import { FrameworkCard } from '@/ui/shared/components/FrameworkCard'
 import type { HomeFramework } from '@/ui/home/frameworkStore'
 import CreateFrameworkDialog, { type CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 import ImportFrameworkDialog from '@/ui/home/ImportFrameworkDialog'
+import UploadFrameworkDialog from '@/ui/home/UploadFrameworkDialog'
+import type { Framework } from '@/domain/framework/model/types'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
 import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/CaseApiClient'
@@ -102,6 +104,7 @@ export default function HomeScreen({
   onRemoveFromStorage,
   remoteOpenLoading,
   onCreateNew,
+  onUploadFramework,
 }: Readonly<{
   /** Locally-created frameworks that have not yet been saved to the server */
   unsavedDrafts: HomeFramework[]
@@ -112,9 +115,23 @@ export default function HomeScreen({
   onRemoveFromStorage?: (_docId: string) => void
   remoteOpenLoading?: boolean
   onCreateNew: (_draft: CreateFrameworkDraft) => void
+  onUploadFramework?: (_framework: Framework) => void
 }>) {
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null)
+
+  // Close the mobile actions menu on outside click
+  useEffect(() => {
+    if (!actionsMenuOpen) return
+    const onPointerDown = (e: PointerEvent) => {
+      if (!actionsMenuRef.current?.contains(e.target as Node)) setActionsMenuOpen(false)
+    }
+    globalThis.addEventListener('pointerdown', onPointerDown)
+    return () => globalThis.removeEventListener('pointerdown', onPointerDown)
+  }, [actionsMenuOpen])
   const { status, tenantId, userName, signOut, getAccessToken, changePassword } = useAuth()
   const cfg = getAppConfig()
 
@@ -465,11 +482,19 @@ export default function HomeScreen({
         {/* ── Action bar (Title + Create) ────────────────────────── */}
         <div className="mb-6 flex items-center justify-between">
           <h2 className="font-heading text-2xl font-normal tracking-[0.02em] text-[#2E2F2F]">Your Frameworks</h2>
-          <div className="flex items-center gap-3">
+
+          {/* Desktop: full buttons (hidden below md) */}
+          <div className="hidden items-center gap-3 md:flex">
             {isAuthenticated && viewMode === 'active' && (
               <Button variant="outline" onClick={() => setImportOpen(true)}>
                 <CloudArrowDownIcon className="h-4 w-4" aria-hidden />
                 Import framework
+              </Button>
+            )}
+            {viewMode === 'active' && (
+              <Button variant="outline" onClick={() => setUploadOpen(true)}>
+                <ArrowUpTrayIcon className="h-4 w-4" aria-hidden />
+                Upload spreadsheet
               </Button>
             )}
             {viewMode === 'active' && (
@@ -479,6 +504,56 @@ export default function HomeScreen({
               </Button>
             )}
           </div>
+
+          {/* Mobile: collapsed + dropdown (hidden at md and above) */}
+          {viewMode === 'active' && (
+            <div className="relative md:hidden" ref={actionsMenuRef}>
+              <Button
+                size="icon"
+                onClick={() => setActionsMenuOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={actionsMenuOpen}
+                aria-label="Add framework"
+              >
+                <PlusIcon className="h-5 w-5" />
+              </Button>
+              {actionsMenuOpen && (
+                <div role="menu" className="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                  <div className="p-1">
+                    {isAuthenticated && (
+                      <button
+                        role="menuitem"
+                        type="button"
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[#2E2F2F] hover:bg-gray-50"
+                        onClick={() => { setImportOpen(true); setActionsMenuOpen(false) }}
+                      >
+                        <CloudArrowDownIcon className="h-4 w-4 text-gray-500" aria-hidden />
+                        Import framework
+                      </button>
+                    )}
+                    <button
+                      role="menuitem"
+                      type="button"
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[#2E2F2F] hover:bg-gray-50"
+                      onClick={() => { setUploadOpen(true); setActionsMenuOpen(false) }}
+                    >
+                      <ArrowUpTrayIcon className="h-4 w-4 text-gray-500" aria-hidden />
+                      Upload spreadsheet
+                    </button>
+                    <button
+                      role="menuitem"
+                      type="button"
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[#2E2F2F] hover:bg-gray-50"
+                      onClick={() => { setCreateOpen(true); setActionsMenuOpen(false) }}
+                    >
+                      <PlusIcon className="h-4 w-4 text-gray-500" aria-hidden />
+                      Create framework
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Active / Archived tabs + Refresh icon ───────────────── */}
@@ -530,7 +605,7 @@ export default function HomeScreen({
 
         {/* ── Search & filter bar (active tab only) ──────────────────── */}
         {viewMode === 'active' && <div className="flex flex-wrap items-center gap-3">
-          {/* Search input */}
+          {/* Search input (always visible) */}
           <div className="relative min-w-0 flex-1">
             <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
@@ -542,8 +617,8 @@ export default function HomeScreen({
             />
           </div>
 
-          {/* Status filter */}
-          <div className="relative">
+          {/* Status filter (hidden on small screens) */}
+          <div className="relative hidden sm:block">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
@@ -559,9 +634,9 @@ export default function HomeScreen({
             <FunnelIcon className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
           </div>
 
-          {/* Framework type filter */}
+          {/* Framework type filter (hidden on small screens) */}
           {allFrameworkTypes.length > 0 && (
-            <div className="relative">
+            <div className="relative hidden sm:block">
               <select
                 value={typeFilter}
                 onChange={(e) => setTypeFilter(e.target.value)}
@@ -578,9 +653,9 @@ export default function HomeScreen({
             </div>
           )}
 
-          {/* Clear filters */}
+          {/* Clear filters (hidden on small screens since filters are hidden) */}
           {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="hidden sm:inline-flex">
               <XMarkIcon className="h-4 w-4" />
               Clear
             </Button>
@@ -807,6 +882,15 @@ export default function HomeScreen({
         open={importOpen}
         onCancel={() => setImportOpen(false)}
         onImport={handleImport}
+      />
+
+      <UploadFrameworkDialog
+        open={uploadOpen}
+        onCancel={() => setUploadOpen(false)}
+        onUpload={(framework) => {
+          setUploadOpen(false)
+          onUploadFramework?.(framework)
+        }}
       />
 
       {/* Archive Confirmation Dialog (active server frameworks → soft delete) */}

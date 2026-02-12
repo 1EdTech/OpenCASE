@@ -4,6 +4,7 @@ import EditorCanvas from '@/ui/editor/EditorCanvas'
 import HomeScreen from '@/ui/home/HomeScreen'
 import { createNewFrameworkDraft, createHomeFrameworkFromDomain, loadFrameworks, saveFrameworks, type HomeFramework } from '@/ui/home/frameworkStore'
 import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
+import type { Framework } from '@/domain/framework/model/types'
 import { AuthProvider, useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
 import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
@@ -140,6 +141,18 @@ function AppInner() {
 
   const createNew = useCallback((draft: CreateFrameworkDraft) => {
     const fw = createNewFrameworkDraft(draft)
+    setFrameworks((prev) => {
+      const next = [fw, ...prev]
+      saveFrameworks(next)
+      return next
+    })
+    setActiveFrameworkId(fw.id)
+    setScreen('editor')
+  }, [])
+
+  /** Create a HomeFramework from a pre-populated domain Framework (e.g. from spreadsheet upload). */
+  const createFromFramework = useCallback((framework: Framework) => {
+    const fw = createHomeFrameworkFromDomain(framework)
     setFrameworks((prev) => {
       const next = [fw, ...prev]
       saveFrameworks(next)
@@ -325,6 +338,7 @@ function AppInner() {
       onRemoveFromStorage={removeFrameworkFromStorage}
       remoteOpenLoading={remoteOpenState === 'loading'}
       onCreateNew={createNew}
+      onUploadFramework={createFromFramework}
     />
   )
 

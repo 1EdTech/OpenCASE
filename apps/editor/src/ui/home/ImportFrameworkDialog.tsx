@@ -79,28 +79,30 @@ export default function ImportFrameworkDialog({
         if (!v) handleCancel()
       }}
     >
-      <DialogContent>
+      <DialogContent className="p-5 sm:p-8 sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Import framework</DialogTitle>
-          <DialogDescription>
-            Enter a CASE CFPackage endpoint URL to import an external framework.
-            The framework will be fetched, validated, and stored locally.
+          <DialogTitle className="text-2xl">Import an existing framework</DialogTitle>
+          <DialogDescription className="text-base leading-relaxed">
+            Already have a framework published on a CASE server? Paste the link below to
+            bring it into the editor so you can view or build on it.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-3">
-          <div className="grid gap-1.5">
-            <Label htmlFor="import_url">CFPackage URL</Label>
+        <div className="grid gap-5">
+          <div className="grid gap-2.5">
+            <Label htmlFor="import_url" className="text-base">Framework URL</Label>
             <Input
               id="import_url"
+              className="text-base py-2.5"
               value={endpointUrl}
               onChange={(e) => setEndpointUrl(e.target.value)}
               placeholder="https://case.example.org/ims/case/v1p1/CFPackages/{id}"
               autoFocus
               disabled={importing}
             />
-            <p className="text-xs text-gray-400">
-              The full URL to a CASE CFPackage endpoint (e.g. /ims/case/v1p1/CFPackages/&lt;uuid&gt;)
+            <p className="text-base text-gray-500 leading-relaxed">
+              Paste the full web address of the framework you want to import.
+              Your administrator or framework provider can give you this link.
             </p>
           </div>
 
@@ -108,41 +110,42 @@ export default function ImportFrameworkDialog({
           <button
             type="button"
             onClick={() => setShowAdvanced((v) => !v)}
-            className="flex items-center gap-1 text-xs font-medium text-[#662F90] hover:text-[#552678]"
+            className="flex items-center gap-1.5 text-base font-medium text-[#662F90] hover:text-[#552678]"
           >
             {showAdvanced ? (
-              <ChevronUpIcon className="h-3 w-3" />
+              <ChevronUpIcon className="h-4 w-4" />
             ) : (
-              <ChevronDownIcon className="h-3 w-3" />
+              <ChevronDownIcon className="h-4 w-4" />
             )}
             Advanced options
           </button>
 
           {showAdvanced && (
-            <div className="grid gap-1.5">
-              <Label htmlFor="import_token">Access token (optional)</Label>
+            <div className="grid gap-2.5">
+              <Label htmlFor="import_token" className="text-base">Access token (optional)</Label>
               <Input
                 id="import_token"
+                className="text-base py-2.5"
                 type="password"
                 value={accessToken}
                 onChange={(e) => setAccessToken(e.target.value)}
-                placeholder="Bearer token for authenticated endpoints"
+                placeholder="Paste your access token here"
                 disabled={importing}
               />
-              <p className="text-xs text-gray-400">
-                If the source CASE server requires authentication, provide an access token.
+              <p className="text-base text-gray-500 leading-relaxed">
+                If the framework server requires a login, paste the access token you were given.
               </p>
             </div>
           )}
 
           {/* Error display */}
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-              <div className="flex items-start gap-2">
-                <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3.5 text-base leading-relaxed text-red-800">
+              <div className="flex items-start gap-3">
+                <ExclamationTriangleIcon className="mt-0.5 h-6 w-6 shrink-0 text-red-500" />
                 <div>
-                  <div className="font-medium">Import failed</div>
-                  <div className="mt-0.5">{error}</div>
+                  <div className="font-semibold">Something went wrong</div>
+                  <div className="mt-1">{error}</div>
                 </div>
               </div>
             </div>
@@ -150,13 +153,13 @@ export default function ImportFrameworkDialog({
 
           {/* Validation warnings */}
           {warnings.length > 0 && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              <div className="flex items-start gap-2">
-                <ExclamationTriangleIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3.5 text-base leading-relaxed text-amber-800">
+              <div className="flex items-start gap-3">
+                <ExclamationTriangleIcon className="mt-0.5 h-6 w-6 shrink-0 text-amber-500" />
                 <div>
-                  <div className="font-medium">Imported with warnings</div>
+                  <div className="font-semibold">Imported with some notes</div>
                   {warnings.map((w) => (
-                    <div key={w} className="mt-0.5">{w}</div>
+                    <div key={w} className="mt-1">{w}</div>
                   ))}
                 </div>
               </div>
@@ -175,10 +178,10 @@ export default function ImportFrameworkDialog({
             {importing ? (
               <>
                 <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                Importing
+                Importing&hellip;
               </>
             ) : (
-              'Import'
+              'Import framework'
             )}
           </Button>
         </DialogFooter>
