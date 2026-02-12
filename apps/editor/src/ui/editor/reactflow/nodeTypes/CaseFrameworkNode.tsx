@@ -1,5 +1,5 @@
 import { Handle, Position, type NodeProps, NodeResizer, useReactFlow, useConnection } from '@xyflow/react'
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, ArchiveBoxArrowDownIcon } from '@heroicons/react/24/solid'
 import type { CaseFrameworkNodeType } from '../types'
 import { FrameworkCard } from '@/ui/shared/components/FrameworkCard'
 import type { CaseEditorNodeType } from '@/ui/editor/reactflow/types'
@@ -77,18 +77,18 @@ export default function CaseFrameworkNode({ id, data, selected }: NodeProps<Case
 
         <button
           type="button"
-          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-rose-300 bg-white px-3 py-1 text-xs font-semibold text-rose-700 shadow-sm hover:bg-rose-50 focus-visible:outline-2 focus-visible:outline-rose-700/40 focus-visible:outline-offset-2"
+          className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-700 shadow-sm hover:bg-amber-50 focus-visible:outline-2 focus-visible:outline-amber-700/40 focus-visible:outline-offset-2"
           onClick={(e) => {
             e.stopPropagation()
             const node = rf.getNode(id)
             if (!node) return
             rf.deleteElements({ nodes: [node], edges: [] })
           }}
-          aria-label="Delete framework"
-          title="Delete framework"
+          aria-label="Archive framework"
+          title="Archive framework"
         >
-          <TrashIcon className="h-3.5 w-3.5" aria-hidden="true" />
-          Delete
+          <ArchiveBoxArrowDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          Archive
         </button>
       </div>
 

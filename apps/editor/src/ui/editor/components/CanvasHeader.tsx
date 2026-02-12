@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
-import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon } from '@heroicons/react/24/solid'
+import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
 
 type MenuItem = {
@@ -267,7 +267,7 @@ export default function CanvasHeader({
             {frameworkSubtitle ? <div className="truncate text-xs text-gray-500">{frameworkSubtitle}</div> : null}
           </div>
 
-          {/* Save button - shows status during save operations */}
+          {/* Save button / status indicator */}
           {onSave ? (
             <div className="flex items-center gap-2">
               {isDirty ? (
@@ -286,14 +286,20 @@ export default function CanvasHeader({
                       Saving…
                     </>
                   ) : saveStatus === 'error' ? (
-                    '✗ Error'
+                    <>
+                      <CloudArrowUpIcon className="h-4 w-4" />
+                      Retry
+                    </>
                   ) : (
-                    'Save'
+                    <>
+                      <CloudArrowUpIcon className="h-4 w-4" />
+                      Save
+                    </>
                   )}
                 </Button>
               ) : (
-                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-                  {saveStatus === 'success' ? '✓ Saved' : 'Saved'}
+                <span className="flex items-center gap-1 px-2 py-1 text-gray-400" title="All changes saved">
+                  <CheckCircleIcon className="h-4 w-4" />
                 </span>
               )}
               {saveStatus === 'error' && saveError ? (

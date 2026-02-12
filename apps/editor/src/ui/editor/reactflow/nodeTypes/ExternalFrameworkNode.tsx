@@ -1,8 +1,10 @@
-import { Handle, Position, type NodeProps, NodeResizer, useConnection } from '@xyflow/react'
-import { TrashIcon, LinkIcon } from '@heroicons/react/24/solid'
+import { Handle, Position, type NodeProps, NodeResizer, useReactFlow, useConnection } from '@xyflow/react'
+import { XMarkIcon, LinkIcon } from '@heroicons/react/24/solid'
 import type { ExternalFrameworkNodeType } from '../types'
+import type { CaseEditorNodeType } from '@/ui/editor/reactflow/types'
 
 export default function ExternalFrameworkNode({ id, data, selected }: NodeProps<ExternalFrameworkNodeType>) {
+  const rf = useReactFlow<CaseEditorNodeType>()
   // Get connection state to show visual feedback during drag (React Flow v12+)
   const connection = useConnection()
   const connectionInProgress = connection.inProgress
@@ -62,11 +64,11 @@ export default function ExternalFrameworkNode({ id, data, selected }: NodeProps<
             if (!node) return
             rf.deleteElements({ nodes: [node], edges: [] })
           }}
-          aria-label="Delete external framework"
-          title="Delete external framework"
+          aria-label="Remove external framework"
+          title="Remove external framework"
         >
-          <TrashIcon className="h-3.5 w-3.5" aria-hidden="true" />
-          Delete
+          <XMarkIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          Remove
         </button>
       </div>
 

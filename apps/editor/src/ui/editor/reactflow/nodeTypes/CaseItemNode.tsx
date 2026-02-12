@@ -1,5 +1,5 @@
 import { Handle, Position, type NodeProps, NodeResizer, useReactFlow, useConnection } from '@xyflow/react'
-import { PlusIcon, TrashIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, XMarkIcon } from '@heroicons/react/24/solid'
 import type { CaseItemNodeType } from '../types'
 import type { CaseEditorNodeType } from '@/ui/editor/reactflow/types'
 
@@ -99,11 +99,11 @@ export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemN
             if (!node) return
             rf.deleteElements({ nodes: [node], edges: [] })
           }}
-          aria-label="Delete item"
-          title="Delete item"
+          aria-label="Remove item"
+          title="Remove item"
         >
-          <TrashIcon className="h-3.5 w-3.5" aria-hidden="true" />
-          Delete
+          <XMarkIcon className="h-3.5 w-3.5" aria-hidden="true" />
+          Remove
         </button>
       </div>
 

@@ -91,6 +91,7 @@ export default function HomeScreen({
   onOpenFramework,
   onOpenRemoteFramework,
   onDeleteDraft,
+  onRemoveFromStorage,
   remoteOpenLoading,
   onCreateNew,
 }: Readonly<{
@@ -99,6 +100,8 @@ export default function HomeScreen({
   onOpenFramework: (_id: string) => void
   onOpenRemoteFramework?: (_docId: string) => Promise<void>
   onDeleteDraft?: (_id: string) => void
+  /** Remove a framework from localStorage after archive or hard delete */
+  onRemoveFromStorage?: (_docId: string) => void
   remoteOpenLoading?: boolean
   onCreateNew: (_draft: CreateFrameworkDraft) => void
 }>) {
@@ -115,8 +118,19 @@ export default function HomeScreen({
   const [error, setError] = useState<string | null>(null)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
 
-  // Delete confirmation state (for server frameworks)
-  const [deleteConfirm, setDeleteConfirm] = useState<{ docId: string; title: string } | null>(null)
+  // Active / Archived tab
+  const [viewMode, setViewMode] = useState<'active' | 'archived'>('active')
+
+  // Archived frameworks (loaded when switching to Archived tab)
+  const [archivedFrameworks, setArchivedFrameworks] = useState<CfDocumentSummary[]>([])
+  const [archivedLoading, setArchivedLoading] = useState(false)
+
+  // Archive confirmation state (for active server frameworks → soft delete)
+  const [archiveConfirm, setArchiveConfirm] = useState<{ docId: string; title: string } | null>(null)
+  const [archivingDocId, setArchivingDocId] = useState<string | null>(null)
+
+  // Hard delete confirmation state (for archived frameworks → permanent delete)
+  const [hardDeleteConfirm, setHardDeleteConfirm] = useState<{ docId: string; title: string } | null>(null)
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
 
   // Delete confirmation state (for unsaved drafts)
@@ -161,33 +175,83 @@ export default function HomeScreen({
     [onOpenRemoteFramework],
   )
 
-  // Handle server framework delete (archive)
-  const handleDeleteRequest = useCallback((docId: string, title: string) => {
-    setDeleteConfirm({ docId, title })
+  // Load archived frameworks from server
+  const loadArchivedFrameworks = useCallback(async () => {
+    setArchivedLoading(true)
+    setError(null)
+    try {
+      const docs = await api.listCfDocuments({ caseVersion: 'v1p1', includeArchived: true })
+      // Filter to only archived (Retired/Deprecated) frameworks
+      const archived = docs.filter((d) => d.adoptionStatus === 'Retired' || d.adoptionStatus === 'Deprecated')
+      setArchivedFrameworks(archived)
+    } catch (e: unknown) {
+      setArchivedFrameworks([])
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setArchivedLoading(false)
+    }
+  }, [api])
+
+  // Handle server framework archive (soft delete)
+  const handleArchiveRequest = useCallback((docId: string, title: string) => {
+    setArchiveConfirm({ docId, title })
   }, [])
 
-  const handleDeleteConfirm = useCallback(async () => {
-    if (!deleteConfirm || !tenantId) return
+  const handleArchiveConfirm = useCallback(async () => {
+    if (!archiveConfirm || !tenantId) return
 
-    setDeletingDocId(deleteConfirm.docId)
-    setDeleteConfirm(null)
+    setArchivingDocId(archiveConfirm.docId)
+    setArchiveConfirm(null)
     setError(null)
 
     try {
       await api.deleteCfPackage({
         tenantId,
-        docId: deleteConfirm.docId,
+        docId: archiveConfirm.docId,
         caseVersion: 'v1p1',
       })
 
-      // Remove from local list
-      setServerFrameworks((prev) => prev.filter((f) => f.identifier !== deleteConfirm.docId))
+      // Remove from active list
+      setServerFrameworks((prev) => prev.filter((f) => f.identifier !== archiveConfirm.docId))
+      // Remove from localStorage
+      onRemoveFromStorage?.(archiveConfirm.docId)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setArchivingDocId(null)
+    }
+  }, [api, archiveConfirm, tenantId, onRemoveFromStorage])
+
+  // Handle archived framework hard delete (permanent)
+  const handleHardDeleteRequest = useCallback((docId: string, title: string) => {
+    setHardDeleteConfirm({ docId, title })
+  }, [])
+
+  const handleHardDeleteConfirm = useCallback(async () => {
+    if (!hardDeleteConfirm || !tenantId) return
+
+    setDeletingDocId(hardDeleteConfirm.docId)
+    setHardDeleteConfirm(null)
+    setError(null)
+
+    try {
+      await api.deleteCfPackage({
+        tenantId,
+        docId: hardDeleteConfirm.docId,
+        caseVersion: 'v1p1',
+        hardDelete: true,
+      })
+
+      // Remove from archived list
+      setArchivedFrameworks((prev) => prev.filter((f) => f.identifier !== hardDeleteConfirm.docId))
+      // Remove from localStorage
+      onRemoveFromStorage?.(hardDeleteConfirm.docId)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setDeletingDocId(null)
     }
-  }, [api, deleteConfirm, tenantId])
+  }, [api, hardDeleteConfirm, tenantId, onRemoveFromStorage])
 
   // Handle unsaved draft delete
   const handleDraftDeleteConfirm = useCallback(() => {
@@ -215,7 +279,6 @@ export default function HomeScreen({
   }, [api, tenantId, loadFrameworks, onOpenRemoteFramework])
 
   const isAuthenticated = status === 'authenticated'
-  const refreshButtonClass = loading ? 'animate-spin' : ''
 
   // IDs of server frameworks, used to exclude drafts that have since been saved
   const serverIds = useMemo(() => new Set(serverFrameworks.map((f) => f.identifier)), [serverFrameworks])
@@ -312,28 +375,66 @@ export default function HomeScreen({
               <Button
                 variant="outline"
                 size="sm"
-                disabled={loading}
-                onClick={() => void loadFrameworks()}
+                disabled={loading || archivedLoading}
+                onClick={() => {
+                  if (viewMode === 'archived') void loadArchivedFrameworks()
+                  else void loadFrameworks()
+                }}
               >
-                <ArrowPathIcon className={`h-4 w-4 ${refreshButtonClass}`} />
-                {loading ? 'Loading\u2026' : 'Refresh'}
+                <ArrowPathIcon className={`h-4 w-4 ${loading || archivedLoading ? 'animate-spin' : ''}`} />
+                {loading || archivedLoading ? 'Loading\u2026' : 'Refresh'}
               </Button>
             )}
-            {isAuthenticated && (
+            {isAuthenticated && viewMode === 'active' && (
               <Button variant="outline" onClick={() => setImportOpen(true)}>
                 <CloudArrowDownIcon className="h-4 w-4" aria-hidden />
                 Import framework
               </Button>
             )}
-            <Button onClick={() => setCreateOpen(true)}>
-              <PlusIcon className="h-4 w-4" aria-hidden />
-              Create framework
-            </Button>
+            {viewMode === 'active' && (
+              <Button onClick={() => setCreateOpen(true)}>
+                <PlusIcon className="h-4 w-4" aria-hidden />
+                Create framework
+              </Button>
+            )}
           </div>
         </div>
 
-        {/* ── Search & filter bar ───────────────────────────────────── */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* ── Active / Archived tabs ─────────────────────────────── */}
+        {isAuthenticated && (
+          <div className="mb-6 flex gap-1 rounded-lg bg-gray-100 p-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('active')}
+              className={[
+                'rounded-md px-4 py-2 text-sm font-medium transition-colors',
+                viewMode === 'active'
+                  ? 'bg-white text-[#2E2F2F] shadow-sm'
+                  : 'text-gray-500 hover:text-[#2E2F2F]',
+              ].join(' ')}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('archived')
+                void loadArchivedFrameworks()
+              }}
+              className={[
+                'rounded-md px-4 py-2 text-sm font-medium transition-colors',
+                viewMode === 'archived'
+                  ? 'bg-white text-[#2E2F2F] shadow-sm'
+                  : 'text-gray-500 hover:text-[#2E2F2F]',
+              ].join(' ')}
+            >
+              Archived
+            </button>
+          </div>
+        )}
+
+        {/* ── Search & filter bar (active tab only) ──────────────────── */}
+        {viewMode === 'active' && <div className="flex flex-wrap items-center gap-3">
           {/* Search input */}
           <div className="relative min-w-0 flex-1">
             <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -389,18 +490,18 @@ export default function HomeScreen({
               Clear
             </Button>
           )}
-        </div>
+        </div>}
 
         {/* Active filter summary */}
-        {hasActiveFilters && (
+        {viewMode === 'active' && hasActiveFilters && (
           <div className="mt-3 text-sm text-gray-400">
             Showing {totalResults} {totalResults === 1 ? 'framework' : 'frameworks'}
             {searchQuery ? <> matching &ldquo;{searchQuery}&rdquo;</> : null}
           </div>
         )}
 
-        {/* ── Unsaved Drafts ─────────────────────────────────────────── */}
-        {filteredDrafts.length > 0 && (
+        {/* ── Unsaved Drafts (only shown on Active tab) ──────────────── */}
+        {viewMode === 'active' && filteredDrafts.length > 0 && (
           <div className="mt-6">
             <div className="flex items-center gap-3">
               <h3 className="font-heading text-lg font-medium tracking-[0.02em] text-[#2E2F2F]">Unsaved Drafts</h3>
@@ -426,6 +527,7 @@ export default function HomeScreen({
                       ? () => setDraftDeleteConfirm({ id: fw.id, title: fw.cfDocument.title ?? 'Untitled' })
                       : undefined
                   }
+                  actionStyle="delete"
                 />
               ))}
             </div>
@@ -447,58 +549,112 @@ export default function HomeScreen({
             </div>
           )}
 
-          {isAuthenticated && loading && !hasLoadedOnce && (
-            <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
-              <ArrowPathIcon className="h-4 w-4 animate-spin" />
-              Loading frameworks\u2026
-            </div>
+          {/* ── Active frameworks view ──────────────────────────────── */}
+          {viewMode === 'active' && (
+            <>
+              {isAuthenticated && loading && !hasLoadedOnce && (
+                <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
+                  <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                  Loading frameworks\u2026
+                </div>
+              )}
+
+              {isAuthenticated && !loading && hasLoadedOnce && serverFrameworks.length === 0 && !error && (
+                <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
+                  No frameworks found. Create a new framework to get started.
+                </div>
+              )}
+
+              {/* No results after filtering */}
+              {isAuthenticated && hasLoadedOnce && serverFrameworks.length > 0 && filteredServerFrameworks.length === 0 && hasActiveFilters && (
+                <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
+                  No frameworks match your current filters.{' '}
+                  <button type="button" onClick={clearFilters} className="font-medium text-[#662F90] underline underline-offset-2 hover:text-[#2E2F2F]">
+                    Clear filters
+                  </button>
+                </div>
+              )}
+
+              {isAuthenticated && filteredServerFrameworks.length > 0 && (
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredServerFrameworks.map((doc) => {
+                    const title = doc.title ?? doc.identifier ?? 'Untitled Framework'
+                    const hint = remoteOpenLoading ? 'Loading\u2026' : 'Open'
+                    const isArchiving = archivingDocId === doc.identifier
+                    const cardClass = remoteOpenLoading || isArchiving ? 'opacity-60 pointer-events-none' : undefined
+                    return (
+                      <FrameworkCard
+                        key={doc.identifier}
+                        cfDocument={{
+                          title,
+                          creator: doc.creator && doc.creator !== 'Unknown' ? doc.creator : undefined,
+                          description: doc.description,
+                          frameworkType: doc.frameworkType,
+                          adoptionStatus: doc.adoptionStatus,
+                        }}
+                        sourcePackageURI={doc.sourcePackageURI}
+                        isModifiedFromSource={doc.isModifiedFromSource}
+                        rightHint={isArchiving ? 'Archiving\u2026' : hint}
+                        lastChanged={doc.lastChangeDateTime}
+                        onClick={() => openRemote(doc.identifier)}
+                        onDelete={tenantId ? () => handleArchiveRequest(doc.identifier, title) : undefined}
+                        deleteDisabled={isArchiving || remoteOpenLoading}
+                        actionStyle="archive"
+                        className={cardClass}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </>
           )}
 
-          {isAuthenticated && !loading && hasLoadedOnce && serverFrameworks.length === 0 && !error && (
-            <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
-              No frameworks found. Create a new framework to get started.
-            </div>
-          )}
+          {/* ── Archived frameworks view ────────────────────────────── */}
+          {viewMode === 'archived' && (
+            <>
+              {isAuthenticated && archivedLoading && (
+                <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
+                  <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                  Loading archived frameworks\u2026
+                </div>
+              )}
 
-          {/* No results after filtering */}
-          {isAuthenticated && hasLoadedOnce && serverFrameworks.length > 0 && filteredServerFrameworks.length === 0 && hasActiveFilters && (
-            <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
-              No frameworks match your current filters.{' '}
-              <button type="button" onClick={clearFilters} className="font-medium text-[#662F90] underline underline-offset-2 hover:text-[#2E2F2F]">
-                Clear filters
-              </button>
-            </div>
-          )}
+              {isAuthenticated && !archivedLoading && archivedFrameworks.length === 0 && !error && (
+                <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
+                  No archived frameworks found.
+                </div>
+              )}
 
-          {isAuthenticated && filteredServerFrameworks.length > 0 && (
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredServerFrameworks.map((doc) => {
-                const title = doc.title ?? doc.identifier ?? 'Untitled Framework'
-                const hint = remoteOpenLoading ? 'Loading\u2026' : 'Open'
-                const isDeleting = deletingDocId === doc.identifier
-                const cardClass = remoteOpenLoading || isDeleting ? 'opacity-60 pointer-events-none' : undefined
-                return (
-                  <FrameworkCard
-                    key={doc.identifier}
-                    cfDocument={{
-                      title,
-                      creator: doc.creator && doc.creator !== 'Unknown' ? doc.creator : undefined,
-                      description: doc.description,
-                      frameworkType: doc.frameworkType,
-                      adoptionStatus: doc.adoptionStatus,
-                    }}
-                    sourcePackageURI={doc.sourcePackageURI}
-                    isModifiedFromSource={doc.isModifiedFromSource}
-                    rightHint={isDeleting ? 'Archiving\u2026' : hint}
-                    lastChanged={doc.lastChangeDateTime}
-                    onClick={() => openRemote(doc.identifier)}
-                    onDelete={tenantId ? () => handleDeleteRequest(doc.identifier, title) : undefined}
-                    deleteDisabled={isDeleting || remoteOpenLoading}
-                    className={cardClass}
-                  />
-                )
-              })}
-            </div>
+              {isAuthenticated && archivedFrameworks.length > 0 && (
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {archivedFrameworks.map((doc) => {
+                    const title = doc.title ?? doc.identifier ?? 'Untitled Framework'
+                    const isDeleting = deletingDocId === doc.identifier
+                    const cardClass = isDeleting ? 'opacity-60 pointer-events-none' : undefined
+                    return (
+                      <FrameworkCard
+                        key={doc.identifier}
+                        cfDocument={{
+                          title,
+                          creator: doc.creator && doc.creator !== 'Unknown' ? doc.creator : undefined,
+                          description: doc.description,
+                          frameworkType: doc.frameworkType,
+                          adoptionStatus: doc.adoptionStatus,
+                        }}
+                        sourcePackageURI={doc.sourcePackageURI}
+                        isModifiedFromSource={doc.isModifiedFromSource}
+                        rightHint={isDeleting ? 'Deleting\u2026' : undefined}
+                        lastChanged={doc.lastChangeDateTime}
+                        onDelete={tenantId ? () => handleHardDeleteRequest(doc.identifier, title) : undefined}
+                        deleteDisabled={isDeleting}
+                        actionStyle="delete"
+                        className={cardClass}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -554,22 +710,43 @@ export default function HomeScreen({
         onImport={handleImport}
       />
 
-      {/* Archive Confirmation Dialog (server frameworks) */}
-      <Dialog open={Boolean(deleteConfirm)} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+      {/* Archive Confirmation Dialog (active server frameworks → soft delete) */}
+      <Dialog open={Boolean(archiveConfirm)} onOpenChange={(open) => !open && setArchiveConfirm(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Archive Framework</DialogTitle>
             <DialogDescription>
-              Are you sure you want to archive &ldquo;{deleteConfirm?.title}&rdquo;?
+              Are you sure you want to archive &ldquo;{archiveConfirm?.title}&rdquo;?
               The framework will be archived on the server and can be restored by an administrator.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>
+            <Button variant="secondary" onClick={() => setArchiveConfirm(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => void handleDeleteConfirm()}>
+            <Button variant="destructive" onClick={() => void handleArchiveConfirm()}>
               Archive
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Hard Delete Confirmation Dialog (archived frameworks → permanent delete) */}
+      <Dialog open={Boolean(hardDeleteConfirm)} onOpenChange={(open) => !open && setHardDeleteConfirm(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Permanently Delete Framework</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to permanently delete &ldquo;{hardDeleteConfirm?.title}&rdquo;?
+              This action cannot be undone. The framework and all its data will be removed from the server.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setHardDeleteConfirm(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleHardDeleteConfirm()}>
+              Delete permanently
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,4 @@
-import { PlusIcon, TrashIcon, CloudArrowDownIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, TrashIcon, CloudArrowDownIcon, ArchiveBoxArrowDownIcon } from '@heroicons/react/24/solid'
 import type { ReactNode } from 'react'
 import type { CFDocument } from '@/domain/case/types'
 import { Button } from '@/ui/shared/components/ui/button'
@@ -58,6 +58,8 @@ type Props = {
   primaryActionIcon?: 'plus' | 'none'
   onDelete?: () => void
   deleteDisabled?: boolean
+  /** Visual style for the action button: 'archive' shows amber archive icon, 'delete' shows red trash icon */
+  actionStyle?: 'archive' | 'delete'
   onClick?: () => void
   className?: string
   children?: ReactNode
@@ -80,6 +82,7 @@ export function FrameworkCard({
   primaryActionIcon = 'plus',
   onDelete,
   deleteDisabled,
+  actionStyle = 'archive',
   onClick,
   className,
   children,
@@ -143,14 +146,23 @@ export function FrameworkCard({
               variant="ghost"
               size="xs"
               disabled={deleteDisabled}
-              className="rounded-full text-white/50 opacity-0 transition-opacity hover:bg-white/10 hover:text-red-300 group-hover:opacity-100"
+              className={cn(
+                'rounded-full opacity-0 transition-opacity group-hover:opacity-100',
+                actionStyle === 'delete'
+                  ? 'text-white/50 hover:bg-white/10 hover:text-red-300'
+                  : 'text-white/50 hover:bg-white/10 hover:text-amber-300',
+              )}
               onClick={(e) => {
                 e.stopPropagation()
                 onDelete()
               }}
-              title="Archive framework"
+              title={actionStyle === 'delete' ? 'Delete permanently' : 'Archive framework'}
             >
-              <TrashIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              {actionStyle === 'delete' ? (
+                <TrashIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              ) : (
+                <ArchiveBoxArrowDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
             </Button>
           ) : null}
         </div>

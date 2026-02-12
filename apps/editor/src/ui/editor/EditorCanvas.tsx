@@ -9,7 +9,7 @@ import CanvasHeader from '@/ui/editor/components/CanvasHeader'
 import NodePropertiesPanel from '@/ui/editor/components/NodePropertiesPanel'
 import EdgePropertiesPanel from '@/ui/editor/components/EdgePropertiesPanel'
 import AddItemDialog from '@/ui/editor/components/AddItemDialog'
-import ConfirmDeleteDialog from '@/ui/editor/components/ConfirmDeleteDialog'
+import ConfirmActionDialog from '@/ui/editor/components/ConfirmActionDialog'
 import ConfirmLeaveDialog from '@/ui/editor/components/ConfirmLeaveDialog'
 import SettingsModal from '@/ui/editor/components/SettingsModal'
 import FloatingAddButton from '@/ui/editor/components/FloatingAddButton'
@@ -30,9 +30,11 @@ type EditorCanvasProps = {
   onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>) => Promise<void>
   /** Whether the current framework has been published to OpenCASE (loaded from or saved to server) */
   isPublishedToOpenCase?: boolean
+  /** Archive the current framework on the server and navigate home */
+  onArchiveFramework?: () => Promise<void>
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, getAccessToken } = useAuth()
   const {
     nodes,
@@ -224,16 +226,16 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     edgeReconnectSuccessful.current = true
   }, [])
 
-  const [pendingDelete, setPendingDelete] = useState<null | {
+  const [pendingAction, setPendingAction] = useState<null | {
     nodeIds: string[]
     edgeIds: string[]
-    nodeCount: number
     itemCount: number
     childItemCount: number
     reattachChildren: boolean
-    isFrameworkDelete: boolean
+    isFrameworkArchive: boolean
     resolve: (allowDelete: boolean) => void
   }>(null)
+  const [archiving, setArchiving] = useState(false)
   
   // Helper function to get the center of the current viewport in flow coordinates
   const getViewportCenter = useCallback(() => {
@@ -311,17 +313,15 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       ).length
 
       const itemCount = deletedItemIdSet.size
-      const nodeCount = nodeIds.length
 
       return new Promise<boolean>((resolve) => {
-        setPendingDelete({
+        setPendingAction({
           nodeIds,
           edgeIds,
-          nodeCount,
           itemCount,
           childItemCount,
           reattachChildren: !includesFramework,
-          isFrameworkDelete: includesFramework,
+          isFrameworkArchive: includesFramework,
           resolve,
         })
       })
@@ -329,27 +329,48 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     [nodesWithCallbacks, editorEdges],
   )
 
-  const closeDeleteDialog = useCallback(() => {
-    setPendingDelete((pd) => {
+  const closeActionDialog = useCallback(() => {
+    setPendingAction((pd) => {
       pd?.resolve(false)
       return null
     })
   }, [])
 
-  const confirmDelete = useCallback(
-    (options: { reattachChildren: boolean }) => {
-      if (!pendingDelete) return
-      const isFrameworkDelete = pendingDelete.isFrameworkDelete
-      deleteElements({
-        nodeIds: pendingDelete.nodeIds,
-        edgeIds: pendingDelete.edgeIds,
-        reattachChildren: isFrameworkDelete ? false : options.reattachChildren,
-      })
-      pendingDelete.resolve(false) // we perform the deletion ourselves
-      setPendingDelete(null)
-      if (isFrameworkDelete) onBack?.()
+  const confirmAction = useCallback(
+    async (options: { reattachChildren: boolean }) => {
+      if (!pendingAction) return
+      const isArchive = pendingAction.isFrameworkArchive
+
+      if (isArchive) {
+        // Archive on the server first, then navigate home
+        if (onArchiveFramework) {
+          setArchiving(true)
+          try {
+            await onArchiveFramework()
+          } catch (err) {
+            console.error('[EditorCanvas] Failed to archive framework:', err)
+            setArchiving(false)
+            pendingAction.resolve(false)
+            setPendingAction(null)
+            return
+          }
+          setArchiving(false)
+        }
+        pendingAction.resolve(false)
+        setPendingAction(null)
+        // Navigation is handled by onArchiveFramework callback
+      } else {
+        // Local item removal
+        deleteElements({
+          nodeIds: pendingAction.nodeIds,
+          edgeIds: pendingAction.edgeIds,
+          reattachChildren: options.reattachChildren,
+        })
+        pendingAction.resolve(false)
+        setPendingAction(null)
+      }
     },
-    [pendingDelete, deleteElements, onBack],
+    [pendingAction, deleteElements, onArchiveFramework],
   )
 
   const ensureNodeVisible = useCallback(
@@ -652,18 +673,37 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onCreate={confirmAddItem}
       />
 
-      <ConfirmDeleteDialog
-        open={Boolean(pendingDelete)}
-        nodeCount={pendingDelete?.nodeCount ?? 0}
-        itemCount={pendingDelete?.itemCount ?? 0}
-        childItemCount={pendingDelete?.childItemCount ?? 0}
-        reattachChildren={pendingDelete?.reattachChildren ?? true}
-        isFrameworkDelete={pendingDelete?.isFrameworkDelete ?? false}
-        onReattachChildrenChange={(value) =>
-          setPendingDelete((pd) => (pd ? { ...pd, reattachChildren: value } : pd))
+      <ConfirmActionDialog
+        open={Boolean(pendingAction)}
+        title={
+          pendingAction?.isFrameworkArchive
+            ? 'Archive this framework?'
+            : 'Remove selected items?'
         }
-        onCancel={closeDeleteDialog}
-        onConfirm={(options) => confirmDelete({ reattachChildren: options.reattachChildren })}
+        description={
+          pendingAction?.isFrameworkArchive
+            ? 'This will archive the framework on the server. It can be restored later by an administrator.'
+            : 'This will remove the selected items from the canvas.'
+        }
+        confirmLabel={
+          archiving
+            ? 'Archiving\u2026'
+            : pendingAction?.isFrameworkArchive
+              ? 'Archive framework'
+              : 'Remove'
+        }
+        showReattach={!pendingAction?.isFrameworkArchive && (pendingAction?.itemCount ?? 0) > 0}
+        reattachChildren={pendingAction?.reattachChildren ?? true}
+        reattachLabel={
+          (pendingAction?.childItemCount ?? 0) > 0
+            ? `Keep the framework connected by attaching ${pendingAction?.childItemCount} child item${(pendingAction?.childItemCount ?? 0) === 1 ? '' : 's'} to the removed item\u2019s parent`
+            : 'Keep the framework connected by attaching child items to the removed item\u2019s parent'
+        }
+        onReattachChildrenChange={(value) =>
+          setPendingAction((pd) => (pd ? { ...pd, reattachChildren: value } : pd))
+        }
+        onCancel={closeActionDialog}
+        onConfirm={(options) => void confirmAction({ reattachChildren: options.reattachChildren })}
       />
 
       <ConfirmLeaveDialog

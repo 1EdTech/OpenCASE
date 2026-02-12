@@ -6,40 +6,30 @@ import { Label } from '@/ui/shared/components/ui/label'
 
 type Props = {
   open: boolean
-  nodeCount: number
-  itemCount: number
-  childItemCount: number
-  reattachChildren: boolean
-  onReattachChildrenChange: (value: boolean) => void
+  title: string
+  description: string
+  confirmLabel: string
+  /** Optional reattach-children checkbox (only shown for item removal) */
+  showReattach?: boolean
+  reattachChildren?: boolean
+  reattachLabel?: string
+  onReattachChildrenChange?: (value: boolean) => void
   onCancel: () => void
   onConfirm: (options: { reattachChildren: boolean }) => void
-  isFrameworkDelete?: boolean
 }
 
-export default function ConfirmDeleteDialog({
+export default function ConfirmActionDialog({
   open,
-  nodeCount,
-  itemCount,
-  childItemCount,
-  reattachChildren,
+  title,
+  description,
+  confirmLabel,
+  showReattach,
+  reattachChildren = true,
+  reattachLabel,
   onReattachChildrenChange,
   onCancel,
   onConfirm,
-  isFrameworkDelete,
 }: Readonly<Props>) {
-  const title = isFrameworkDelete ? 'Delete this framework?' : nodeCount === 1 ? 'Delete this item?' : `Delete ${nodeCount} items?`
-  const description = isFrameworkDelete
-    ? 'This will delete the framework and all of its items. This action cannot be undone.'
-    : nodeCount === 1
-      ? 'This will remove it from the framework.'
-      : 'This will remove the selected items from the framework.'
-
-  const showReattach = !isFrameworkDelete && itemCount > 0
-  let reattachLabel = 'Keep the framework connected by attaching child items to the deleted item’s parent'
-  if (childItemCount > 0) {
-    reattachLabel = `Keep the framework connected by attaching ${childItemCount} child item${childItemCount === 1 ? '' : 's'} to the deleted item’s parent`
-  }
-
   return (
     <Dialog
       open={open}
@@ -53,7 +43,7 @@ export default function ConfirmDeleteDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
-        {showReattach ? (
+        {showReattach && reattachLabel && onReattachChildrenChange ? (
           <div className="rounded-xl border border-black/10 bg-slate-900/2 p-3">
             <div className="flex items-start gap-3">
               <Checkbox
@@ -80,14 +70,13 @@ export default function ConfirmDeleteDialog({
           <Button
             variant="destructive"
             onClick={() => {
-              onConfirm({ reattachChildren })
+              onConfirm({ reattachChildren: reattachChildren ?? true })
             }}
           >
-            {isFrameworkDelete ? 'Delete framework' : 'Delete'}
+            {confirmLabel}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
-

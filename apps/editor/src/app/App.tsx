@@ -120,6 +120,24 @@ function AppInner() {
     }
   }, [activeFrameworkId])
 
+  /** Remove a framework from localStorage (used after archive or hard delete) */
+  const removeFrameworkFromStorage = useCallback((docId: string) => {
+    setFrameworks((prev) => {
+      const next = prev.filter((f) => f.id !== docId)
+      saveFrameworks(next)
+      return next
+    })
+    setPublishedFrameworkIds((prev) => {
+      const next = new Set(prev)
+      next.delete(docId)
+      return next
+    })
+    if (activeFrameworkId === docId) {
+      setActiveFrameworkId(null)
+      setScreen('home')
+    }
+  }, [activeFrameworkId])
+
   const createNew = useCallback((draft: CreateFrameworkDraft) => {
     const fw = createNewFrameworkDraft(draft)
     setFrameworks((prev) => {
@@ -227,6 +245,20 @@ function AppInner() {
   // Determine CASE API version for requests
   const caseApiVersion: 'v1p0' | 'v1p1' = activeCaseVersion === '1.0' ? 'v1p0' : 'v1p1'
 
+  // Handler to archive the active framework on the server
+  // Must be defined before early returns (React hooks rules)
+  const handleArchiveFramework = useCallback(async () => {
+    if (!tenantId || !activeFrameworkId) {
+      throw new Error('Not signed in or no active framework')
+    }
+    await api.deleteCfPackage({
+      tenantId,
+      docId: activeFrameworkId,
+      caseVersion: caseApiVersion,
+    })
+    removeFrameworkFromStorage(activeFrameworkId)
+  }, [api, tenantId, activeFrameworkId, caseApiVersion, removeFrameworkFromStorage])
+
   // Handler to save the CFPackage to the server
   // Must be defined before early returns (React hooks rules)
   const handleSaveToServer = useCallback(
@@ -290,6 +322,7 @@ function AppInner() {
       onOpenFramework={openFramework}
       onOpenRemoteFramework={openRemoteFramework}
       onDeleteDraft={deleteDraft}
+      onRemoveFromStorage={removeFrameworkFromStorage}
       remoteOpenLoading={remoteOpenState === 'loading'}
       onCreateNew={createNew}
     />
@@ -317,6 +350,7 @@ function AppInner() {
         }}
         onSaveToServer={tenantId ? handleSaveToServer : undefined}
         isPublishedToOpenCase={activeFrameworkId ? publishedFrameworkIds.has(activeFrameworkId) : false}
+        onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
       />
     </EditorProvider>
   )

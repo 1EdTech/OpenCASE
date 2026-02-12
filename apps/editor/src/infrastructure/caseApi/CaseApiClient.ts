@@ -102,24 +102,28 @@ export class CaseApiClient {
   }
 
   /**
-   * Delete (archive) a CFPackage on the server.
+   * Delete (archive) or permanently delete a CFPackage on the server.
    * 
    * Uses the management endpoint: DELETE /management/tenants/{tenantId}/ims/case/{version}/CFPackages/{docId}
-   * By default, OpenCASE will archive the framework rather than hard delete it.
+   * By default, OpenCASE will archive (soft-delete) the framework.
+   * Pass `hardDelete: true` to permanently remove it.
    * 
    * @param params.tenantId - The tenant ID
    * @param params.docId - The document/framework identifier to delete
    * @param params.caseVersion - The CASE version (v1p0 or v1p1), defaults to v1p1
+   * @param params.hardDelete - If true, permanently deletes the framework (default: false = archive)
    */
   async deleteCfPackage(params: {
     tenantId: string
     docId: string
     caseVersion?: 'v1p0' | 'v1p1'
+    hardDelete?: boolean
   }): Promise<void> {
     const v = params.caseVersion ?? 'v1p1'
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages/${encodeURIComponent(params.docId)}`
+    const query = params.hardDelete ? '?hardDelete=true' : ''
     
-    await this._http.delete(url)
+    await this._http.delete(`${url}${query}`)
   }
 
   /**
@@ -161,11 +165,12 @@ export class CaseApiClient {
    * Uses the standard CASE endpoint: GET /ims/case/{version}/CFDocuments
    * Returns a list of document summaries without full item/association data.
    */
-  async listCfDocuments(params?: { caseVersion?: 'v1p0' | 'v1p1'; limit?: number; offset?: number }): Promise<CfDocumentSummary[]> {
+  async listCfDocuments(params?: { caseVersion?: 'v1p0' | 'v1p1'; limit?: number; offset?: number; includeArchived?: boolean }): Promise<CfDocumentSummary[]> {
     const v = params?.caseVersion ?? 'v1p1'
     const queryParams = new URLSearchParams()
     if (params?.limit != null) queryParams.set('limit', String(params.limit))
     if (params?.offset != null) queryParams.set('offset', String(params.offset))
+    if (params?.includeArchived) queryParams.set('includeArchived', 'true')
 
     const query = queryParams.toString()
     const url = `/ims/case/${v}/CFDocuments${query ? `?${query}` : ''}`
