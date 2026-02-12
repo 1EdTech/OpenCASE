@@ -8,7 +8,8 @@
     "start": "node dist/main.js",
     "dev": "ts-node-dev --respawn src/main.ts",
     "lint": "eslint .",
-    "test": "jest --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
     "import-framework": "ts-node src/application/cli/import-framework.ts"
   },
   "author": "",

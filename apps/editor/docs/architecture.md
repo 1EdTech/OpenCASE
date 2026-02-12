@@ -1,281 +1,233 @@
-# Architecture & Project Instructions (DDD + Clean Architecture)
+# Architecture & Project Guide
 
 ## What this project is
 
-This repository is an **open-source editor for 1EdTech CASE frameworks**. It supports creating and editing a framework (CFDocument), its items (CFItem), and associations (CFAssociation), using a **draft → publish** lifecycle. It intentionally focuses on core authoring capabilities and is not intended to compete with commercial CASE products.
+An **open-source editor for 1EdTech CASE frameworks**. You can create and edit frameworks (CFDocument), items (CFItem), and associations (CFAssociation) through a visual canvas, with a **draft → publish** workflow. It's deliberately focused on core authoring — not trying to replace commercial CASE tools.
 
-The UI is a **canvas-first framework editor** using **React Flow**. The CASE model is treated as a **graph** (items + associations); the “tree” is a particular visualization of that graph.
+Under the hood, the CASE model is treated as a **graph** (items + associations). The canvas you see in the UI is just one way to visualise that graph — the domain model is what matters.
 
 ## Tech stack
 
-* React + TypeScript (Vite)
+* React 19 + TypeScript (Vite)
 * Tailwind CSS v4
 * shadcn/ui components
 * React Flow (`@xyflow/react`)
+* Vitest (unit testing)
+* oidc-client-ts (authentication)
 
 ---
 
 ## Architectural goals (non-negotiables)
 
-1. **Domain model is the source of truth**
-   The domain representation of a framework (items + associations) is authoritative.
+These are the principles we don't bend on:
 
-2. **React Flow is a projection of the domain graph**
-   React Flow nodes/edges are derived from the domain model. They are not the canonical data model.
+1. **Domain model is the source of truth** — The domain representation of a framework (items + associations) is authoritative.
 
-3. **All user interactions become application commands**
-   UI events (edit node, add child, connect nodes, delete edge) must translate to commands handled by the application layer.
+2. **React Flow is a projection of the domain graph** — React Flow nodes/edges are derived from the domain model. They're not the canonical data.
 
-4. **Clean architecture dependency direction**
+3. **All user interactions become application commands** — UI events (edit node, add child, connect, delete) must translate to commands handled by the application layer.
 
-* `domain` has no dependencies on React, React Flow, APIs, or storage
-* `application` depends on `domain`
-* `infrastructure` implements interfaces defined by `application`
-* `ui` depends on `application` (and uses `infrastructure` through composition)
+4. **Clean architecture dependency direction** — Dependencies always point inward:
+   * `domain` has no dependencies on React, React Flow, APIs, or storage
+   * `application` depends on `domain`
+   * `infrastructure` implements interfaces defined by `application`
+   * `ui` depends on `application` (and uses `infrastructure` through composition)
 
 ---
 
 ## Folder structure
 
-This structure is intended to keep the mapping between domain graph and React Flow graph explicit and testable.
+Pure logic (reducer, layout algorithms, geometry) is isolated from React so it can be tested and reasoned about independently.
 
 ```
 src
 ├── app
-│   ├── App.tsx
+│   ├── App.tsx                     # App shell — topology detection + pre-render layout
 │   ├── main.tsx
-│   ├── providers
-│   └── routes
+│   └── providers/
 
 ├── domain
-│   ├── framework
-│   │   ├── model
-│   │   │   ├── Framework.ts
-│   │   │   ├── Item.ts
-│   │   │   ├── Association.ts
-│   │   │   └── types.ts
-│   │   ├── services
-│   │   │   ├── FrameworkValidator.ts
-│   │   │   └── DraftPolicy.ts
-│   │   └── index.ts
-│   └── shared
-│       ├── Result.ts
-│       ├── errors.ts
-│       └── types.ts
+│   └── framework/
+│       └── model/                  # Framework, Item, Association entities
 
 ├── application
-│   ├── framework
-│   │   ├── commands
-│   │   │   ├── AddItem.ts
-│   │   │   ├── UpdateItem.ts
-│   │   │   ├── RemoveItem.ts
-│   │   │   ├── AddAssociation.ts
-│   │   │   ├── RemoveAssociation.ts
-│   │   │   └── PublishFramework.ts
-│   │   ├── ports
-│   │   │   ├── FrameworkRepository.ts
-│   │   │   └── IdGenerator.ts
-│   │   ├── mappers
-│   │   │   ├── CaseDtoMapper.ts
-│   │   │   └── CaseTypes.ts
-│   │   └── index.ts
-│   └── shared
-│       └── CommandBus.ts
+│   └── framework/
+│       ├── mappers/                # Domain ↔ CASE JSON DTO mapping
+│       └── ports/                  # Repository / ID generator interfaces
 
 ├── infrastructure
-│   ├── caseApi
-│   │   ├── CaseApiClient.ts
-│   │   ├── CaseFrameworkRepository.ts
-│   │   └── http.ts
-│   ├── persistence
-│   │   └── DraftLocalCache.ts
-│   └── index.ts
+│   └── caseApi/
+│       ├── CaseApiClient.ts        # HTTP client for CASE API
+│       └── http.ts                 # Fetch-based HTTP client
 
 ├── ui
 │   ├── editor
-│   │   ├── EditorPage.tsx
-│   │   ├── components
-│   │   │   ├── Canvas.tsx
-│   │   │   ├── TopBar.tsx
-│   │   │   ├── NodePropertiesPanel.tsx
-│   │   │   ├── PublishDialog.tsx
-│   │   │   └── ConfirmLeaveFrameworkDialog.tsx
-│   │   ├── reactflow
-│   │   │   ├── nodeTypes
-│   │   │   │   ├── CaseItemNode.tsx
-│   │   │   │   └── index.ts
-│   │   │   ├── edgeTypes
-│   │   │   │   ├── CaseAssociationEdge.tsx
-│   │   │   │   └── index.ts
-│   │   │   ├── mapping
-│   │   │   │   ├── toReactFlow.ts
-│   │   │   │   ├── fromReactFlow.ts
-│   │   │   │   ├── layout
-│   │   │   │   │   ├── dagreLayout.ts
-│   │   │   │   │   └── elkLayout.ts
-│   │   │   │   └── types.ts
-│   │   │   └── interactions
-│   │   │       ├── onNodesChange.ts
-│   │   │       ├── onEdgesChange.ts
-│   │   │       └── onConnect.ts
-│   │   ├── state
-│   │   │   ├── FrameworkEditorContext.tsx
-│   │   │   ├── reducer.ts
-│   │   │   └── selectors.ts
-│   │   └── terminology
+│   │   ├── components/             # Canvas, header, dialogs
+│   │   ├── reactflow/
+│   │   │   ├── nodeTypes/          # CaseItemNode, CaseFrameworkNode
+│   │   │   ├── edgeTypes/          # LabeledEdge
+│   │   │   ├── mapping/
+│   │   │   │   ├── toReactFlow.ts  # Domain → React Flow nodes/edges
+│   │   │   │   └── fromEditorGraph.ts  # React Flow → Domain + layout
+│   │   │   └── types.ts           # CaseEditorNodeType, CaseEditorEdge, CaseEdgeData
+│   │   ├── state/
+│   │   │   ├── EditorContext.tsx   # React provider (orchestration only)
+│   │   │   ├── editorReducer.ts   # Pure state reducer (no React dependency)
+│   │   │   ├── editorFactories.ts # Node/edge factory helpers
+│   │   │   └── helpers/
+│   │   │       └── nodeGeometry.ts # Pure geometry, type guards, adjacency
+│   │   ├── layout/
+│   │   │   ├── detectTopology.ts       # Classify graph as hierarchy/star/tree
+│   │   │   ├── applyInitialLayout.ts   # Pre-render layout orchestrator
+│   │   │   ├── hierarchyLayout.ts      # Flat column layout (smoothstep)
+│   │   │   ├── starLayout.ts           # Elliptical radial layout (bezier)
+│   │   │   └── treeLayout.ts           # Recursive tree-spread layout (bezier)
+│   │   └── terminology/
 │   │       ├── lens.ts
 │   │       └── strings.ts
-│   └── shared
-│       ├── components
-│       │   └── ui
-│       ├── hooks
-│       └── utils
+│   ├── home/                       # Home screen, framework cards, import dialog
+│   └── shared/
+│       ├── components/ui/          # shadcn/ui primitives
+│       └── hooks/
 
-├── styles
+├── __tests__
+│   └── fixtures.ts                 # Reusable mock factories for tests
+
+├── styles/
 │   └── index.css
 
-└── lib
+└── lib/
     └── utils.ts
 ```
 
-### Moving existing files (current repo)
-
-* `src/App.tsx` → `src/app/App.tsx`
-* `src/main.tsx` → `src/app/main.tsx`
-* `src/NodePropertiesPanel.tsx` → `src/ui/editor/components/NodePropertiesPanel.tsx`
-* `src/TextUpdaterNode.tsx` → `src/ui/editor/reactflow/nodeTypes/CaseItemNode.tsx` (rename)
-* `src/components/ui/*` → `src/ui/shared/components/ui/*` (shadcn)
-* `src/index.css` → `src/styles/index.css` (optional)
-* `src/lib/utils.ts` stays
-
 ---
 
-## Domain model rules (how we represent CASE in code)
+## Domain model
 
-Treat CASE as a **graph**:
+We treat CASE as a **graph**:
 
 * `Item` = node (`CFItem`)
 * `Association` = edge (`CFAssociation`)
 * `Framework` = aggregate root owning items + associations (`CFDocument` + supporting structures)
 
-**Important:** The domain model does not depend on React Flow types or UI concerns.
+The domain model has no knowledge of React Flow, the UI, or any external system.
 
 ---
 
-## Mapping rules: Domain graph ↔ React Flow graph (critical)
+## Domain ↔ React Flow mapping
 
-The mapping code is intentionally centralized in:
+This is the most important boundary in the codebase. The mapping code is intentionally centralised in two files:
 
-* `src/ui/editor/reactflow/mapping/toReactFlow.ts`
-* `src/ui/editor/reactflow/mapping/fromReactFlow.ts`
+* `src/ui/editor/reactflow/mapping/toReactFlow.ts` — Domain → React Flow
+* `src/ui/editor/reactflow/mapping/fromEditorGraph.ts` — React Flow → Domain
 
-### Rule 1: Domain → React Flow is derived
+**How it works:**
 
-React Flow nodes/edges should be built from the domain `Framework`:
-
-* `Item → ReactFlowNode`
-* `Association → ReactFlowEdge`
-
-### Rule 2: UI changes must become commands
-
-React Flow events should not mutate “React Flow state as truth”.
-
-Instead:
-
-* User drags/edits/connects
-* UI converts that action into an **application command**
-* Application layer updates the domain model
-* UI re-renders by re-projecting domain → React Flow
-
-### Rule 3: Layout is separate from domain data
-
-Layout (x,y positions) is a UI concern.
-
-* Store layout in UI state or a separate persistence layer
-* Do not mix layout into domain entities unless explicitly decided and documented
+1. **Domain → React Flow is derived** — React Flow nodes/edges are built from the domain `Framework` (Item → Node, Association → Edge).
+2. **UI changes become commands** — When a user drags, edits, or connects something, the UI translates that into an application command. The command updates the domain model, and the UI re-renders by re-projecting the domain.
+3. **Layout is separate** — Positions (x, y) are a UI concern. They're stored in UI state, not in domain entities.
 
 ---
 
-## Application layer rules
+## State management
 
-Commands define the user-intent operations. Examples:
+Editor state uses a **pure reducer** pattern, cleanly separated from React:
 
-* `AddItem`
-* `UpdateItem`
-* `RemoveItem`
-* `AddAssociation`
-* `RemoveAssociation`
+### Pure modules (no React dependency)
+
+* **`state/editorReducer.ts`** — A single pure function that handles all state transitions: selection, CRUD, layout, connections, graph loading, etc.
+* **`state/helpers/nodeGeometry.ts`** — Geometry utilities (sizing, handles, overlap detection), type guards, and graph adjacency builders.
+* **`state/editorFactories.ts`** — Factory functions for items, documents, edges, and graph structures.
+
+### Layout algorithms (also pure)
+
+* **`layout/detectTopology.ts`** — Looks at a graph's shape and classifies it as `hierarchy`, `star`, or `tree`.
+* **`layout/hierarchyLayout.ts`** — Vertical column: framework at top, items stacked below. Smoothstep edges.
+* **`layout/starLayout.ts`** — Radial: framework at centre, branches fan out in angular sectors. Bezier edges.
+* **`layout/treeLayout.ts`** — Recursive horizontal tree-spread. Bezier edges.
+* **`layout/applyInitialLayout.ts`** — Pre-render orchestrator. Detects topology and applies layout *before* the first React Flow render, so there's no visible jump.
+
+### React orchestration
+
+* **`state/EditorContext.tsx`** — A thin React provider. It imports the reducer and layout functions, wires them up with hooks, and exposes the `EditorContext` API. Business logic stays out.
+
+---
+
+## Application layer
+
+Commands define what a user can do:
+
+* `AddItem`, `UpdateItem`, `RemoveItem`
+* `AddAssociation`, `RemoveAssociation`
 * `PublishFramework`
 
-Command handlers:
-
-* validate inputs
-* enforce domain invariants (e.g., no illegal association types)
-* update the domain model
-* call repository ports as needed
+Command handlers validate inputs, enforce domain invariants, update the model, and call repository ports as needed.
 
 ---
 
-## Infrastructure rules
+## Infrastructure
 
-Infrastructure implements interfaces defined in `application/ports`:
+Implements the interfaces defined in `application/ports`:
 
-* `FrameworkRepository` (load/save/publish)
-* `IdGenerator` (GUID/URI generator)
-
-Infrastructure may include:
-
-* HTTP client for your CASE API
-* local draft cache (optional)
-* serialization/deserialization between domain and CASE JSON DTOs
+* `FrameworkRepository` — load/save/publish
+* `IdGenerator` — GUID/URI generation
+* HTTP client for the CASE API
+* Serialisation between domain objects and CASE JSON DTOs
 
 ---
 
-## UI rules (React + shadcn + Tailwind)
+## UI layer
 
-### UI responsibilities
-
-* Render the canvas editor (React Flow)
-* Provide panels/dialogs for editing properties
-* Translate UI events → commands
-* Display draft status and explicit publishing flow
-* Apply terminology “lens” (K-12 / HE / Workforce)
-
-### Terminology lens
-
-Terminology mapping must be in `ui/editor/terminology/*` and should not leak into domain.
-Example: show “Standard” vs “Skill” label depending on lens, but store a consistent domain item type.
+* Renders the canvas editor (React Flow)
+* Provides panels and dialogs for editing properties
+* Translates UI events → commands
+* Shows draft status and the explicit publishing flow
+* Applies a **terminology lens** (K-12 / HE / Workforce) — UI labels adapt to context without touching the domain
 
 ---
 
-## Draft vs Publish behavior (required)
+## Draft → Publish workflow
 
-* All edits occur in a **draft state**
+* All edits happen in a **draft state**
 * Switching frameworks discards the draft (with a warning)
-* Publishing is an explicit action:
-
-  * show a summary of changes
-  * optionally capture release notes
-  * call `PublishFramework` command
+* Publishing is explicit: review changes, optionally add notes, then publish
 
 ---
 
-## Conventions for contributors
+## Testing
 
-* If you need a new concept:
+All pure modules have unit tests (Vitest, jsdom). Tests live alongside the code they cover (`*.test.ts`), with shared fixtures in `src/__tests__/fixtures.ts`.
 
-  * Add it in `domain` if it’s business meaning
-  * Add it in `application` if it’s a use-case/command
-  * Add it in `ui` if it’s presentation
-  * Add it in `infrastructure` only to integrate external systems
-* If you are changing how nodes/edges render:
+```bash
+npm run test         # Single run
+npm run test:watch   # Watch mode
+```
 
-  * Prefer changing node/edge components in `ui/editor/reactflow/*`
-  * Keep mapping logic centralized in `mapping/*`
+If you're adding a new reducer action or layout algorithm, please add tests to go with it.
 
 ---
 
-## Why the mapping is emphasized
+## Contributing
 
-CASE frameworks are inherently items + associations (a graph). Even if the current UX displays a tree, future features (crosswalks, alignment links, references) will require edges that aren’t purely hierarchical. Designing the mapping cleanly now prevents a re-architecture later.
+Where to put things:
 
+* **Business meaning** → `domain/`
+* **Use-case or command** → `application/`
+* **Presentation** → `ui/`
+* **External integrations** → `infrastructure/`
+
+If you're working on **nodes/edges**:
+* Change components in `ui/editor/reactflow/*`
+* Keep mapping logic in `mapping/*`
+
+If you're adding **state logic**:
+* Add new actions to the `Action` union in `editorReducer.ts`
+* Handle them in the reducer (keep it pure)
+* Keep `EditorContext.tsx` as a thin orchestrator
+* Write tests
+
+---
+
+## Why the mapping matters
+
+CASE frameworks are inherently items + associations — a graph. Even though the current UI mostly shows a tree, future features (crosswalks, alignment links, references) will need edges that aren't purely hierarchical. Getting the mapping right now avoids a painful re-architecture later.

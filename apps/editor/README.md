@@ -1,16 +1,85 @@
-# React + Vite
+# CASE Editor
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A visual, canvas-based editor for creating and managing [1EdTech CASE](https://www.imsglobal.org/activity/case) frameworks. Think of it as a graph editor for competency standards — you work with items and associations on a React Flow canvas, with a domain model underneath that keeps everything honest.
 
-Currently, two official plugins are available:
+Built with DDD + Clean Architecture principles, so the domain logic stays completely separate from the UI.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Getting Started
 
-## React Compiler
+```bash
+npm install --include=dev
+npm run dev          # http://localhost:5173
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Or run the full stack (Editor + API + Auth) via Docker from the monorepo root — see the [main README](../../README.md).
 
-## Expanding the ESLint configuration
+## Commands
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm run dev          # Vite dev server with HMR
+npm run build        # Production build
+npm run lint         # ESLint
+npm run test         # Unit tests (single run)
+npm run test:watch   # Unit tests (watch mode)
+```
+
+## How It's Organised
+
+```
+src/
+├── domain/            # CASE entities — no external dependencies
+├── application/       # Use-cases, mappers, ports
+├── infrastructure/    # API clients, HTTP, persistence
+├── ui/                # React components, state, layout
+└── app/               # App shell, providers, routing
+```
+
+Dependencies flow inward: `domain ← application ← infrastructure ← ui`
+
+### State Management
+
+Editor state uses a **pure reducer** pattern. The reducer and all its helpers have zero React dependencies, which makes them straightforward to test and reason about.
+
+- `state/EditorContext.tsx` — Thin React provider that wires the reducer to hooks. Orchestration only, no business logic.
+- `state/editorReducer.ts` — Pure reducer handling all state transitions (selection, CRUD, layout, connect, delete, etc.)
+- `state/helpers/nodeGeometry.ts` — Geometry utilities, type guards, graph adjacency builders
+- `state/editorFactories.ts` — Factory functions for items, documents, edges, and graph structures
+
+### Layout Algorithms
+
+Three auto-layout modes, all pure functions with no side effects:
+
+| Layout | When to use | Edge style |
+|--------|------------|-----------|
+| **Hierarchy** | Flat lists — many items at one level | smoothstep |
+| **Star** | Radial — framework at centre, branches fan out | bezier |
+| **Tree** | General purpose — recursive horizontal spread | bezier |
+
+The editor auto-detects which layout suits a framework when no saved positions exist, and applies it *before* the first render (so there's no visible jump).
+
+- `layout/detectTopology.ts` — Classifies the graph shape
+- `layout/applyInitialLayout.ts` — Pre-render orchestrator
+
+### React Flow Mapping
+
+The CASE domain model (Framework, Item, Association) is the source of truth. React Flow is a derived projection:
+
+- `reactflow/mapping/toReactFlow.ts` — Domain → React Flow
+- `reactflow/mapping/fromEditorGraph.ts` — React Flow → Domain + layout
+
+## Testing
+
+```bash
+npm run test
+```
+
+The test suite covers all the pure modules — reducer, layout algorithms, geometry helpers, topology detection, and factories. Tests live alongside the code they cover (`*.test.ts`), with shared fixtures in `src/__tests__/fixtures.ts`.
+
+## Tech Stack
+
+- **React 19** + TypeScript
+- **Vite** (build + dev server)
+- **Tailwind CSS v4** + shadcn/ui
+- **@xyflow/react** (React Flow)
+- **Vitest** (testing)
+- **oidc-client-ts** (authentication)

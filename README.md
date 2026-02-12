@@ -1,9 +1,9 @@
 # OpenCASE Monorepo
 
-A monorepo containing the full CASE (Competencies & Academic Standards Exchange) development stack:
+An open-source toolkit for working with [1EdTech CASE](https://www.imsglobal.org/activity/case) (Competencies & Academic Standards Exchange) frameworks:
 
-- **OpenCASE** (`apps/opencase`) - Reference implementation of a 1EdTech CASE Provider API
-- **Editor** (`apps/editor`) - Visual canvas-based framework editor using React Flow
+- **OpenCASE** (`apps/opencase`) — A multi-tenant CASE Provider API (Node.js/Express)
+- **Editor** (`apps/editor`) — A visual canvas-based framework editor (React + React Flow)
 
 ## Quick Start
 
@@ -146,27 +146,68 @@ Traefik routes requests based on path:
 
 See `env.example` for available environment variables. Copy it to `.env` to customize:
 
+## Testing
+
+### Editor (`apps/editor`)
+
+```bash
+cd apps/editor
+npm run test          # Single run
+npm run test:watch    # Watch mode
+```
+
+Tests cover the pure domain and layout logic — reducer, geometry helpers, layout algorithms, topology detection, and factories. See the [Editor README](apps/editor/README.md) for details.
+
+### OpenCASE (`apps/opencase`)
+
+```bash
+cd apps/opencase
+npm run test          # Single run
+npm run test:watch    # Watch mode
+```
+
 ## Project Structure
 
 ```
 monorepo/
-├── docker-compose.yml      # Production-like environment
-├── docker-compose.dev.yml  # Dev overrides (hot-reload)
-├── env.example             # Environment variable template
-├── README.md               # This file
+├── docker-compose.yml        # Production-like environment
+├── docker-compose.dev.yml    # Dev overrides (hot-reload)
+├── env.example               # Environment variable template
+├── AGENTS.md                 # AI assistant guidance
+├── README.md                 # This file
 └── apps/
-    ├── editor/             # React frontend
-    │   ├── Dockerfile      # Vite dev server container
-    │   ├── src/            # Source code (mounted for hot-reload)
+    ├── editor/               # React frontend
+    │   ├── Dockerfile
+    │   ├── src/
+    │   │   ├── app/          # App shell, providers, routing
+    │   │   ├── domain/       # CASE entities (Framework, Item, Association)
+    │   │   ├── application/  # Use-cases, mappers, ports
+    │   │   ├── infrastructure/ # API clients, persistence
+    │   │   └── ui/
+    │   │       ├── editor/
+    │   │       │   ├── state/          # EditorContext (React provider)
+    │   │       │   │   ├── helpers/    # Pure geometry & adjacency utils
+    │   │       │   │   ├── editorReducer.ts  # Pure state reducer
+    │   │       │   │   └── editorFactories.ts
+    │   │       │   ├── layout/         # Pure layout algorithms
+    │   │       │   │   ├── hierarchyLayout.ts
+    │   │       │   │   ├── starLayout.ts
+    │   │       │   │   ├── treeLayout.ts
+    │   │       │   │   ├── detectTopology.ts
+    │   │       │   │   └── applyInitialLayout.ts
+    │   │       │   ├── reactflow/      # React Flow types, mapping, components
+    │   │       │   └── components/     # Canvas, header, dialogs
+    │   │       └── home/               # Home screen, framework cards
     │   └── ...
-    └── opencase/           # Node.js backend
-        ├── Dockerfile      # Production build container
-        ├── Dockerfile.dev  # Dev container (ts-node-dev)
-        ├── data/           # Persisted framework data
+    └── opencase/             # Node.js backend
+        ├── Dockerfile
+        ├── Dockerfile.dev
+        ├── data/             # Persisted framework data
         └── ...
 ```
 
-## Individual App Documentation
+## Learn More
 
-- [OpenCASE README](apps/opencase/README.md) - Backend API documentation
-- [Editor Architecture](apps/editor/docs/architecture.md) - Frontend architecture guide
+- [Editor README](apps/editor/README.md) — How the frontend works
+- [Editor Architecture](apps/editor/docs/architecture.md) — Design decisions, folder structure, contributing guide
+- [OpenCASE README](apps/opencase/README.md) — Backend API documentation
