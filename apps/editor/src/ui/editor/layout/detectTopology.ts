@@ -1,5 +1,5 @@
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
-import type { CaseEditorNodeType } from '@/ui/editor/reactflow/types'
+import { buildAdjacency, isFrameworkNode } from '@/ui/editor/state/helpers/nodeGeometry'
 
 export type Topology = 'hierarchy' | 'star' | 'tree'
 
@@ -17,18 +17,11 @@ export function detectTopology(graph: EditorGraph): Topology {
   const { nodes, edges } = graph
 
   // Find the framework node
-  const frameworkNode = nodes.find(
-    (n): n is CaseEditorNodeType => n.type === 'caseFrameworkNode',
-  )
+  const frameworkNode = nodes.find(isFrameworkNode)
   if (!frameworkNode) return 'tree'
 
   // Build parent → children adjacency from visual edges
-  const childrenOf = new Map<string, string[]>()
-  for (const e of edges) {
-    const kids = childrenOf.get(e.source) ?? []
-    kids.push(e.target)
-    childrenOf.set(e.source, kids)
-  }
+  const { childrenOf } = buildAdjacency(edges)
 
   // Start nodes: direct children of the framework
   const startNodeIds = childrenOf.get(frameworkNode.id) ?? []
