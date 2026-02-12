@@ -64,6 +64,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     addDetachedItem,
     addExternalFramework,
     applyHierarchyLayout,
+    applyStarLayout,
   } = useEditor()
 
   const reactFlowWrapRef = useRef<HTMLDivElement | null>(null)
@@ -567,6 +568,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         }
         onOpenSettings={() => setSettingsOpen(true)}
         onResetHierarchy={applyHierarchyLayout}
+        onResetStar={applyStarLayout}
       />
 
       <div ref={reactFlowWrapRef} className="h-full w-full">

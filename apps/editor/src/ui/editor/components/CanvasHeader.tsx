@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
-import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon } from '@heroicons/react/24/solid'
+import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
 
 type MenuItem = {
@@ -185,6 +185,7 @@ export default function CanvasHeader({
   onSignOut,
   onOpenSettings,
   onResetHierarchy,
+  onResetStar,
 }: {
   frameworkTitle: string
   frameworkSubtitle?: string
@@ -206,6 +207,8 @@ export default function CanvasHeader({
   onOpenSettings?: () => void
   /** Re-layout graph in hierarchy mode (flat column below framework) */
   onResetHierarchy?: () => void
+  /** Re-layout graph in star/radial topology mode */
+  onResetStar?: () => void
 }) {
   // Build user menu items
   const userMenuItems: (MenuItem | 'divider')[] = []
@@ -310,6 +313,7 @@ export default function CanvasHeader({
               items={[
                 { label: 'Settings', icon: Cog6ToothIcon, onClick: onOpenSettings },
                 { label: 'Hierarchy layout', icon: Bars3BottomLeftIcon, onClick: onResetHierarchy, disabled: !onResetHierarchy },
+                { label: 'Star layout', icon: SparklesIcon, onClick: onResetStar, disabled: !onResetStar },
                 'divider',
                 { label: 'Help', icon: QuestionMarkCircleIcon, onClick: () => {} },
               ]}

@@ -33,6 +33,8 @@ const HEADER_SAFE_Y = 96
 const HIERARCHY_INDENT = 120  // How far right item column is offset from framework center
 const HIERARCHY_GAP_Y = 40   // Vertical gap between items in hierarchy column
 
+// Star-layout ring radii and spacing are computed dynamically inside applyStarLayout
+
 const isFrameworkNode = (n: CaseEditorNodeType): n is CaseFrameworkNodeType => n.type === 'caseFrameworkNode'
 const isItemNode = (n: CaseEditorNodeType): n is CaseItemNodeType => n.type === 'caseItemNode'
 
@@ -750,7 +752,7 @@ function reducer(state: EditorState, action: Action): EditorState {
           ...e,
           sourceHandle: h.sourceHandle,
           targetHandle: h.targetHandle,
-          data: { ...e.data, edgeType: h.edgeType ?? e.data?.edgeType, labelPosition: h.labelPosition },
+          data: { ...e.data, edgeType: h.edgeType, labelPosition: h.labelPosition },
         } as CaseEditorEdge
       })
       return { ...state, nodes: nextNodes, edges: nextEdges, layoutVersion: state.layoutVersion + 1, dirty: true }
@@ -818,6 +820,8 @@ type EditorContextValue = {
   deleteElements: (_params: { nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }) => void
   /** Re-layout the graph as a flat hierarchy: framework on top, items in a column below */
   applyHierarchyLayout: () => void
+  /** Re-layout the graph as a star/radial topology: framework at center, start nodes around it */
+  applyStarLayout: () => void
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null)
@@ -1012,7 +1016,7 @@ export function EditorProvider({
 
     // Compute positions
     const positions: Record<string, { x: number; y: number }> = {}
-    const edgeHandles: Record<string, { sourceHandle: string; targetHandle: string; edgeType?: string }> = {}
+    const edgeHandles: Record<string, { sourceHandle: string; targetHandle: string; edgeType?: string; labelPosition?: 'center' | 'target' }> = {}
 
     // Framework at top
     positions[frameworkNode.id] = { x: 0, y: HEADER_SAFE_Y }
@@ -1042,6 +1046,245 @@ export function EditorProvider({
 
     // Switch the framework-level edge style to smoothstep (persisted on next save)
     updateSettings({ ...settings, edgeType: 'smoothstep' })
+  }, [state.nodes, state.edges, settings, updateSettings])
+
+  /**
+   * Apply a star/radial layout: framework at center, start nodes on a ring
+   * around it, children on successively larger rings. Angular sectors are
+   * Radial sub-tree layout: framework at center, start nodes on a compact
+   * ring, children clustered around their parent extending outward with
+   * siblings spread tangentially. Uses bezier curves with shortest-path
+   * handle routing (bottom→top when vertically aligned).
+   */
+  const applyStarLayout = useCallback(() => {
+    const frameworkNode = state.nodes.find(isFrameworkNode)
+    if (!frameworkNode) return
+
+    const frameworkSize = getNodeSize(frameworkNode)
+    const nodeById = new Map(state.nodes.map((n) => [n.id, n]))
+
+    // ── Build parent → children adjacency ──────────────────────────────
+    const childrenOf = new Map<string, string[]>()
+    const edgeBySourceTarget = new Map<string, (typeof state.edges)[0]>()
+    for (const e of state.edges) {
+      const kids = childrenOf.get(e.source) ?? []
+      kids.push(e.target)
+      childrenOf.set(e.source, kids)
+      edgeBySourceTarget.set(`${e.source}->${e.target}`, e)
+    }
+
+    // Sort children everywhere by sequence number
+    const sortChildrenRecursive = (parentId: string) => {
+      const kids = childrenOf.get(parentId)
+      if (!kids) return
+      kids.sort((a, b) => {
+        const eA = edgeBySourceTarget.get(`${parentId}->${a}`)
+        const eB = edgeBySourceTarget.get(`${parentId}->${b}`)
+        const seqA = eA?.data?.cfAssociation?.sequenceNumber ?? eA?.data?.sequenceNumber ?? Infinity
+        const seqB = eB?.data?.cfAssociation?.sequenceNumber ?? eB?.data?.sequenceNumber ?? Infinity
+        return seqA - seqB
+      })
+      for (const kid of kids) sortChildrenRecursive(kid)
+    }
+    sortChildrenRecursive(frameworkNode.id)
+
+    const startNodeIds = childrenOf.get(frameworkNode.id) ?? []
+    if (!startNodeIds.length) return
+
+    // ── Count leaves for proportional angular allocation ───────────────
+    const leafCount = new Map<string, number>()
+    const countLeaves = (id: string): number => {
+      const kids = childrenOf.get(id) ?? []
+      if (!kids.length) { leafCount.set(id, 1); return 1 }
+      const count = kids.reduce((sum, kid) => sum + countLeaves(kid), 0)
+      leafCount.set(id, count)
+      return count
+    }
+    for (const id of startNodeIds) countLeaves(id)
+    const totalLeaves = startNodeIds.reduce((sum, id) => sum + (leafCount.get(id) ?? 1), 0)
+
+    // ── Spacing constants & recursive sub-tree span ──────────────────
+    const SIBLING_GAP = 200           // tangential gap between sibling nodes
+    const RADIAL_STEP = DEFAULT_NODE_HEIGHT + 220  // radial gap between levels (~360px)
+
+    // Recursive tangential span: how much tangential room a node's
+    // entire sub-tree needs. Used for positioning so that a child with
+    // many descendants is allocated enough space to prevent overlap.
+    const tangentialSpan = new Map<string, number>()
+    const calcSpan = (id: string): number => {
+      if (tangentialSpan.has(id)) return tangentialSpan.get(id)!
+      const n = nodeById.get(id)
+      if (!n) return DEFAULT_NODE_WIDTH
+      const { w } = getNodeSize(n)
+      const kids = childrenOf.get(id) ?? []
+      if (!kids.length) { tangentialSpan.set(id, w); return w }
+      const kidsSpan = kids.reduce((sum, kid) => sum + calcSpan(kid), 0)
+        + Math.max(0, kids.length - 1) * SIBLING_GAP
+      const span = Math.max(w, kidsSpan)
+      tangentialSpan.set(id, span)
+      return span
+    }
+    for (const id of startNodeIds) calcSpan(id)
+
+    // ── Compute ring radius and sector allocation ──────────────────────
+    // Blended sector allocation: guaranteed minimum share (half-equal)
+    // plus proportional share based on leaf count.
+    const N = startNodeIds.length
+    const minFraction = 0.5 / N
+    const propPool = 0.5
+    const getSectorAngle = (id: string) =>
+      (minFraction + ((leafCount.get(id) ?? 1) / totalLeaves) * propPool) * 2 * Math.PI
+
+    // Ellipse radii: wider than tall to match typical widescreen displays
+    // and provide more horizontal room for sub-tree clusters.
+    const ELLIPSE_ASPECT = 1.6  // width / height ratio
+    let baseRadius = 500
+    if (N > 1) {
+      const minSectorAngle = Math.min(...startNodeIds.map(getSectorAngle))
+      const halfAngle = minSectorAngle / 2
+      if (halfAngle > 0 && halfAngle < Math.PI) {
+        baseRadius = Math.max(baseRadius, (DEFAULT_NODE_WIDTH + 80) / (2 * Math.sin(halfAngle)))
+      }
+    }
+    const radiusX = baseRadius * ELLIPSE_ASPECT  // horizontal radius (wider)
+    const radiusY = baseRadius                    // vertical radius
+
+    // Helper: get the ellipse radius at a given angle
+    const ellipseRadius = (angle: number) => {
+      const cosA = Math.cos(angle)
+      const sinA = Math.sin(angle)
+      return (radiusX * radiusY) / Math.sqrt(radiusY * radiusY * cosA * cosA + radiusX * radiusX * sinA * sinA)
+    }
+
+    // ── Position framework at center ───────────────────────────────────
+    const positions: Record<string, { x: number; y: number }> = {}
+    const cx = 0
+    const cy = 0
+    positions[frameworkNode.id] = { x: cx - frameworkSize.w / 2, y: cy - frameworkSize.h / 2 }
+
+    // ── Recursive radial sub-tree positioning ──────────────────────────
+    // At the first level children are spread tangentially (perpendicular
+    // to the parent's radial direction) for reliable pixel-based spacing.
+    // Each child then receives its own angular sub-sector so its
+    // descendants fan out in a unique direction, reducing edge crossings.
+    const positionRadialChildren = (
+      parentId: string,
+      parentCX: number,
+      parentCY: number,
+      sectorStart: number,
+      sectorEnd: number,
+    ) => {
+      const kids = childrenOf.get(parentId) ?? []
+      if (!kids.length) return
+
+      const sectorMid = (sectorStart + sectorEnd) / 2
+
+      // Unit vectors: outward (radial) and tangential
+      const outX = Math.cos(sectorMid)
+      const outY = Math.sin(sectorMid)
+      const tanX = -Math.sin(sectorMid)
+      const tanY = Math.cos(sectorMid)
+
+      // Children base point: one RADIAL_STEP further from center
+      const kidBaseCX = parentCX + outX * RADIAL_STEP
+      const kidBaseCY = parentCY + outY * RADIAL_STEP
+
+      // Spread children along the tangential axis using recursive span
+      // so children with large sub-trees get proportionally more room.
+      const totalExtent = kids.reduce(
+        (sum, kid) => sum + (tangentialSpan.get(kid) ?? DEFAULT_NODE_WIDTH),
+        0,
+      ) + Math.max(0, kids.length - 1) * SIBLING_GAP
+
+      const parentLeaves = leafCount.get(parentId) ?? 1
+      let cursor = -totalExtent / 2
+      let kidAngleOffset = sectorStart
+
+      for (const kid of kids) {
+        const kidNode = nodeById.get(kid)
+        if (!kidNode) continue
+        const kidSize = getNodeSize(kidNode)
+        const span = tangentialSpan.get(kid) ?? DEFAULT_NODE_WIDTH
+        const kidTangentialOffset = cursor + span / 2
+
+        const kidCX = kidBaseCX + tanX * kidTangentialOffset
+        const kidCY = kidBaseCY + tanY * kidTangentialOffset
+
+        positions[kid] = {
+          x: Math.round(kidCX - kidSize.w / 2),
+          y: Math.round(kidCY - kidSize.h / 2),
+        }
+
+        // Each child gets an angular sub-sector proportional to its leaf count
+        const kidLeaves = leafCount.get(kid) ?? 1
+        const kidSectorAngle = (kidLeaves / parentLeaves) * (sectorEnd - sectorStart)
+
+        // Recurse with the child's own sub-sector so its descendants fan out
+        positionRadialChildren(kid, kidCX, kidCY, kidAngleOffset, kidAngleOffset + kidSectorAngle)
+        kidAngleOffset += kidSectorAngle
+        cursor += span + SIBLING_GAP
+      }
+    }
+
+    // ── Place start nodes and their sub-trees ──────────────────────────
+    let angleOffset = -Math.PI / 2
+    for (const startId of startNodeIds) {
+      const sectorAngle = getSectorAngle(startId)
+      const midAngle = angleOffset + sectorAngle / 2
+
+      const startNode = nodeById.get(startId)
+      if (!startNode) continue
+      const startSize = getNodeSize(startNode)
+
+      const r = ellipseRadius(midAngle)
+      const startCX = cx + r * Math.cos(midAngle)
+      const startCY = cy + r * Math.sin(midAngle)
+      positions[startId] = {
+        x: Math.round(startCX - startSize.w / 2),
+        y: Math.round(startCY - startSize.h / 2),
+      }
+
+      positionRadialChildren(startId, startCX, startCY, angleOffset, angleOffset + sectorAngle)
+      angleOffset += sectorAngle
+    }
+
+    // ── Compute closest handles for ALL edges ──────────────────────────
+    // Every edge must get an entry so per-edge overrides (e.g. smoothstep
+    // from a previous hierarchy layout) are always cleared.
+    const edgeHandles: Record<string, { sourceHandle: string; targetHandle: string; edgeType?: string; labelPosition?: 'center' | 'target' }> = {}
+    for (const e of state.edges) {
+      const sourceNode = nodeById.get(e.source)
+      const targetNode = nodeById.get(e.target)
+
+      if (!sourceNode || !targetNode) {
+        // Can't compute handles but still clear per-edge type overrides
+        edgeHandles[e.id] = {
+          sourceHandle: e.sourceHandle ?? 'bottom',
+          targetHandle: e.targetHandle ?? 'top',
+          edgeType: undefined,
+          labelPosition: 'center',
+        }
+        continue
+      }
+
+      const sourcePos = positions[e.source] ?? sourceNode.position
+      const targetPos = positions[e.target] ?? targetNode.position
+      const sourceSize = getNodeSize(sourceNode)
+      const targetSize = getNodeSize(targetNode)
+
+      const handles = getClosestHandles(sourcePos, sourceSize, targetPos, targetSize)
+      edgeHandles[e.id] = {
+        sourceHandle: handles.sourceHandle,
+        targetHandle: handles.targetHandle,
+        edgeType: undefined,
+        labelPosition: 'center',
+      }
+    }
+
+    dispatch({ type: 'layout/applyHierarchy', positions, edgeHandles })
+
+    // Switch the framework-level edge style to bezier (default)
+    updateSettings({ ...settings, edgeType: 'default' })
   }, [state.nodes, state.edges, settings, updateSettings])
 
   const addChild = useCallback((parentId: string) => {
@@ -1243,6 +1486,7 @@ export function EditorProvider({
       confirmAddItem,
       deleteElements,
       applyHierarchyLayout,
+      applyStarLayout,
     }),
     [
       state.nodes,
@@ -1278,6 +1522,7 @@ export function EditorProvider({
       confirmAddItem,
       deleteElements,
       applyHierarchyLayout,
+      applyStarLayout,
     ],
   )
 

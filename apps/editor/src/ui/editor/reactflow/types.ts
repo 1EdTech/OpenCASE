@@ -107,6 +107,12 @@ export type CaseEdgeData = {
    * 'center' (default) = midpoint; 'target' = biased toward the target node.
    */
   labelPosition?: 'center' | 'target'
+  /**
+   * Per-edge path style override. When set, takes priority over the
+   * framework-level edgeType in settings. Used by layout modes (e.g.
+   * hierarchy sets 'smoothstep', star clears to undefined for bezier).
+   */
+  edgeType?: string
 }
 
 export type CaseEditorEdge = Edge<CaseEdgeData>
