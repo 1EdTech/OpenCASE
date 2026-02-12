@@ -13,6 +13,8 @@ import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFrom
 import type { LayoutState } from '@/ui/editor/reactflow/mapping'
 import type { CaseVersion } from '@/application/framework/mappers/case/CasePackageSnapshot'
 import LoginScreen from '@/ui/auth/LoginScreen'
+import { detectTopology } from '@/ui/editor/layout/detectTopology'
+import { applyInitialLayout } from '@/ui/editor/layout/applyInitialLayout'
 
 export default function App() {
   return (
@@ -189,20 +191,29 @@ function AppInner() {
   )
 
   // Derive the graph from the active framework
-  // This converts the domain Framework to React Flow format
-  const activeGraph = useMemo(() => {
-    if (!activeFramework) return null
+  // This converts the domain Framework to React Flow format.
+  // When no saved layout exists the topology is detected and an appropriate
+  // auto-layout is applied *before* the first render so there is no visible jump.
+  const { graph: activeGraph, autoEdgeType } = useMemo(() => {
+    if (!activeFramework) return { graph: null, autoEdgeType: undefined as string | undefined }
 
     // Use legacy graph if available (for backward compatibility with stored data)
     if (activeFramework.graph) {
-      return activeFramework.graph
+      return { graph: activeFramework.graph, autoEdgeType: undefined as string | undefined }
     }
 
     // Get the stored layout for this framework (from CASE extensions)
     const layout = frameworkLayouts[activeFramework.id]
+    const graph = toReactFlowGraph({ framework: activeFramework.framework, layout })
 
-    // Derive from the domain Framework with layout
-    return toReactFlowGraph({ framework: activeFramework.framework, layout })
+    // If no saved layout, detect topology and apply appropriate layout
+    if (!layout) {
+      const topology = detectTopology(graph)
+      const result = applyInitialLayout(graph, topology)
+      return { graph: result.graph, autoEdgeType: result.edgeType }
+    }
+
+    return { graph, autoEdgeType: undefined as string | undefined }
   }, [activeFramework, frameworkLayouts])
 
   // Determine CASE version from framework metadata or CFDocument
@@ -297,8 +308,8 @@ function AppInner() {
       initialGraph={activeGraph} 
       graphKey={activeFramework.id} 
       caseVersion={activeCaseVersion}
-      skipAutoLayout={Boolean(frameworkLayouts[activeFramework.id])}
-      initialEdgeType={frameworkEdgeTypes[activeFramework.id]}
+      skipAutoLayout={Boolean(frameworkLayouts[activeFramework.id]) || Boolean(autoEdgeType)}
+      initialEdgeType={frameworkEdgeTypes[activeFramework.id] ?? autoEdgeType}
     >
       <EditorCanvas
         onBack={() => {
