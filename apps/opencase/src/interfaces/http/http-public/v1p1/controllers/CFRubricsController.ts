@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express'
 import { GetCFRubric } from '../../../../../application/case/endpoints/GetCFRubric'
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
-import { absolutizeCaseUris, applyFieldSelectionToEntity, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified } from '../utils/httpUtils'
+import { absolutizeCaseUris, applyFieldSelectionToEntity, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified, stripExtensions, wantsOpenCaseExtensions } from '../utils/httpUtils'
 import { getParam } from '../../../utils/expressParams'
 import type { FileFrameworkStore } from '../../../../../infrastructure/persistence/file/FileFrameworkStore'
 
@@ -54,7 +54,8 @@ export class CFRubricsControllerV1p1 {
       if (wrapped.CFRubric && parsed.value.fields?.length) {
         wrapped.CFRubric = applyFieldSelectionToEntity(wrapped.CFRubric, parsed.value.fields)
       }
-      const body = absolutizeCaseUris(wrapped, baseUrl)
+      let body = absolutizeCaseUris(wrapped, baseUrl)
+      if (!wantsOpenCaseExtensions(req)) { body = stripExtensions(body) }
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)
     } catch (error: any) {

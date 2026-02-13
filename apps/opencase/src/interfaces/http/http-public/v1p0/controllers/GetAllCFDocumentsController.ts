@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express'
 import { GetAllCFDocuments } from '../../../../../application/case/endpoints/GetAllCFDocuments'
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
-import { absolutizeCaseUris, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified } from '../utils/httpUtils'
+import { absolutizeCaseUris, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified, stripExtensions, wantsOpenCaseExtensions } from '../utils/httpUtils'
 import type { FileFrameworkStore } from '../../../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export class GetAllCFDocumentsControllerV1p0 {
@@ -43,7 +43,8 @@ export class GetAllCFDocumentsControllerV1p0 {
       }
 
       const baseUrl = getBaseUrl(req)
-      const body = absolutizeCaseUris(result, baseUrl, '1.0')
+      let body = absolutizeCaseUris(result, baseUrl, '1.0')
+      if (!wantsOpenCaseExtensions(req)) { body = stripExtensions(body) }
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)
     } catch (error: any) {

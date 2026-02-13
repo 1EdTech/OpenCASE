@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express'
 import { GetCFSubject } from '../../../../../application/case/endpoints/GetCFSubject'
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
-import { absolutizeCaseUris, applyFieldSelectionToEntity, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified } from '../utils/httpUtils'
+import { absolutizeCaseUris, applyFieldSelectionToEntity, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified, stripExtensions, wantsOpenCaseExtensions } from '../utils/httpUtils'
 import { getParam } from '../../../utils/expressParams'
 import type { FileFrameworkStore } from '../../../../../infrastructure/persistence/file/FileFrameworkStore'
 
@@ -43,7 +43,8 @@ export class CFSubjectsControllerV1p1 {
       if (wrapped.CFSubject && parsed.value.fields?.length) {
         wrapped.CFSubject = applyFieldSelectionToEntity(wrapped.CFSubject, parsed.value.fields)
       }
-      const body = absolutizeCaseUris(wrapped, baseUrl)
+      let body = absolutizeCaseUris(wrapped, baseUrl)
+      if (!wantsOpenCaseExtensions(req)) { body = stripExtensions(body) }
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)
     } catch (error: any) {
