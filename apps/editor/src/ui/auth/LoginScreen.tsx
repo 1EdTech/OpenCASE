@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
 import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
@@ -14,31 +14,17 @@ export default function LoginScreen() {
   const [uiState, setUiState] = useState<'idle' | 'loading'>('idle')
   const [hint, setHint] = useState<string | null>(null)
 
-  // Single-tenant mode: skip tenant lookup and sign in directly.
-  // If the user just logged out (flag in sessionStorage), show the login screen
-  // instead of immediately redirecting back.
+  // Single-tenant mode: skip tenant lookup, show a direct sign-in button
   const [autoSignInError, setAutoSignInError] = useState<string | null>(null)
-  const [justLoggedOut, setJustLoggedOut] = useState(() => {
-    const flag = globalThis.sessionStorage?.getItem('opencase:just-logged-out')
-    if (flag) {
-      globalThis.sessionStorage?.removeItem('opencase:just-logged-out')
-      return true
-    }
-    return false
-  })
-  const autoSignInAttempted = useRef(false)
-  useEffect(() => {
+  const singleTenantSignIn = useCallback(() => {
     if (!cfg.defaultTenantId) return
-    if (justLoggedOut) return
-    if (autoSignInAttempted.current) return
-    if (status !== 'anonymous') return
-    autoSignInAttempted.current = true
+    setAutoSignInError(null)
     setTenantId(cfg.defaultTenantId)
     signIn(cfg.defaultTenantId).catch((err: unknown) => {
-      console.error('[LoginScreen] auto sign-in failed:', err)
+      console.error('[LoginScreen] sign-in failed:', err)
       setAutoSignInError(err instanceof Error ? err.message : String(err))
     })
-  }, [cfg.defaultTenantId, justLoggedOut, status, setTenantId, signIn])
+  }, [cfg.defaultTenantId, setTenantId, signIn])
 
   const continueWithEmail = useCallback(async () => {
     const trimmed = email.trim()
@@ -63,30 +49,21 @@ export default function LoginScreen() {
     }
   }, [email, publicApi, setTenantId, signIn])
 
-  // Single-tenant mode: show sign-in button after logout, or loading while redirecting
+  // Single-tenant mode: show a direct sign-in button (no email/tenant lookup)
   if (cfg.defaultTenantId) {
     return (
       <div className="min-h-screen w-full bg-slate-50">
         <div className="mx-auto flex w-full max-w-md flex-col px-5 py-14">
           <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
-            {justLoggedOut ? (
-              <>
-                <div className="text-lg font-semibold text-slate-900">Signed out</div>
-                <div className="mt-1 text-sm text-slate-600">You have been signed out successfully.</div>
-                <div className="mt-5">
-                  <Button className="w-full" onClick={() => { setJustLoggedOut(false); autoSignInAttempted.current = false }}>
-                    Sign in again
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="text-lg font-semibold text-slate-900">Signing in…</div>
-                <div className="mt-1 text-sm text-slate-600">Redirecting to your identity provider.</div>
-              </>
-            )}
+            <div className="text-lg font-semibold text-slate-900">Welcome to OpenCASE</div>
+            <div className="mt-1 text-sm text-slate-600">Sign in to continue.</div>
             {autoSignInError ? <div className="mt-3 text-sm text-red-700">{autoSignInError}</div> : null}
             {status === 'error' && error ? <div className="mt-3 text-sm text-red-700">{error}</div> : null}
+            <div className="mt-5">
+              <Button className="w-full" onClick={singleTenantSignIn} disabled={status === 'loading'}>
+                {status === 'loading' ? 'Signing in…' : 'Sign in'}
+              </Button>
+            </div>
           </div>
         </div>
       </div>

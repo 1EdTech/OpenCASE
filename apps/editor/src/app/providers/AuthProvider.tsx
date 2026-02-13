@@ -182,8 +182,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const signOut = useCallback(async () => {
     setStatus('loading')
     setError(null)
-    // Signal to LoginScreen not to auto-sign-in after logout (single-tenant mode)
-    globalThis.sessionStorage?.setItem('opencase:just-logged-out', '1')
     try {
       await userManager.signoutRedirect({
         post_logout_redirect_uri: `${globalThis.location?.origin ?? ''}/#/login`,
