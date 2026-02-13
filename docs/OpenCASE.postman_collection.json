@@ -1,0 +1,988 @@
+{
+  "info": {
+    "name": "OpenCASE API",
+    "description": "Complete Postman collection for the OpenCASE CASE Provider & Management API.\n\n## Setup\n1. Set the `base_url` variable to your OpenCASE instance (default: `http://localhost:3000`)\n2. Set `tenant_id` to your tenant (e.g. `demo`)\n3. Use the **Get Access Token** request (under Auth) to obtain a Bearer token — it auto-saves to the `access_token` variable\n4. All authenticated endpoints inherit the Bearer token from the collection\n\n## Folders\n- **Auth** — Token requests (client_credentials, password grant)\n- **Public** — Unauthenticated endpoints (health, tenant lookup, discovery)\n- **CASE Provider v1p0** — Standard CASE 1.0 read endpoints\n- **CASE Provider v1p1** — Standard CASE 1.1 read endpoints\n- **Management › Tenants** — Tenant CRUD (requires `case.admin`)\n- **Management › CFPackages** — Framework create/import/delete/restore\n- **Management › CFDocuments** — Document update/delete\n- **Management › CFItems** — Item update/delete\n- **Management › CFAssociations** — Association update/delete\n- **Management › Licenses** — License listing\n- **Management › API Keys** — API key CRUD (requires `case.owner` or `case.admin`)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
+    { "key": "keycloak_realm_url", "value": "http://localhost:3000/realms/opencase", "type": "string" },
+    { "key": "tenant_id", "value": "demo", "type": "string" },
+    { "key": "client_id", "value": "tenant-{{tenant_id}}", "type": "string" },
+    { "key": "client_secret", "value": "", "type": "string" },
+    { "key": "username", "value": "", "type": "string" },
+    { "key": "password", "value": "", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "doc_id", "value": "", "type": "string" },
+    { "key": "item_id", "value": "", "type": "string" },
+    { "key": "association_id", "value": "", "type": "string" },
+    { "key": "api_key_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Token requests against the Keycloak OIDC endpoint.",
+      "item": [
+        {
+          "name": "Get Token (client_credentials)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  pm.collectionVariables.set('access_token', json.access_token);",
+                  "  pm.test('Token received', function () {",
+                  "    pm.expect(json.access_token).to.be.a('string');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "client_credentials" },
+                { "key": "client_id", "value": "{{client_id}}" },
+                { "key": "client_secret", "value": "{{client_secret}}" }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_realm_url}}/protocol/openid-connect/token",
+              "host": ["{{keycloak_realm_url}}"],
+              "path": ["protocol", "openid-connect", "token"]
+            },
+            "description": "Obtain an access token using the `client_credentials` grant.\n\nSet `client_id` and `client_secret` from an API key. The token is auto-saved to the `access_token` collection variable."
+          }
+        },
+        {
+          "name": "Get Token (password grant)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  pm.collectionVariables.set('access_token', json.access_token);",
+                  "  pm.test('Token received', function () {",
+                  "    pm.expect(json.access_token).to.be.a('string');",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/x-www-form-urlencoded" }
+            ],
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "password" },
+                { "key": "client_id", "value": "{{client_id}}" },
+                { "key": "username", "value": "{{username}}" },
+                { "key": "password", "value": "{{password}}" }
+              ]
+            },
+            "url": {
+              "raw": "{{keycloak_realm_url}}/protocol/openid-connect/token",
+              "host": ["{{keycloak_realm_url}}"],
+              "path": ["protocol", "openid-connect", "token"]
+            },
+            "description": "Obtain an access token using the `password` grant (direct access).\n\nSet `username` and `password` for the user. The tenant's SPA client must have direct access grants enabled.\nThe token is auto-saved to the `access_token` collection variable."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Public",
+      "description": "Unauthenticated endpoints — no Bearer token required.",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Simple health check.\n\nReturns `{ \"status\": \"ok\" }` if the server is running."
+          }
+        },
+        {
+          "name": "Tenant Lookup",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/public/tenant-lookup?email=admin@demo.local",
+              "host": ["{{base_url}}"],
+              "path": ["public", "tenant-lookup"],
+              "query": [
+                { "key": "email", "value": "admin@demo.local", "description": "Email to look up" }
+              ]
+            },
+            "description": "Anti-enumeration tenant lookup. Always returns 202; includes `tenantId` only if the email matches a known user."
+          }
+        }
+      ]
+    },
+    {
+      "name": "CASE Provider v1p0",
+      "description": "Standard CASE 1.0 Provider API (read-only).\n\nAuthentication is optional — public-licensed frameworks are accessible without a token.",
+      "item": [
+        {
+          "name": "Discovery (OpenAPI spec)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/discovery/imscasev1p0_openapi3_v1p0.json",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "discovery", "imscasev1p0_openapi3_v1p0.json"]
+            }
+          }
+        },
+        {
+          "name": "Get All CFDocuments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFDocuments?limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFDocuments"],
+              "query": [
+                { "key": "limit", "value": "50", "description": "Max items (optional)" },
+                { "key": "offset", "value": "0", "description": "Pagination offset (optional)" },
+                { "key": "sort", "value": "", "disabled": true },
+                { "key": "orderBy", "value": "asc", "disabled": true },
+                { "key": "filter", "value": "", "disabled": true },
+                { "key": "fields", "value": "", "disabled": true },
+                { "key": "includeArchived", "value": "false", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get CFDocument",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFDocuments/{{doc_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFDocuments", "{{doc_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get CFPackage",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFPackages/{{doc_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFPackages", "{{doc_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get CFItem",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFItems/{{item_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFItems", "{{item_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get CFItemAssociations",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFItemAssociations/{{item_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFItemAssociations", "{{item_id}}"]
+            },
+            "description": "Get all associations for a given CFItem."
+          }
+        },
+        {
+          "name": "Get CFAssociation",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFAssociations/{{association_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFAssociations", "{{association_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get CFRubric",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFRubrics/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFRubrics", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get CFSubject",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFSubjects/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFSubjects", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get CFConcept",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFConcepts/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFConcepts", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get CFAssociationGrouping",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFAssociationGroupings/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFAssociationGroupings", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get CFItemType",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFItemTypes/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFItemTypes", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get CFLicense",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p0/CFLicenses/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p0", "CFLicenses", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "CASE Provider v1p1",
+      "description": "Standard CASE 1.1 Provider API (read-only).\n\nAuthentication is optional — public-licensed frameworks are accessible without a token.\n\nSupports the `X-CASE-EDITOR: true` header to include OpenCASE extension fields.",
+      "item": [
+        {
+          "name": "Discovery (OpenAPI spec)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/discovery/imscasev1p1_openapi3_v1p0.json",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "discovery", "imscasev1p1_openapi3_v1p0.json"]
+            }
+          }
+        },
+        {
+          "name": "Get All CFDocuments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFDocuments?limit=50&offset=0",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFDocuments"],
+              "query": [
+                { "key": "limit", "value": "50", "description": "Max items (optional)" },
+                { "key": "offset", "value": "0", "description": "Pagination offset (optional)" },
+                { "key": "sort", "value": "", "disabled": true },
+                { "key": "orderBy", "value": "asc", "disabled": true },
+                { "key": "filter", "value": "", "disabled": true },
+                { "key": "fields", "value": "", "disabled": true },
+                { "key": "includeArchived", "value": "false", "disabled": true }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get CFDocument",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFDocuments/{{doc_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFDocuments", "{{doc_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get CFPackage",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFPackages/{{doc_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFPackages", "{{doc_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get CFItem",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFItems/{{item_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFItems", "{{item_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get CFItemAssociations",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFItemAssociations/{{item_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFItemAssociations", "{{item_id}}"]
+            },
+            "description": "Get all associations for a given CFItem."
+          }
+        },
+        {
+          "name": "Get CFAssociation",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFAssociations/{{association_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFAssociations", "{{association_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Get CFRubric",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFRubrics/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFRubrics", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get CFSubject",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFSubjects/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFSubjects", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get CFConcept",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFConcepts/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFConcepts", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get CFAssociationGrouping",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFAssociationGroupings/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFAssociationGroupings", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get CFItemType",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFItemTypes/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFItemTypes", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        },
+        {
+          "name": "Get CFLicense",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/ims/case/v1p1/CFLicenses/:id",
+              "host": ["{{base_url}}"],
+              "path": ["ims", "case", "v1p1", "CFLicenses", ":id"],
+              "variable": [{ "key": "id", "value": "" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Management",
+      "description": "Extended management API (non-CASE standard).\n\nAll endpoints require authentication. Tenant ID in the URL must match the JWT `tenantId` claim.",
+      "item": [
+        {
+          "name": "Tenants",
+          "description": "Tenant CRUD — requires `case.admin` scope.",
+          "item": [
+            {
+              "name": "List Tenants",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants"]
+                },
+                "description": "Requires `case.admin` scope."
+              }
+            },
+            {
+              "name": "Create Tenant",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tenantId\": \"new-tenant\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants"]
+                },
+                "description": "Requires `case.admin` scope.\n\nCreates tenant data directories and provisions a Keycloak client + admin user.\n\nReturns the admin credentials (temporary password)."
+              }
+            }
+          ]
+        },
+        {
+          "name": "CFPackages (v1p0)",
+          "item": [
+            {
+              "name": "List CFPackages",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/CFPackages?caseVersion=1.0",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "CFPackages"],
+                  "query": [
+                    { "key": "caseVersion", "value": "1.0" },
+                    { "key": "includeArchived", "value": "false", "disabled": true }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create/Publish CFPackage",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"CFDocument\": {\n    \"identifier\": \"00000000-0000-0000-0000-000000000001\",\n    \"uri\": \"urn:example:doc\",\n    \"title\": \"Example Framework\",\n    \"creator\": \"Author\",\n    \"lastChangeDateTime\": \"2026-01-01T00:00:00Z\"\n  },\n  \"CFItems\": [],\n  \"CFAssociations\": []\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p0/CFPackages",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p0", "CFPackages"]
+                }
+              }
+            },
+            {
+              "name": "Import CFPackage from Endpoint",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"endpointUrl\": \"https://example.com/ims/case/v1p0/CFPackages/some-uuid\",\n  \"accessToken\": \"\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p0/CFPackages/import",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p0", "CFPackages", "import"]
+                }
+              }
+            },
+            {
+              "name": "Delete CFPackage (archive)",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p0/CFPackages/{{doc_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p0", "CFPackages", "{{doc_id}}"],
+                  "query": [
+                    { "key": "hardDelete", "value": "false", "disabled": true, "description": "Set to true for permanent deletion" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Restore CFPackage",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p0/CFPackages/{{doc_id}}/restore",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p0", "CFPackages", "{{doc_id}}", "restore"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "CFPackages (v1p1)",
+          "item": [
+            {
+              "name": "List CFPackages",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/CFPackages?caseVersion=1.1",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "CFPackages"],
+                  "query": [
+                    { "key": "caseVersion", "value": "1.1" },
+                    { "key": "includeArchived", "value": "false", "disabled": true }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create/Publish CFPackage",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"CFDocument\": {\n    \"identifier\": \"00000000-0000-0000-0000-000000000001\",\n    \"uri\": \"urn:example:doc\",\n    \"title\": \"Example Framework\",\n    \"creator\": \"Author\",\n    \"lastChangeDateTime\": \"2026-01-01T00:00:00Z\"\n  },\n  \"CFItems\": [],\n  \"CFAssociations\": []\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p1/CFPackages",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFPackages"]
+                }
+              }
+            },
+            {
+              "name": "Import CFPackage from Endpoint",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"endpointUrl\": \"https://example.com/ims/case/v1p1/CFPackages/some-uuid\",\n  \"accessToken\": \"\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p1/CFPackages/import",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFPackages", "import"]
+                }
+              }
+            },
+            {
+              "name": "Delete CFPackage (archive)",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p1/CFPackages/{{doc_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFPackages", "{{doc_id}}"],
+                  "query": [
+                    { "key": "hardDelete", "value": "false", "disabled": true, "description": "Set to true for permanent deletion" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Restore CFPackage",
+              "request": {
+                "method": "POST",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p1/CFPackages/{{doc_id}}/restore",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFPackages", "{{doc_id}}", "restore"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "CFDocuments (v1p0)",
+          "item": [
+            {
+              "name": "Update CFDocument",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Updated Title\",\n  \"description\": \"Updated description\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p0/CFDocuments/{{doc_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p0", "CFDocuments", "{{doc_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Delete CFDocument",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p0/CFDocuments/{{doc_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p0", "CFDocuments", "{{doc_id}}"],
+                  "query": [
+                    { "key": "hardDelete", "value": "false", "disabled": true }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "CFDocuments (v1p1)",
+          "item": [
+            {
+              "name": "Update CFDocument",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Updated Title\",\n  \"description\": \"Updated description\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p1/CFDocuments/{{doc_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFDocuments", "{{doc_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Delete CFDocument",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p1/CFDocuments/{{doc_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFDocuments", "{{doc_id}}"],
+                  "query": [
+                    { "key": "hardDelete", "value": "false", "disabled": true }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "CFItems (v1p0)",
+          "item": [
+            {
+              "name": "Update CFItem",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fullStatement\": \"Updated statement\",\n  \"humanCodingScheme\": \"1.2.3\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p0/CFItems/{{item_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p0", "CFItems", "{{item_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Delete CFItem",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p0/CFItems/{{item_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p0", "CFItems", "{{item_id}}"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "CFItems (v1p1)",
+          "item": [
+            {
+              "name": "Update CFItem",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"fullStatement\": \"Updated statement\",\n  \"humanCodingScheme\": \"1.2.3\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p1/CFItems/{{item_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFItems", "{{item_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Delete CFItem",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p1/CFItems/{{item_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFItems", "{{item_id}}"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "CFAssociations (v1p0)",
+          "item": [
+            {
+              "name": "Update CFAssociation",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"associationType\": \"isChildOf\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p0/CFAssociations/{{association_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p0", "CFAssociations", "{{association_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Delete CFAssociation",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p0/CFAssociations/{{association_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p0", "CFAssociations", "{{association_id}}"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "CFAssociations (v1p1)",
+          "item": [
+            {
+              "name": "Update CFAssociation",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"associationType\": \"isChildOf\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p1/CFAssociations/{{association_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFAssociations", "{{association_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Delete CFAssociation",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/ims/case/v1p1/CFAssociations/{{association_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFAssociations", "{{association_id}}"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Licenses",
+          "item": [
+            {
+              "name": "List Licenses",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/licenses",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "licenses"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "API Keys",
+          "description": "Manage OAuth2 `client_credentials` API keys for external system access.\n\nRequires `case.owner` or `case.admin` scope.",
+          "item": [
+            {
+              "name": "List API Keys",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/api-keys",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "api-keys"]
+                },
+                "description": "List all API keys for the tenant.\n\nReturns `{ apiKeys: [{ id, clientId, description }] }`"
+              }
+            },
+            {
+              "name": "Create API Key",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  var json = pm.response.json();",
+                      "  pm.test('API key created', function () {",
+                      "    pm.expect(json.clientId).to.be.a('string');",
+                      "    pm.expect(json.clientSecret).to.be.a('string');",
+                      "  });",
+                      "  console.log('Client ID: ' + json.clientId);",
+                      "  console.log('Client Secret: ' + json.clientSecret);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"description\": \"LMS integration\"\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/api-keys",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "api-keys"]
+                },
+                "description": "Create a new API key.\n\nReturns `{ clientId, clientSecret, description }`.\n\n**The secret is only shown at creation time.**"
+              }
+            },
+            {
+              "name": "Delete API Key",
+              "request": {
+                "method": "DELETE",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/api-keys/{{api_key_id}}",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "api-keys", "{{api_key_id}}"]
+                },
+                "description": "Delete an API key by its Keycloak UUID (the `id` field from the list response)."
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
