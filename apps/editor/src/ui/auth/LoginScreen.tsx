@@ -15,6 +15,7 @@ export default function LoginScreen() {
   const [hint, setHint] = useState<string | null>(null)
 
   // Single-tenant mode: skip tenant lookup and sign in directly
+  const [autoSignInError, setAutoSignInError] = useState<string | null>(null)
   const autoSignInAttempted = useRef(false)
   useEffect(() => {
     if (!cfg.defaultTenantId) return
@@ -22,7 +23,10 @@ export default function LoginScreen() {
     if (status !== 'anonymous') return
     autoSignInAttempted.current = true
     setTenantId(cfg.defaultTenantId)
-    void signIn(cfg.defaultTenantId)
+    signIn(cfg.defaultTenantId).catch((err: unknown) => {
+      console.error('[LoginScreen] auto sign-in failed:', err)
+      setAutoSignInError(err instanceof Error ? err.message : String(err))
+    })
   }, [cfg.defaultTenantId, status, setTenantId, signIn])
 
   const continueWithEmail = useCallback(async () => {
@@ -56,6 +60,7 @@ export default function LoginScreen() {
           <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
             <div className="text-lg font-semibold text-slate-900">Signing in…</div>
             <div className="mt-1 text-sm text-slate-600">Redirecting to your identity provider.</div>
+            {autoSignInError ? <div className="mt-3 text-sm text-red-700">{autoSignInError}</div> : null}
             {status === 'error' && error ? <div className="mt-3 text-sm text-red-700">{error}</div> : null}
           </div>
         </div>
