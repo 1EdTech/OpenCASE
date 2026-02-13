@@ -20,8 +20,8 @@ services:
     networks:
       - opencasenet
     labels:
-      - "traefik.enable=true"
-      - "traefik.constraint-label=opencase_opencasenet"
+      # Traefik does not route to itself — disable auto-router
+      - "traefik.enable=false"
 
   # =============================================================================
   # Keycloak - OIDC Identity Provider
@@ -102,7 +102,7 @@ services:
       - PORT=8080
       # Keycloak / OIDC configuration
       # External issuer URL — constructed from base variables (scheme://host:port/realms/realm)
-      - OIDC_ISSUER_URL=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX:-:3000}/realms/${KEYCLOAK_REALM:-opencase}
+      - OIDC_ISSUER_URL=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-:3000}/realms/${KEYCLOAK_REALM:-opencase}
       # Internal URL for fetching JWKS (Docker network access to Keycloak)
       - OIDC_JWKS_FETCH_URL=http://keycloak:8080/realms/${KEYCLOAK_REALM:-opencase}
       - OIDC_CLIENT_ID_PREFIX=${OIDC_CLIENT_ID_PREFIX:-tenant-}
@@ -114,8 +114,8 @@ services:
       - KEYCLOAK_ADMIN_USERNAME=${KEYCLOAK_ADMIN_USERNAME:-admin}
       - KEYCLOAK_ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       # SPA redirect URIs — constructed from base variables
-      - KEYCLOAK_SPA_REDIRECT_URIS=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX:-:3000}/*
-      - KEYCLOAK_SPA_WEB_ORIGINS=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX:-:3000}
+      - KEYCLOAK_SPA_REDIRECT_URIS=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-:3000}/*
+      - KEYCLOAK_SPA_WEB_ORIGINS=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-:3000}
       # Bootstrap system admin
       - KEYCLOAK_BOOTSTRAP_SYSTEM_ADMIN=${KEYCLOAK_BOOTSTRAP_SYSTEM_ADMIN:-true}
       - KEYCLOAK_SYSTEM_ADMIN_EMAIL=${KEYCLOAK_SYSTEM_ADMIN_EMAIL:-system-admin@local}
@@ -177,9 +177,11 @@ services:
       dockerfile: Dockerfile
     environment:
       # All URLs constructed from base variables (scheme://host:port)
-      - VITE_OPENCASE_BASE_URL=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX:-:3000}
-      - VITE_OIDC_AUTHORITY=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX:-:3000}/realms/${KEYCLOAK_REALM:-opencase}
+      - VITE_OPENCASE_BASE_URL=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-:3000}
+      - VITE_OIDC_AUTHORITY=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-:3000}/realms/${KEYCLOAK_REALM:-opencase}
       - VITE_OIDC_CLIENT_ID_PREFIX=${OIDC_CLIENT_ID_PREFIX:-tenant-}
+      # Single-tenant mode: skip tenant lookup, sign in directly (leave empty to disable)
+      - VITE_DEFAULT_TENANT_ID=${DEFAULT_TENANT_ID:-}
     volumes:
       # Mount source for hot-reload
       - ./apps/editor/src:/app/src

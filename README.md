@@ -241,6 +241,7 @@ monorepo/
 ## Learn More
 
 - [Get Started Guide](docs/GET_STARTED.md) — Deploy on a Linux server (Docker)
+- [Auth0 SSO Guide](docs/AUTH0_SSO.md) — Configure Auth0 as an external Identity Provider
 - [Editor README](apps/editor/README.md) — How the frontend works
 - [Editor Architecture](apps/editor/docs/architecture.md) — Design decisions, folder structure, contributing guide
 - [OpenCASE README](apps/opencase/README.md) — Backend API documentation

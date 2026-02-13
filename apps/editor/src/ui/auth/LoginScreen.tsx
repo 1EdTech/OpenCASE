@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
 import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
@@ -13,6 +13,17 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('')
   const [uiState, setUiState] = useState<'idle' | 'loading'>('idle')
   const [hint, setHint] = useState<string | null>(null)
+
+  // Single-tenant mode: skip tenant lookup and sign in directly
+  const autoSignInAttempted = useRef(false)
+  useEffect(() => {
+    if (!cfg.defaultTenantId) return
+    if (autoSignInAttempted.current) return
+    if (status !== 'anonymous') return
+    autoSignInAttempted.current = true
+    setTenantId(cfg.defaultTenantId)
+    void signIn(cfg.defaultTenantId)
+  }, [cfg.defaultTenantId, status, setTenantId, signIn])
 
   const continueWithEmail = useCallback(async () => {
     const trimmed = email.trim()
@@ -36,6 +47,21 @@ export default function LoginScreen() {
       setUiState('idle')
     }
   }, [email, publicApi, setTenantId, signIn])
+
+  // Single-tenant mode: show loading state while redirecting to IdP
+  if (cfg.defaultTenantId) {
+    return (
+      <div className="min-h-screen w-full bg-slate-50">
+        <div className="mx-auto flex w-full max-w-md flex-col px-5 py-14">
+          <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
+            <div className="text-lg font-semibold text-slate-900">Signing in…</div>
+            <div className="mt-1 text-sm text-slate-600">Redirecting to your identity provider.</div>
+            {status === 'error' && error ? <div className="mt-3 text-sm text-red-700">{error}</div> : null}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen w-full bg-slate-50">

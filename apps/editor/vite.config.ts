@@ -10,7 +10,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     // Allow any host when running behind a reverse proxy (Traefik)
-    allowedHosts: 'all',
+    allowedHosts: true,
   },
   resolve: {
     alias: {

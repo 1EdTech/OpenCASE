@@ -1,0 +1,317 @@
+# Auth0 SSO with Keycloak
+
+Configure Auth0 as an external Identity Provider (IdP) so users can log in to OpenCASE using their Auth0 accounts. Keycloak acts as the broker -- it delegates authentication to Auth0 and creates local user accounts automatically on first login (Just-in-Time provisioning).
+
+## How It Works
+
+```
+Browser --> OpenCASE Editor --> Keycloak login page
+                                  |
+                          "Login with Auth0"
+                                  |
+                          Auth0 login page
+                                  |
+                          User authenticates
+                                  |
+                          Auth0 returns auth code
+                                  |
+                          Keycloak exchanges code for tokens
+                                  |
+                          Keycloak creates/updates local user
+                                  |
+                          User is logged in to OpenCASE
+```
+
+---
+
+## Prerequisites
+
+- OpenCASE is running (see [Get Started Guide](GET_STARTED.md))
+- You have an **Auth0 account** (free tier works)
+- You know your **OpenCASE domain** (e.g. `opencase.1edtech.org`)
+
+---
+
+## Step 1 -- Create an Application in Auth0
+
+1. Log in to the [Auth0 Dashboard](https://manage.auth0.com/)
+2. Go to **Applications** > **Applications** > **Create Application**
+3. Enter a name, e.g. `OpenCASE SSO`
+4. Select **Regular Web Applications**
+5. Click **Create**
+
+### Configure Application Settings
+
+In the application's **Settings** tab, scroll to **Application URIs** and set:
+
+| Field | Value |
+|-------|-------|
+| **Allowed Callback URLs** | `https://YOUR_DOMAIN/realms/opencase/broker/auth0/endpoint` |
+| **Allowed Logout URLs** | `https://YOUR_DOMAIN` |
+| **Allowed Web Origins** | `https://YOUR_DOMAIN` |
+
+Replace `YOUR_DOMAIN` with your OpenCASE hostname (e.g. `opencase.1edtech.org`).
+
+> The callback URL follows Keycloak's broker pattern: `/realms/{realm}/broker/{alias}/endpoint`. We'll use `auth0` as the alias in Step 2.
+
+### Note Your Credentials
+
+From the **Settings** tab, copy these values -- you'll need them in Step 2:
+
+- **Domain** (e.g. `your-tenant.auth0.com`)
+- **Client ID**
+- **Client Secret**
+
+### Scroll down and click **Save Changes**
+
+---
+
+## Step 2 -- Add Auth0 as an Identity Provider in Keycloak
+
+### Open the Keycloak Admin Console
+
+Navigate to `https://YOUR_DOMAIN/admin/` and log in with your Keycloak admin credentials (the `ADMIN_PASSWORD` from your `.env` file, username `admin`).
+
+### Select the OpenCASE Realm
+
+Make sure you're in the **opencase** realm (top-left dropdown). If you see "master", switch to "opencase".
+
+### Add a New Identity Provider
+
+1. In the left sidebar, click **Identity providers**
+2. Click **Add provider** > **OpenID Connect v1.0**
+
+### Configure the Provider
+
+Fill in the following fields:
+
+| Field | Value |
+|-------|-------|
+| **Alias** | `auth0` |
+| **Display name** | `Auth0` (or your preferred label, e.g. `Login with Auth0`) |
+| **Discovery endpoint** | `https://YOUR_AUTH0_DOMAIN/.well-known/openid-configuration` |
+| **Client ID** | (from Step 1) |
+| **Client Secret** | (from Step 1) |
+
+Replace `YOUR_AUTH0_DOMAIN` with your Auth0 domain (e.g. `your-tenant.auth0.com`).
+
+After entering the discovery endpoint, click outside the field -- Keycloak will auto-populate the authorization, token, and userinfo endpoints.
+
+### Additional Settings
+
+| Field | Value |
+|-------|-------|
+| **Client Authentication** | `Client secret sent as post` |
+| **Default Scopes** | `openid email profile` |
+| **Trust Email** | `On` |
+| **Sync Mode** | `Force` (updates user attributes on every login) |
+
+> **Trust Email = On** means Keycloak trusts that Auth0 has already verified the user's email. Without this, users may be prompted to verify their email again.
+
+> **Sync Mode = Force** ensures user profile data (name, email) stays in sync with Auth0 on each login. Use `Import` if you only want to import on first login.
+
+### Logout Settings
+
+By default, logging out of OpenCASE only ends the Keycloak session -- the Auth0 session stays active. To propagate logouts to Auth0:
+
+1. Scroll to **Advanced settings** (or **OpenID Connect settings**)
+2. Set **Logout URL** to `https://YOUR_AUTH0_DOMAIN/oidc/logout` (may already be populated from the discovery endpoint)
+3. Enable **Backchannel logout**
+
+Also ensure your Auth0 application has the correct **Allowed Logout URLs** (see Step 1).
+
+### Click **Save**
+
+---
+
+## Step 3 -- Configure Claim Mappers
+
+Keycloak needs to map Auth0's token claims to local user attributes. Without these, the username will be set to Auth0's raw user ID (e.g. `auth0|abc123`) which contains invalid characters.
+
+1. In the Auth0 identity provider settings, click the **Mappers** tab
+2. Click **Add mapper** for each of the following:
+
+### Username Mapper (Important)
+
+Auth0's `sub` claim looks like `auth0|665065950e64e810e52d03ea`, which Keycloak rejects because the `|` character is invalid in usernames. This mapper uses the email address as the username instead.
+
+| Field | Value |
+|-------|-------|
+| **Name** | `username` |
+| **Mapper type** | `Username Template Importer` |
+| **Template** | `${CLAIM.email}` |
+
+### Email Mapper
+
+| Field | Value |
+|-------|-------|
+| **Name** | `email` |
+| **Mapper type** | `Attribute Importer` |
+| **Claim** | `email` |
+| **User Attribute Name** | `email` |
+
+### First Name Mapper
+
+| Field | Value |
+|-------|-------|
+| **Name** | `first-name` |
+| **Mapper type** | `Attribute Importer` |
+| **Claim** | `given_name` |
+| **User Attribute Name** | `firstName` |
+
+### Last Name Mapper
+
+| Field | Value |
+|-------|-------|
+| **Name** | `last-name` |
+| **Mapper type** | `Attribute Importer` |
+| **Claim** | `family_name` |
+| **User Attribute Name** | `lastName` |
+
+Click **Save** after each mapper.
+
+---
+
+## Step 4 -- Configure First Login Flow (Optional)
+
+When a user logs in via Auth0 for the first time, Keycloak's **First Broker Login** flow determines what happens. The default flow:
+
+1. Reviews the user's profile
+2. Creates a local Keycloak account
+3. Links it to the Auth0 identity
+
+This works well for most setups. If you want to **skip the review page** and create users silently:
+
+1. Go to **Authentication** in the left sidebar
+2. Find **first broker login** flow
+3. Click the settings icon on **Review Profile** and set it to **Disabled**
+
+---
+
+## Step 5 -- Test the Integration
+
+1. Open your OpenCASE Editor: `https://YOUR_DOMAIN`
+2. Click **Sign in**
+3. On the Keycloak login page, you should see an **Auth0** button (or whatever display name you set)
+4. Click it -- you'll be redirected to Auth0's login page
+5. Authenticate with your Auth0 credentials
+6. You'll be redirected back to OpenCASE, now logged in
+
+> **First login:** Keycloak may show a profile review page asking you to confirm your email and name. After this, subsequent logins go straight through.
+
+---
+
+## Step 6 -- Assign Roles to SSO Users
+
+Users who log in via Auth0 are created in Keycloak with no roles by default. To give them access to OpenCASE features, you need to assign roles:
+
+### Manual Role Assignment
+
+1. In the Keycloak Admin Console, go to **Users**
+2. Find the Auth0 user (they appear after their first login)
+3. Click on the user > **Role mappings** tab
+4. Assign the appropriate client roles for their tenant (e.g. `case.read`, `case.write`, `case.owner`)
+
+### Automatic Role Assignment (Optional)
+
+To assign a default role to all Auth0 users automatically:
+
+1. Go to **Identity providers** > **auth0** > **Mappers** tab
+2. Click **Add mapper**
+3. Configure:
+
+| Field | Value |
+|-------|-------|
+| **Name** | `default-role` |
+| **Mapper type** | `Hardcoded Role` |
+| **Role** | (select the role to assign) |
+
+---
+
+## Troubleshooting
+
+### "Invalid redirect_uri" error on Auth0
+
+The callback URL in Auth0 doesn't match what Keycloak sends. Verify the **Allowed Callback URLs** in Auth0 matches exactly:
+
+```
+https://YOUR_DOMAIN/realms/opencase/broker/auth0/endpoint
+```
+
+Check for trailing slashes, http vs https, and port numbers.
+
+### "Invalid token issuer" error in Keycloak
+
+The discovery endpoint URL is wrong. It should be:
+
+```
+https://YOUR_AUTH0_DOMAIN/.well-known/openid-configuration
+```
+
+### User is created but has no email
+
+Auth0 might not be returning the `email` claim. In Auth0:
+
+1. Go to **Actions** > **Flows** > **Login**
+2. Add a custom action that ensures the email claim is in the ID token:
+
+```javascript
+exports.onExecutePostLogin = async (event, api) => {
+  if (event.user.email) {
+    api.idToken.setCustomClaim('email', event.user.email);
+  }
+};
+```
+
+Or verify that the **Default Scopes** in Keycloak's Auth0 IdP config include `email`.
+
+### Username contains "auth0|..." and is rejected
+
+Auth0's `sub` claim contains a `|` character that Keycloak doesn't allow in usernames. Add a **Username Template Importer** mapper (see Step 3) that uses `${CLAIM.email}` as the template.
+
+### Users are prompted to verify email
+
+Set **Trust Email** to **On** in the Auth0 identity provider settings in Keycloak (Step 2).
+
+### Auth0 button doesn't appear on login page
+
+Make sure the Auth0 identity provider is **Enabled** (toggle at the top of the IdP settings page in Keycloak).
+
+---
+
+## Making Auth0 the Default Login (Optional)
+
+If you want users to go directly to Auth0 without seeing the Keycloak login page:
+
+1. Go to **Authentication** > **Browser** flow
+2. Click the settings icon on **Identity Provider Redirector**
+3. Set **Default Identity Provider** to `auth0`
+
+Now when users click "Sign in", they'll be sent directly to Auth0. To still allow direct Keycloak login (e.g. for admin), append `?kc_idp_hint=` (empty) to the login URL.
+
+---
+
+## Architecture with Auth0
+
+```
+┌──────────────┐     ┌──────────────┐     ┌──────────────┐
+│   Browser    │────>│   Keycloak   │────>│    Auth0     │
+│  (Editor)    │<────│  (Broker)    │<────│   (IdP)      │
+└──────────────┘     └──────────────┘     └──────────────┘
+                            │
+                     Creates local user
+                     Assigns roles & scopes
+                     Issues OIDC tokens
+                            │
+                     ┌──────────────┐
+                     │   OpenCASE   │
+                     │   (API)      │
+                     └──────────────┘
+```
+
+Keycloak remains the OIDC provider for OpenCASE. Auth0 is an upstream identity source. This means:
+
+- OpenCASE only talks to Keycloak (no Auth0 dependency in code)
+- Roles and scopes are managed in Keycloak
+- You can add more IdPs later (Google, Azure AD, SAML, etc.) without changing OpenCASE
+- User accounts are local to Keycloak, linked to their Auth0 identity
