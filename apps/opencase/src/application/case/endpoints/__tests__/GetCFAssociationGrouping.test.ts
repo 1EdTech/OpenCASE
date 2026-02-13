@@ -48,9 +48,7 @@ describe('GetCFAssociationGrouping', () => {
 
       const result = await getCFAssociationGrouping.execute({ tenantId, caseVersion, sourcedId: groupingId })
 
-      expect(result).toEqual({
-        CFAssociationGrouping: grouping
-      })
+      expect(result).toEqual(grouping)
       expect(mockStore.getDefinitionById).toHaveBeenCalledWith(tenantId, caseVersion, 'CFAssociationGroupings', groupingId)
     })
   })

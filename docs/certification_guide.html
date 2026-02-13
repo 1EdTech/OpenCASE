@@ -1,0 +1,1003 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML+RDFa 1.0//EN"
+  "http://www.w3.org/MarkUp/DTD/xhtml-rdfa-1.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" version="XHTML+RDFa 1.0" dir="ltr"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:dc="http://purl.org/dc/terms/"
+  xmlns:foaf="http://xmlns.com/foaf/0.1/"
+  xmlns:og="http://ogp.me/ns#"
+  xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+  xmlns:sioc="http://rdfs.org/sioc/ns#"
+  xmlns:sioct="http://rdfs.org/sioc/types#"
+  xmlns:skos="http://www.w3.org/2004/02/skos/core#"
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema#">
+
+<head profile="http://www.w3.org/1999/xhtml/vocab">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="Generator" content="Drupal 7 (http://drupal.org)" />
+<link rel="canonical" href="/spec/case/v1p1/cert" />
+<link rel="shortlink" href="/node/224022" />
+  <title>CASE v1.1 Certification Guide | IMS Global Learning Consortium</title>
+  <style type="text/css" media="all">
+@import url("https://www.imsglobal.org/modules/system/system.base.css?t073oh");
+@import url("https://www.imsglobal.org/modules/system/system.menus.css?t073oh");
+@import url("https://www.imsglobal.org/modules/system/system.messages.css?t073oh");
+@import url("https://www.imsglobal.org/modules/system/system.theme.css?t073oh");
+</style>
+<style type="text/css" media="all">
+@import url("https://www.imsglobal.org/sites/all/modules/jquery_update/replace/ui/themes/base/minified/jquery.ui.core.min.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/jquery_update/replace/ui/themes/base/minified/jquery.ui.theme.min.css?t073oh");
+</style>
+<style type="text/css" media="all">
+@import url("https://www.imsglobal.org/modules/book/book.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/calendar/css/calendar_multiday.css?t073oh");
+@import url("https://www.imsglobal.org/modules/comment/comment.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/contrib/date/date_repeat_field/date_repeat_field.css?t073oh");
+@import url("https://www.imsglobal.org/modules/field/theme/field.css?t073oh");
+@import url("https://www.imsglobal.org/modules/node/node.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/pd_reports_module/css/global.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/pd_reports_module/css/plugins/datepicker/daterangepicker.css?t073oh");
+@import url("https://www.imsglobal.org/modules/poll/poll.css?t073oh");
+@import url("https://www.imsglobal.org/modules/search/search.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/toc_node/css/toc_node.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/ubercart/uc_order/uc_order.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/ubercart/uc_product/uc_product.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/ubercart/uc_store/uc_store.css?t073oh");
+@import url("https://www.imsglobal.org/modules/user/user.css?t073oh");
+@import url("https://www.imsglobal.org/modules/forum/forum.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/views/css/views.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/contrib/media/modules/media_wysiwyg/css/media_wysiwyg.base.css?t073oh");
+</style>
+<style type="text/css" media="all">
+@import url("https://www.imsglobal.org/sites/all/modules/colorbox/styles/default/colorbox_style.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/contrib/ctools/css/ctools.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/contrib/ctools/css/modal.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/tagclouds/tagclouds.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/user_dashboard/user_dashboard.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/taxonomy_access/taxonomy_access.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/libraries/swagger_ui/dist/swagger-ui.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/modules/productdirectory/css/tooltip.css?t073oh");
+</style>
+<style type="text/css" media="all">
+@import url("https://www.imsglobal.org/sites/all/themes/ims_spec/layout.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/themes/ims_spec/assets/css/ims_base_respec2.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/themes/ims_spec/assets/css/github.css?t073oh");
+@import url("https://www.imsglobal.org/sites/all/themes/ims_spec/assets/css/ims_base_overrides.css?t073oh");
+</style>
+  <script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>
+<script type="text/javascript">
+<!--//--><![CDATA[//><!--
+window.jQuery || document.write("<script src='/sites/all/modules/jquery_update/replace/jquery/1.8/jquery.min.js'>\x3C/script>")
+//--><!]]>
+</script>
+<script type="text/javascript" src="https://www.imsglobal.org/sites/default/files/js/js_Hfha9RCTNm8mqMDLXriIsKGMaghzs4ZaqJPLj2esi7s.js"></script>
+<script type="text/javascript" src="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.2/jquery-ui.min.js"></script>
+<script type="text/javascript">
+<!--//--><![CDATA[//><!--
+window.jQuery.ui || document.write("<script src='/sites/all/modules/jquery_update/replace/ui/ui/minified/jquery-ui.min.js'>\x3C/script>")
+//--><!]]>
+</script>
+<script type="text/javascript" src="https://www.imsglobal.org/sites/default/files/js/js_-jenMcWHoY-_YofME9QdfIdN78Hvtfo2npip2cxdObU.js"></script>
+<script type="text/javascript" src="https://www.imsglobal.org/sites/all/libraries/swagger_ui/dist/swagger-ui-bundle.js?t073oh"></script>
+<script type="text/javascript" src="https://www.imsglobal.org/sites/all/libraries/swagger_ui/dist/swagger-ui-standalone-preset.js?t073oh"></script>
+<script type="text/javascript" src="https://www.imsglobal.org/sites/default/files/js/js_6WjiFgvmHfmfHrKGHz-A0lTB6gHYOj0W5sdi01IZZqI.js"></script>
+<script type="text/javascript" src="https://www.imsglobal.org/sites/default/files/js/js_R9UbiVw2xuTUI0GZoaqMDOdX0lrZtgX-ono8RVOUEVc.js"></script>
+<script type="text/javascript" src="https://www.imsglobal.org/sites/default/files/js/js_5zuXMRVW1l-QcImtnzkLxRllVLM4bkSP3BtjtgfuCOI.js"></script>
+<script type="text/javascript" src="https://www.imsglobal.org/sites/default/files/googleanalytics/js?t073oh"></script>
+<script type="text/javascript">
+<!--//--><![CDATA[//><!--
+window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments)};gtag("js", new Date());gtag("set", "developer_id.dMDhkMT", true);gtag("config", "G-WL2WTVSYLS", {"groups":"default","cookie_domain":".www.imsglobal.org","anonymize_ip":true,"page_path":location.pathname + location.search + location.hash});
+//--><!]]>
+</script>
+<script type="text/javascript" src="https://www.imsglobal.org/sites/default/files/js/js_tN2SQva4IXSklg_PsaIvwpom8pFKsToPRBkQ_DHs_4A.js"></script>
+<script type="text/javascript">
+<!--//--><![CDATA[//><!--
+jQuery.extend(Drupal.settings, {"basePath":"\/","pathPrefix":"","setHasJsCookie":0,"ajaxPageState":{"theme":"ims_spec","theme_token":"wANkwkssqcp0ndJ518NGZwL-2rI-3fPo2gSnoJqcVm8","jquery_version":"1.8","js":{"sites\/all\/themes\/ims_spec\/assets\/js\/fixup.js":1,"\/\/ajax.googleapis.com\/ajax\/libs\/jquery\/1.8.3\/jquery.min.js":1,"0":1,"misc\/jquery-extend-3.4.0.js":1,"misc\/jquery-html-prefilter-3.5.0-backport.js":1,"misc\/jquery.once.js":1,"misc\/drupal.js":1,"\/\/ajax.googleapis.com\/ajax\/libs\/jqueryui\/1.10.2\/jquery-ui.min.js":1,"1":1,"sites\/all\/modules\/jquery_update\/replace\/ui\/external\/jquery.cookie.js":1,"sites\/all\/modules\/jquery_update\/replace\/misc\/jquery.form.min.js":1,"sites\/all\/libraries\/swagger_ui\/dist\/swagger-ui-bundle.js":1,"sites\/all\/libraries\/swagger_ui\/dist\/swagger-ui-standalone-preset.js":1,"misc\/ajax.js":1,"sites\/all\/modules\/jquery_update\/js\/jquery_update.js":1,"sites\/all\/modules\/contrib\/admin_menu\/admin_devel\/admin_devel.js":1,"sites\/all\/libraries\/colorbox\/jquery.colorbox-min.js":1,"sites\/all\/modules\/colorbox\/js\/colorbox.js":1,"sites\/all\/modules\/colorbox\/styles\/default\/colorbox_style.js":1,"misc\/progress.js":1,"sites\/all\/modules\/contrib\/ctools\/js\/modal.js":1,"sites\/all\/modules\/contrib\/swagger_ui_formatter\/swagger_ui_formatter.js":1,"sites\/all\/modules\/google_analytics\/googleanalytics.js":1,"https:\/\/www.imsglobal.org\/sites\/default\/files\/googleanalytics\/js?t073oh":1,"2":1,"sites\/all\/themes\/ims_spec\/assets\/js\/jquery.scrollTo.min.js":1,"sites\/all\/themes\/ims_spec\/assets\/js\/scroll.js":1},"css":{"modules\/system\/system.base.css":1,"modules\/system\/system.menus.css":1,"modules\/system\/system.messages.css":1,"modules\/system\/system.theme.css":1,"misc\/ui\/jquery.ui.core.css":1,"misc\/ui\/jquery.ui.theme.css":1,"modules\/book\/book.css":1,"sites\/all\/modules\/calendar\/css\/calendar_multiday.css":1,"modules\/comment\/comment.css":1,"sites\/all\/modules\/contrib\/date\/date_repeat_field\/date_repeat_field.css":1,"modules\/field\/theme\/field.css":1,"modules\/node\/node.css":1,"sites\/all\/modules\/pd_reports_module\/css\/global.css":1,"sites\/all\/modules\/pd_reports_module\/css\/plugins\/datepicker\/daterangepicker.css":1,"modules\/poll\/poll.css":1,"modules\/search\/search.css":1,"sites\/all\/modules\/toc_node\/css\/toc_node.css":1,"sites\/all\/modules\/ubercart\/uc_order\/uc_order.css":1,"sites\/all\/modules\/ubercart\/uc_product\/uc_product.css":1,"sites\/all\/modules\/ubercart\/uc_store\/uc_store.css":1,"modules\/user\/user.css":1,"modules\/forum\/forum.css":1,"sites\/all\/modules\/views\/css\/views.css":1,"sites\/all\/modules\/contrib\/media\/modules\/media_wysiwyg\/css\/media_wysiwyg.base.css":1,"sites\/all\/modules\/colorbox\/styles\/default\/colorbox_style.css":1,"sites\/all\/modules\/contrib\/ctools\/css\/ctools.css":1,"sites\/all\/modules\/contrib\/ctools\/css\/modal.css":1,"sites\/all\/modules\/tagclouds\/tagclouds.css":1,"sites\/all\/modules\/user_dashboard\/user_dashboard.css":1,"sites\/all\/modules\/taxonomy_access\/taxonomy_access.css":1,"sites\/all\/libraries\/swagger_ui\/dist\/swagger-ui.css":1,"sites\/all\/modules\/productdirectory\/css\/tooltip.css":1,"sites\/all\/themes\/ims_spec\/layout.css":1,"sites\/all\/themes\/ims_spec\/assets\/css\/ims_base_respec2.css":1,"sites\/all\/themes\/ims_spec\/assets\/css\/github.css":1,"sites\/all\/themes\/ims_spec\/assets\/css\/ims_base_overrides.css":1}},"colorbox":{"opacity":"0.85","current":"{current} of {total}","previous":"\u00ab Prev","next":"Next \u00bb","close":"Close","maxWidth":"98%","maxHeight":"98%","fixed":true,"mobiledetect":true,"mobiledevicewidth":"480px","file_public_path":"\/sites\/default\/files","specificPagesDefaultValue":"admin*\nimagebrowser*\nimg_assist*\nimce*\nnode\/add\/*\nnode\/*\/edit\nprint\/*\nprintpdf\/*\nsystem\/ajax\nsystem\/ajax\/*"},"CToolsModal":{"loadingText":"Loading...","closeText":"Close Window","closeImage":"\u003Cimg typeof=\u0022foaf:Image\u0022 src=\u0022https:\/\/www.imsglobal.org\/sites\/all\/modules\/contrib\/ctools\/images\/icon-close-window.png\u0022 alt=\u0022Close window\u0022 title=\u0022Close window\u0022 \/\u003E","throbber":"\u003Cimg typeof=\u0022foaf:Image\u0022 src=\u0022https:\/\/www.imsglobal.org\/sites\/all\/modules\/contrib\/ctools\/images\/throbber.gif\u0022 alt=\u0022Loading\u0022 title=\u0022Loading...\u0022 \/\u003E"},"variable_compare_against_baseline":"IMS has defined an ideal minimum conformance certification that different types of tools should meet. This filter will allow you to view whether a specific tool meets that baseline.","Affiliate":"Affiliate Member","CCLTI":"Learning Tools and Content Alliance Member","CM":"Contributing Member","IWB":"IWB Member","LIS":"EduERP Alliance Member","Assessment":"eAssessment Alliance Member","Prospect":"Prospect Member","better_exposed_filters":{"views":{"sidebar_content":{"displays":{"block":{"filters":[]},"block_1":{"filters":[]}}}}},"googleanalytics":{"account":["G-WL2WTVSYLS"],"trackOutbound":1,"trackMailto":1,"trackDownload":1,"trackDownloadExtensions":"7z|aac|arc|arj|asf|asx|avi|bin|csv|doc(x|m)?|dot(x|m)?|exe|flv|gif|gz|gzip|hqx|jar|jpe?g|js|mp(2|3|4|e?g)|mov(ie)?|msi|msp|pdf|phps|png|ppt(x|m)?|pot(x|m)?|pps(x|m)?|ppam|sld(x|m)?|thmx|qtm?|ra(m|r)?|sea|sit|tar|tgz|torrent|txt|wav|wma|wmv|wpd|xls(x|m|b)?|xlt(x|m)|xlam|xml|z|zip","trackColorbox":1,"trackDomainMode":1,"trackUrlFragments":1},"swagger_ui_formatter":{"swagger_fields":[],"validator_url":null,"doc_expansion":"none","show_top_bar":0,"sort_tags_by_name":0}});
+//--><!]]>
+</script>
+</head>
+<body class="html not-front not-logged-in one-sidebar sidebar-first page-node page-node- page-node-224022 node-type-ims-spec" >
+
+<div class="main_header">
+    <a href="/">
+    <!-- img class="logo ims_logo_globe" src="/sites/all/themes/ims_spec/assets/images/ims_logo_globe.svg" / -->
+    <img class="logo ims_logo_globe_imsg" src="/sites/all/themes/ims_spec/assets/images/ims_logo_globe_imsg.svg" />
+    <!-- img class="logo ims_logo_globe_imsg_lc" src="/sites/all/themes/ims_spec/assets/images/ims_logo_globe_imsg_lc.svg" / -->
+    <!-- img class="logo ims_logo_globe_imsg_lc_tag" src="/sites/all/themes/ims_spec/assets/images/ims_logo_globe_imsg_lc_tag.svg" / -->
+    </a>
+</div>
+
+<div id="skip-link">
+<a href="#main-content" class="element-invisible element-focusable">Skip to main content</a>
+</div>
+
+
+  <div id="page-wrapper"><div id="page">
+
+    <div id="header"><div class="section clearfix">
+
+      
+      
+      
+    </div></div> <!-- /.section, /#header -->
+
+    
+          <div id="breadcrumb"><h2 class="element-invisible">You are here</h2><div class="breadcrumb"><a href="/">Home</a> » <a href="/specifications.html">Specifications</a> » <a href="/activity/case">Competencies and Academic Standards Exchange</a></div></div>
+    
+    
+    <div id="main-wrapper"><div id="main" class="clearfix">
+
+      <div id="content" class="column"><div class="section">
+                <a id="main-content"></a>
+                <h1 class="title" id="page-title">CASE v1.1 Certification Guide</h1>                <div class="tabs"></div>                          <div class="region region-content">
+    <div id="block-system-main" class="block block-system">
+
+    
+  <div class="content">
+    <div id="node-224022" class="node node-ims-spec clearfix" about="/spec/case/v1p1/cert" typeof="sioc:Item foaf:Document">
+
+  
+      <span property="dc:title" content="CASE v1.1 Certification Guide" class="rdf-meta element-hidden"></span><span property="sioc:num_replies" content="0" datatype="xsd:integer" class="rdf-meta element-hidden"></span>
+  
+  <div class="content">
+    <div class="field field-name-field-im-spec-body field-type-text-long field-label-hidden"><div class="field-items"><div class="field-item even"><header>
+    <div class="header-top">
+      <h1 class="title" id="title">Competencies and Academic Standards Exchange (CASE) Service v.1.1: Conformance and Certification</h1>
+      <a href="https://www.1edtech.org" id="1edtech-logo" style="margin-left:27px">
+        <img src="https://purl.imsglobal.org/respec/1edtech_logo_color_with_tagline.svg" width="300" height="105" alt="1EdTech logo">
+      </a>
+    </div>
+    <div class="subtitle">
+        Final Release<br>Spec Version 1.1
+      </div> <span class="statusPD final" data-content="Final Release">Final Release</span>
+    <table id="version-table" title="Version/Release Details">
+    <tbody>
+      <tr>
+        <td>Document Version:</td>
+        <td>1</td>
+      </tr>
+      <tr>
+        <td>Date Issued:</td>
+        <td>January 24th, 2025</td>
+      </tr>
+      <tr>
+        <td>Status:</td>
+        <td>This document is made available for adoption by the public community at large.</td>
+      </tr>
+      <tr>
+        <td>This version:</td>
+        <td><a href="/spec/CASE/v1p1/cert/">https://www.imsglobal.org/spec/CASE/v1p1/cert/</a></td>
+      </tr>
+      <tr>
+                <td>Latest version:</td>
+                <td><a href="/spec/CASE/latest/cert/">https://www.imsglobal.org/spec/CASE/latest/cert/</a></td>
+              </tr><tr>
+                <td>Errata:</td>
+                <td><a href="/spec/CASE/v1p1/errata/">https://www.imsglobal.org/spec/CASE/v1p1/errata/</a></td>
+              </tr>
+      
+    </tbody>
+  </table> <div id="ipr">
+      <h2>IPR and Distribution Notice</h2>
+      <p>
+        Recipients of this document are requested to submit, with their comments, notification of any relevant patent claims or other intellectual property rights of which they may be aware that might be infringed by any implementation of the specification set forth in this document, and to provide supporting documentation.
+      </p>
+      <p>
+        1EdTech takes no position regarding the validity or scope of any intellectual property or other rights that might be claimed to pertain implementation or use of the technology described in this document or the extent to which any license under such rights might or might not be available; neither does it represent that it has made any effort to identify any such rights. Information on 1EdTech's procedures with respect to rights in 1EdTech specifications can be found at the 1EdTech Intellectual Property Rights webpage:
+        <a href="https://www.1edtech.org/sites/default/files/media/docs/2023/imsipr_policyFinal.pdf">
+          https://www.1edtech.org/sites/default/files/media/docs/2023/imsipr_policyFinal.pdf </a>.
+      </p>
+    </div><p>
+        The following participating organizations have made explicit license commitments to this specification:
+      </p><table>
+      <thead>
+        <tr>
+          <th>Org name</th>
+          <th>Date election made</th>
+          <th>Necessary claims</th>
+          <th>Type</th>
+        
+      </tr></thead>
+      <tbody>
+      <tr>
+    <td>UNICON INC.</td>
+    <td>January 14, 2025</td>
+    <td>No</td>
+    <td>RF RAND (Required &amp; Optional Elements)</td>
+  </tr><tr>
+    <td>Common Good Learning Tools</td>
+    <td>January 15, 2025</td>
+    <td>No</td>
+    <td>RF RAND (Required &amp; Optional Elements)</td>
+  </tr><tr>
+    <td>Infinite Campus</td>
+    <td>January 23, 2025</td>
+    <td>No</td>
+    <td>RF RAND (Required &amp; Optional Elements)</td>
+  </tr>
+      </tbody>
+      </table> <div id="disclosure">
+      <p>
+        Use of this specification to develop products or services is governed by the license with 1EdTech found on the 1EdTech website:
+        <a href="https://www.1edtech.org/standards/specification-license">
+          https://www.1edtech.org/standards/specification-license</a>.
+      </p>
+      <p>
+        Permission is granted to all parties to use excerpts from this document as needed in producing requests for proposals.
+      </p>
+      <p>
+        The limited permissions granted above are perpetual and will not be revoked by 1EdTech or its successors or assigns.
+      </p>
+      <p>
+        THIS SPECIFICATION IS BEING OFFERED WITHOUT ANY WARRANTY WHATSOEVER, AND IN PARTICULAR, ANY WARRANTY OF NONINFRINGEMENT IS EXPRESSLY DISCLAIMED. ANY USE OF THIS SPECIFICATION <em class="rfc2119">SHALL</em> BE MADE ENTIRELY AT THE IMPLEMENTER'S OWN RISK, AND NEITHER THE CONSORTIUM, NOR ANY OF ITS MEMBERS OR SUBMITTERS, <em class="rfc2119">SHALL</em> HAVE ANY LIABILITY WHATSOEVER TO ANY IMPLEMENTER OR THIRD PARTY FOR ANY DAMAGES OF ANY NATURE WHATSOEVER, DIRECTLY OR INDIRECTLY, ARISING FROM THE USE OF THIS SPECIFICATION.
+      </p>
+      <p>
+        Public contributions, comments and questions should be directed to
+        <a href="mailto:support@1edtech.org">
+          support@1edtech.org
+        </a>.
+      </p>
+    </div>
+    <div id="cpr">
+    <p>
+      © 2025 1EdTech™ Consortium, Inc. All Rights Reserved.
+    </p>
+    <p>
+      Trademark information:
+      <a href="https://www.1edtech.org/about/legal">https://www.1edtech.org/about/legal
+      </a>
+    </p>
+  </div>
+  </header>
+    <section class="introductory" id="abstract" data-format="markdown"><h2>Abstract</h2></section><nav id="toc"><h2 class="introductory" id="table-of-contents">Table of Contents</h2><ol class="toc"><li class="tocline"><a class="tocxref" href="#abstract">Abstract</a></li><li class="tocline"><a class="tocxref" href="#introduction"><bdi class="secno">1. </bdi>Introduction</a><ol class="toc"><li class="tocline"><a class="tocxref" href="#scope-and-context"><bdi class="secno">1.1 </bdi>Scope and Context</a></li><li class="tocline"><a class="tocxref" href="#status-of-this-document"><bdi class="secno">1.2 </bdi>Status of this Document</a></li><li class="tocline"><a class="tocxref" href="#structure-of-this-document"><bdi class="secno">1.3 </bdi>Structure of this Document</a></li><li class="tocline"><a class="tocxref" href="#nomenclature"><bdi class="secno">1.4 </bdi>Nomenclature</a></li><li class="tocline"><a class="tocxref" href="#references"><bdi class="secno">1.5 </bdi>References</a></li><li class="tocline"><a class="tocxref" href="#the-conformance-process"><bdi class="secno">1.6 </bdi>The Conformance Process</a><ol class="toc"></ol></li><li class="tocline"><a class="tocxref" href="#the-changes-in-case-v1-1"><bdi class="secno">1.7 </bdi>The Changes In CASE v1.1</a><ol class="toc"></ol></li><li class="tocline"><a class="tocxref" href="#service-provider-conformance"><bdi class="secno">1.8 </bdi>Service Provider Conformance</a></li><li class="tocline"><a class="tocxref" href="#required-endpoint-support"><bdi class="secno">1.9 </bdi>Required Endpoint Support</a></li><li class="tocline"><a class="tocxref" href="#x3-2-optional-endpoint-support"><bdi class="secno">1.10 </bdi>3.2 Optional Endpoint Support</a></li><li class="tocline"><a class="tocxref" href="#service-provider-compliance"><bdi class="secno">1.11 </bdi>Service Provider Compliance</a></li><li class="tocline"><a class="tocxref" href="#service-consumer-conformance"><bdi class="secno">1.12 </bdi>Service Consumer Conformance</a><ol class="toc"></ol></li><li class="tocline"><a class="tocxref" href="#service-consumer-compliance"><bdi class="secno">1.13 </bdi>Service Consumer Compliance</a></li><li class="tocline"><a class="tocxref" href="#case-service-certifications"><bdi class="secno">1.14 </bdi>CASE Service Certifications</a></li><li class="tocline"><a class="tocxref" href="#about-this-document"><bdi class="secno">1.15 </bdi>About this Document</a></li></ol></li><li class="tocline"><a class="tocxref" href="#conformance-statements"><bdi class="secno">2. </bdi>Conformance Statements</a></li><li class="tocline"><a class="tocxref" href="#references"><bdi class="secno">A. </bdi>References</a><ol class="toc"><li class="tocline"><a class="tocxref" href="#normative-references"><bdi class="secno">A.1 </bdi>Normative references</a></li></ol></li><li class="tocline"><a class="tocxref" href="#contributors"><bdi class="secno">B. </bdi>List of Contributors</a></li></ol></nav>
+    <section data-format="markdown" id="introduction-0"><div class="header-wrapper"><h2 id="introduction"><bdi class="secno">1. </bdi>Introduction</h2><a class="self-link" href="#introduction" aria-label="Permalink for Section 1."></a></div>
+<section id="scope-and-context-0"><div class="header-wrapper"><h3 id="scope-and-context"><bdi class="secno">1.1 </bdi>Scope and Context</h3><a class="self-link" href="#scope-and-context" aria-label="Permalink for Section 1.1"></a></div>
+<p>The Competencies and Academic Standards Exchange (CASE) Service Specification v1.1 is the definition of how systems
+achieve the exchange of information about academic standards, competencies, and/or skills. The goal for CASE is to replace the current ways of documenting a learning standard and competency, typically in a PDF or HTML document, by one which is both human and machine-readable. Using this CASE v1.1 specification will make it possible to electronically exchange academic standards, competencies, and/or skills between applications, systems, and tools.</p>
+</section><section id="status-of-this-document-0"><div class="header-wrapper"><h3 id="status-of-this-document"><bdi class="secno">1.2 </bdi>Status of this Document</h3><a class="self-link" href="#status-of-this-document" aria-label="Permalink for Section 1.2"></a></div>
+<p>This document is released for public adoption and implementation of the CASE Service 1.1 Specification. Public contributions, feedback on adoption of the specification, comments and questions can be emailed to: <a href="mailto:support@1edtech.org">support@1edtech.org</a></p>
+</section><section id="structure-of-this-document-0"><div class="header-wrapper"><h3 id="structure-of-this-document"><bdi class="secno">1.3 </bdi>Structure of this Document</h3><a class="self-link" href="#structure-of-this-document" aria-label="Permalink for Section 1.3"></a></div>
+<p>The structure of the rest of this document is:</p>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>Number</strong></th>
+<th align="center"><strong>Section</strong></th>
+<th><strong>Description</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1.</td>
+<td align="center">THE CONFORMANCE PROCESS</td>
+<td>The formal process to be undertaken by a vendor wishing to obtain CASE Service conformance certification;</td>
+</tr>
+<tr>
+<td align="center">2.</td>
+<td align="center">SERVICE PROVIDER CONFORMANCE</td>
+<td>The conformance requirements that must be achieved for the certification of a CASE Service Provider;</td>
+</tr>
+<tr>
+<td align="center">3.</td>
+<td align="center">SERVICE CONSUMER CONFORMANCE</td>
+<td>The conformance requirements that must be achieved for the certification of a CASE Service Consumer;</td>
+</tr>
+<tr>
+<td align="center">4.</td>
+<td align="center">CASE SERVICE CERTIFICATIONS</td>
+<td>A comparison of the endpoint certification requirements for a Service Provider and a Service Consumer.</td>
+</tr>
+</tbody></table>
+</section><section id="nomenclature-0"><div class="header-wrapper"><h3 id="nomenclature"><bdi class="secno">1.4 </bdi>Nomenclature</h3><a class="self-link" href="#nomenclature" aria-label="Permalink for Section 1.4"></a></div>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>Number</strong></th>
+<th align="center"><strong>Section</strong></th>
+<th><strong>Description</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1.</td>
+<td align="center">API</td>
+<td>Application Programming Interface</td>
+</tr>
+<tr>
+<td align="center">2.</td>
+<td align="center">IUT</td>
+<td>Implementation Under Test</td>
+</tr>
+<tr>
+<td align="center">3.</td>
+<td align="center">JSON</td>
+<td>Java Script Object Notation</td>
+</tr>
+<tr>
+<td align="center">4.</td>
+<td align="center">CASE</td>
+<td>Competencies and Academic Standards Exchange</td>
+</tr>
+<tr>
+<td align="center">5.</td>
+<td align="center">REST</td>
+<td>Representation State Transfer</td>
+</tr>
+</tbody></table>
+</section><section id="references-0"><div class="header-wrapper"><h3 id="references"><bdi class="secno">1.5 </bdi>References</h3><a class="self-link" href="#references" aria-label="Permalink for Section 1.5"></a></div>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>Number</strong></th>
+<th align="center"><strong>Section</strong></th>
+<th><strong>Description</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1.</td>
+<td align="center">[CASE, 17a]</td>
+<td>1EdTech Competencies and Academic Standards Exchange (CASE) Service 1.1 Candidate Final Document, G.Nadeau, R.Grogan, C.Smythe and J.Hobson, 1EdTech Learning Consortium Inc., July 2017, <a href="/case/casev1p0/imscaseservice_infomodelv1p0.html">http://www.imsglobal.org/case/casev1p0/imscaseservice_infomodelv1p0.html</a>.</td>
+</tr>
+<tr>
+<td align="center">2.</td>
+<td align="center">[CASE, 17b]</td>
+<td>1EdTech Competencies and Academic Standards Exchange (CASE) Service 1.1 REST/JSON Binding Candidate Final Document, G.Nadeau, R.Grogan, C.Smythe and J.Hobson, IMS Global Learning Consortium Inc., July 2017, <a href="/case/casev1p0/imscaseservice_restbingv1p0.html">http://www.imsglobal.org/case/casev1p0/imscaseservice_restbingv1p0.html</a>.</td>
+</tr>
+</tbody></table>
+</section><section id="the-conformance-process-0"><div class="header-wrapper"><h3 id="the-conformance-process"><bdi class="secno">1.6 </bdi>The Conformance Process</h3><a class="self-link" href="#the-conformance-process" aria-label="Permalink for Section 1.6"></a></div>
+<section id="conformance-testing-process-0"><div class="header-wrapper"><h4 id="conformance-testing-process"><bdi class="secno">1.6.1 </bdi>Conformance Testing Process</h4><a class="self-link" href="#conformance-testing-process" aria-label="Permalink for Section 1.6.1"></a></div>
+<p>The process for conformance testing implementations of CASE Service includes the following:</p>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>Number</strong></th>
+<th align="center"><strong>Step</strong></th>
+<th><strong>Notes</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">1.</td>
+<td align="center">Go to the <a href="/competencies-and-academic-standards-exchange-conformance-certification">1EdTech CASE Conformance Certification Test Suite.</a></td>
+<td>Conformance Test Suite links are available in the 1EdTech CASE Service Alliance and the relevant link details are given in Sections 3 and 4 of this document.</td>
+</tr>
+<tr>
+<td align="center">2.</td>
+<td align="center">Follow the onscreen instructions to run the tests for certification testing for the REST-based implementation of CASE v1.1.</td>
+<td></td>
+</tr>
+<tr>
+<td align="center">3.</td>
+<td align="center">1EdTech Members can certify for CASE v1.1 or CASE v1.0. Go to the <a href="https://www.1edtech.org/about/membership">1EdTech Become a Member web page</a> to begin.</td>
+<td>1EdTech Contributing, Affiliate, and CASE Alliance Members may get certified as a CASE Consumer and/or Provider. Suppliers who pay for CASE Network 2 access receive a CASE Alliance Membership, which provides the ability to become certified as CASE Providers and/or Consumers.</td>
+</tr>
+<tr>
+<td align="center">4.</td>
+<td align="center">Go to the 1EdTech Conformance Test Suite for CASE.</td>
+<td>A comparison of the endpoint certification requirements for a service provider and a service consumer.</td>
+</tr>
+<tr>
+<td align="center">5.</td>
+<td align="center">Follow the onscreen instructions to run the tests.</td>
+<td>A comparison of the endpoint certification requirements for a service provider and a service consumer.</td>
+</tr>
+<tr>
+<td align="center">6.</td>
+<td align="center">Once the test has been successfully run, submit a printout of the test results, complete the 1EdTech Competencies and Academic Standards Exchange (CASE) Conformance Test Results form, located on the CASE Conformance and Certification <a href="/competencies-and-academic-standards-exchange-conformance-certification">web page</a>, and send the test results and the completed form to <a href="mailto:conformance@1edtech.org">conformance@1edtech.org</a>.</td>
+<td></td>
+</tr>
+<tr>
+<td align="center">7.</td>
+<td align="center">1EdTech will review the results and issue a conformance certification number.</td>
+<td></td>
+</tr>
+</tbody></table>
+<p>Once the test has been successfully run, submit the print out of the test results along with the following information to <a href="mailto:conformance@imsglobal.org">conformance@imsglobal.org</a>:</p>
+<ol>
+<li>Your Name</li>
+<li>Your Organization</li>
+<li>Your Product Name and Version</li>
+<li>Date the Product was tested</li>
+<li>Whether you are a Service Provider, a Service Consumer or both.</li>
+</ol>
+<p>All tests for either profile must be passed successfully to be considered 1EdTech compliant.</p>
+</section><section id="requirements-for-case-service-1-1-conformance-0"><div class="header-wrapper"><h4 id="requirements-for-case-service-1-1-conformance"><bdi class="secno">1.6.2 </bdi>Requirements for CASE Service 1.1 Conformance</h4><a class="self-link" href="#requirements-for-case-service-1-1-conformance" aria-label="Permalink for Section 1.6.2"></a></div>
+<p>All of the <em class="rfc2119">REQUIRED</em> feature tests <em class="rfc2119">MUST</em> be passed successfully to be considered 1EdTech CASE Service compliant. If a system is to be certified for any of the <em class="rfc2119">OPTIONAL</em> features then the corresponding tests for these <em class="rfc2119">MUST</em> ALSO be passed. When using the conformance test systems you are required to identify which optional features are supported by the implementation under test. The conformance test systems will then test ALL of the <em class="rfc2119">REQUIRED</em> and identified <em class="rfc2119">OPTIONAL</em> features to confirm their correct implementation. The 1EdTech Product Certification directory will then identify the set of optional features that are certified as being compliant.</p>
+</section><section id="case-conformance-mark-0"><div class="header-wrapper"><h4 id="case-conformance-mark"><bdi class="secno">1.6.3 </bdi>CASE Conformance Mark</h4><a class="self-link" href="#case-conformance-mark" aria-label="Permalink for Section 1.6.3"></a></div>
+<p>After you have submitted your successful conformance information to <a href="mailto:conformance@imsglobal.org">conformance@imsglobal.org</a>, and received confirmation and a registration number from 1EdTech Consortium, Inc., you may then apply the appropriate conformance mark. The 1EdTech Global conformance chart will list your conformance details. If you have any questions, please feel free to contact us at any point.</p>
+<p>Membership in the CASE Service Alliance is the only way to achieve official conformance to the CASE Service standard. Products without a 1EdTech conformance Registration Number are not considered to be compliant by 1EdTech Consortium, Inc.</p>
+</section></section><section id="the-changes-in-case-v1-1-0"><div class="header-wrapper"><h3 id="the-changes-in-case-v1-1"><bdi class="secno">1.7 </bdi>The Changes In CASE v1.1</h3><a class="self-link" href="#the-changes-in-case-v1-1" aria-label="Permalink for Section 1.7"></a></div>
+<p>CASE 1.1 serves as a minor upgrade to CASE 1.0. CASE 1.1 still consists of two distinct services that were available in previous version, which are: CASE Provider and CASE Consumer. The goal for CASE 1.1 is to release a small update to address active integration concerns as well as provide clarity for implementing organizations. The sections below describe an overview of the new API path and each new feature. The new API path and any added features will be checked during the review process for CASE 1.1 Provider and CASE 1.1 Consumer certifications.</p>
+<section id="new-api-path-and-features-in-case-1-1-0"><div class="header-wrapper"><h4 id="new-api-path-and-features-in-case-1-1"><bdi class="secno">1.7.1 </bdi>New API Path and Features in CASE 1.1</h4><a class="self-link" href="#new-api-path-and-features-in-case-1-1" aria-label="Permalink for Section 1.7.1"></a></div>
+<p>The goal for CASE 1.1 is to release a small update to address active integration concerns as well as provide clarity for implementing organizations. The sections below describe an overview of the new API path and each new feature. The new API path and any added features will be checked during the review process for CASE 1.1 Provider and CASE 1.1 Consumer certifications.</p>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>New to CASE v1.1</strong></th>
+<th align="center"><strong>Required</strong></th>
+<th align="center"><strong>Optional</strong></th>
+<th><strong>Notes</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">API Path Change</td>
+<td align="center">X</td>
+<td align="center"></td>
+<td>The API endpoint path for CASE 1.1 changes the BASEURL to /ims/case/v1p1</td>
+</tr>
+<tr>
+<td align="center">New Fields and Model Changes</td>
+<td align="center"></td>
+<td align="center">X</td>
+<td>Will be reviewed, if included in the CASE v1.1 certification submission</td>
+</tr>
+<tr>
+<td align="center">Framework Types</td>
+<td align="center"></td>
+<td align="center">X</td>
+<td>Will be reviewed, if included in the CASE v1.1 certification submission</td>
+</tr>
+<tr>
+<td align="center">Associations Pointing to non-CASE Frameworks</td>
+<td align="center"></td>
+<td align="center">X</td>
+<td>Will be reviewed, if included in the CASE v1.1 certification submission</td>
+</tr>
+<tr>
+<td align="center">Rich text with Markdown and LaTeX</td>
+<td align="center"></td>
+<td align="center">X</td>
+<td>Will be reviewed, if included in the CASE v1.1 certification submission</td>
+</tr>
+<tr>
+<td align="center">Extensions to CFItems and other entities</td>
+<td align="center"></td>
+<td align="center">X</td>
+<td>Will be reviewed, if included in the CASE v1.1 certification submission</td>
+</tr>
+<tr>
+<td align="center">CASE Consumer Certification Requirements</td>
+<td align="center">X</td>
+<td align="center"></td>
+<td>Required as a minimum either a CFPackage or CFItem must be supported</td>
+</tr>
+</tbody></table>
+</section><section id="requirement-for-case-1-1-certification-0"><div class="header-wrapper"><h4 id="requirement-for-case-1-1-certification"><bdi class="secno">1.7.2 </bdi>Requirement for CASE 1.1 Certification:</h4><a class="self-link" href="#requirement-for-case-1-1-certification" aria-label="Permalink for Section 1.7.2"></a></div>
+<p>API Path Change:</p>
+<p>The API endpoint path for CASE 1.1 changes the BASEURL to /ims/case/v1p1.</p>
+</section><section id="optional-for-case-1-1-certification-0"><div class="header-wrapper"><h4 id="optional-for-case-1-1-certification"><bdi class="secno">1.7.3 </bdi>Optional for CASE 1.1 Certification:</h4><a class="self-link" href="#optional-for-case-1-1-certification" aria-label="Permalink for Section 1.7.3"></a></div>
+<p>New fields and model changes:</p>
+<p>These are brief descriptions of the new fields, see the sections below for more thorough descriptions and implementation guidance.</p>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>New Fields</strong></th>
+<th><strong>Description</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">API</td>
+<td>Application Programming Interface</td>
+</tr>
+<tr>
+<td align="center">CFDocument.frameworkType</td>
+<td>Specify the framework type of the CFDocument</td>
+</tr>
+<tr>
+<td align="center">CFDocument.caseVersion</td>
+<td>The CASE version for the CFDocument. Currently, the only expected value is 1.1 since this field does not exist for CASE 1.0.</td>
+</tr>
+<tr>
+<td align="center">CFItem.subject</td>
+<td>Allow individual items to have different subjects from the main document</td>
+</tr>
+<tr>
+<td align="center">CFItem.subjectURI</td>
+<td>Allow individual items to have different subjects from the main document</td>
+</tr>
+<tr>
+<td align="center">CFAssociation.notes</td>
+<td>Allow notes for associations</td>
+</tr>
+<tr>
+<td align="center">CFAssociation.originNodeURI.targetType</td>
+<td>Specify the type of the referenced association</td>
+</tr>
+<tr>
+<td align="center">CFAssociation.destinationNodeURI.targetType</td>
+<td>Specify the type of the referenced association</td>
+</tr>
+<tr>
+<td align="center">CFAssociation Types</td>
+<td>Added isTranslationOf</td>
+</tr>
+<tr>
+<td align="center">Extensions</td>
+<td>CFItem, CFDocument, and CFAssociation JSON entities can now include an extensions field, which can include additional sub-fields that are not included in the defined CASE information model</td>
+</tr>
+</tbody></table>
+<p>Framework Types</p>
+<p>CFDocument now has an optional field frameworkType. This allows framework creators to indicate what type of framework this is, for example course codes.</p>
+<ul>
+<li>With the release of CASE 1.1, course codes is the only official type.</li>
+<li>For CASE 1.1 framework types and their data will not be certified.</li>
+</ul>
+<p>Associations Pointing to non-CASE Frameworks:</p>
+<p>CFAssociations now allow the originNodeURI and destinationNodeURI to point to non-CASE frameworks. This is a large change since it changes how CASE consumers process associations since it can no longer be assumed the target is a CASE object. To help guide implementors the field targetType was added to these association pointers.</p>
+<ul>
+<li>The default value is CASE. This is intended to be an open vocabulary with a shared set defined by the CASE workgroup over time.</li>
+</ul>
+<p>Rich text with Markdown and LaTeX:</p>
+<p>Many item statements need to utilize basic formatting and support for math and other rendered text. In CASE 1.1, many fields <em class="rfc2119">MAY</em> now contain Markdown and math-related LaTeX. While it is possible to display this content without rendering the Markdown/LaTeX, all systems that display CASE items <em class="rfc2119">SHOULD</em> render the Markdown and LaTeX, e.g. using JavaScript libraries such as Marked and KaTeX or MathJax.</p>
+<p>List of fields that now support Markdown and LaTeX:</p>
+<ul>
+<li>CFItem.fullStatement</li>
+<li>CFItem.notes</li>
+<li>CFAssociation.notes</li>
+<li>CFDocument.notes</li>
+<li>All description fields</li>
+<li>See the best practices section on Markdown and Latex and the appendix examples of rendered Markdown and LaTeX for more guidance and examples of how Markdown and LaTeX should be properly rendered.</li>
+</ul>
+<p>Extensions to CFItems and other entities</p>
+<p>The CASE 1.0 spec explicitly disallowed “proprietary data elements” in CASE JSON. However, in CASE 1.1, CFItems, CFDocuments, CFAssociations, and other entities <em><em class="rfc2119">MAY</em></em> include an extensions field, which can in turn include sub-fields for names and values that are outside the spec. A system consuming CASE can simply ignore the entire extensions field, and/or any extension sub-fields, that the system doesn’t “know” or “care” about. By nesting all custom data in an extensions field, we avoid namespace collisions with field names that may be introduced in future CASE versions. Best practice is to use camelCase for field names, for consistency with official CASE fields.</p>
+<p>Requirement Option Added for CASE 1.1 Consumer Certification</p>
+<p>The set of endpoints that <em class="rfc2119">MUST</em> be supported by a CASE 1.1 Service Consumer can be EITHER a CFPackage or CFItem.</p>
+</section></section><section id="service-provider-conformance-0"><div class="header-wrapper"><h3 id="service-provider-conformance"><bdi class="secno">1.8 </bdi>Service Provider Conformance</h3><a class="self-link" href="#service-provider-conformance" aria-label="Permalink for Section 1.8"></a></div>
+<p>In Tables 3.1 and 3.2, the following should be noted:</p>
+<p>For a CASE Service 1.1 implementation the 'Endpoint' value should be appended to the string '/ims/case/v1p1/';
+The 'Mode' is used denote whether the system is responsible for issuing the request (Init) or responding to the request (Resp).</p>
+</section><section id="required-endpoint-support-1"><div class="header-wrapper"><h3 id="required-endpoint-support"><bdi class="secno">1.9 </bdi>Required Endpoint Support</h3><a class="self-link" href="#required-endpoint-support" aria-label="Permalink for Section 1.9"></a></div>
+<p>The set of endpoints that <em class="rfc2119">MUST</em> be supported by a Service Provider is listed in Table 3.1.</p>
+<p><strong>Table 3.1 The endpoints that must be supported by a compliant CASE Service Provider.</strong></p>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>Service Call</strong></th>
+<th align="center"><strong>Endpoint</strong></th>
+<th><strong>HTTP Verb</strong></th>
+<th><strong>Mode</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">getCFPackage</td>
+<td align="center">/CFPackages/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+<tr>
+<td align="center">getAllCFDocuments</td>
+<td align="center">/CFDocuments</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+<tr>
+<td align="center">getCFDocument</td>
+<td align="center">/CFDocuments/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+<tr>
+<td align="center">getCFItem</td>
+<td align="center">/CFItems/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+<tr>
+<td align="center">getCFItemAssociations</td>
+<td align="center">/CFItemAssociations/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+<tr>
+<td align="center">getCFAssociation</td>
+<td align="center">/CFAssociations/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+<tr>
+<td align="center">getCFAssociationGrouping</td>
+<td align="center">/CFAssociationGroupings/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+<tr>
+<td align="center">getCFConcept</td>
+<td align="center">/CFConcepts/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+<tr>
+<td align="center">getCFItemType</td>
+<td align="center">/CFItemTypes/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+<tr>
+<td align="center">getCFLicense</td>
+<td align="center">/CFLicenses/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+<tr>
+<td align="center">getCFSubject</td>
+<td align="center">/CFSubjects/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+</tbody></table>
+</section><section id="x3-2-optional-endpoint-support-0"><div class="header-wrapper"><h3 id="x3-2-optional-endpoint-support"><bdi class="secno">1.10 </bdi>3.2 Optional Endpoint Support</h3><a class="self-link" href="#x3-2-optional-endpoint-support" aria-label="Permalink for Section 1.10"></a></div>
+<p>The set of <em class="rfc2119">OPTIONAL</em> endpoints that <em class="rfc2119">MAY</em> be supported by a Service Provider is listed in Table 3.2.</p>
+<p><strong>Table 3.2 The endpoints that <em class="rfc2119">MAY</em> be supported by a compliant CASE Service Provider.</strong></p>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>Service Call</strong></th>
+<th align="center"><strong>Endpoint</strong></th>
+<th><strong>HTTP Verb</strong></th>
+<th><strong>Mode</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">getCFRubric</td>
+<td align="center">/CFRubrics/{sourcedId}</td>
+<td>GET</td>
+<td>Resp</td>
+</tr>
+</tbody></table>
+</section><section id="service-provider-compliance-0"><div class="header-wrapper"><h3 id="service-provider-compliance"><bdi class="secno">1.11 </bdi>Service Provider Compliance</h3><a class="self-link" href="#service-provider-compliance" aria-label="Permalink for Section 1.11"></a></div>
+<p>The functional capabilities of such systems are:</p>
+<ul>
+<li>They must support all of the required endpoints;</li>
+<li>They may support any of the optional endpoints;</li>
+<li>They must supply all of the required data fields in the JSON payloads;</li>
+<li>They must be capable of supplying all of the optional data fields in the JSON payloads (conformance testing requires ALL data fields to be populated);</li>
+<li>They must not provide extension data fields in the JSON payloads;</li>
+<li>They may support the endpoint payload pagination query parameters. If supported the corresponding response HTTP header extensions <em class="rfc2119">MUST</em> be supported;</li>
+<li>They may support the endpoint payload filtering query parameters;</li>
+<li>They may support the endpoint payload sorting query parameters;</li>
+<li>They may support the endpoint payload field selection query parameter.</li>
+</ul>
+<p>The Conformance Test System used to certify a CASE 1.1 Service Provider is available at: <a href="https://validate.imsglobal.org/CASEv1p1_CTS_ServiceProvider/index.html">https://validate.imsglobal.org/CASEv1p1_CTS_ServiceProvider/index.html</a></p>
+</section><section id="service-consumer-conformance-0"><div class="header-wrapper"><h3 id="service-consumer-conformance"><bdi class="secno">1.12 </bdi>Service Consumer Conformance</h3><a class="self-link" href="#service-consumer-conformance" aria-label="Permalink for Section 1.12"></a></div>
+<p>In Tables 4.1 and 4.2, the following should be noted:</p>
+<ul>
+<li>For a CASE Service 1.1 implementation the 'Endpoint' value should be appended to the string '/ims/case/v1p1/';</li>
+<li>The 'Mode' is used denote whether the system is responsible for issuing the request (Init) or responding to the request (Resp).</li>
+<li>For CASE 1.1 Consumer Certification Requirements, an additional endpoint value was included to ease with implementations: Required as a minimum either a CFPackage or CFItem must be supported.</li>
+</ul>
+<section id="required-endpoint-support-2"><div class="header-wrapper"><h4 id="required-endpoint-support-0"><bdi class="secno">1.12.1 </bdi>Required Endpoint Support</h4><a class="self-link" href="#required-endpoint-support-0" aria-label="Permalink for Section 1.12.1"></a></div>
+<p>The set of endpoints that <em class="rfc2119">MUST</em> be supported by a Service Consumer is listed in Table 4.1.</p>
+<p><strong>Table 4.1 The endpoints that must be supported by a compliant CASE Service Consumer.</strong></p>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>Service Call</strong></th>
+<th align="center"><strong>Endpoint</strong></th>
+<th><strong>HTTP Verb</strong></th>
+<th><strong>Mode</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">getCFItem <strong>OR</strong> getCFPackage</td>
+<td align="center">/CFItems/{sourcedId} <strong>OR</strong> /CFPackage/{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">CASE Consumer Certification Requirements</td>
+<td align="center">X</td>
+<td></td>
+<td></td>
+</tr>
+</tbody></table>
+</section><section id="optional-endpoint-support-0"><div class="header-wrapper"><h4 id="optional-endpoint-support"><bdi class="secno">1.12.2 </bdi>Optional Endpoint Support</h4><a class="self-link" href="#optional-endpoint-support" aria-label="Permalink for Section 1.12.2"></a></div>
+<p>The set of <em class="rfc2119">OPTIONAL</em> endpoints that <em class="rfc2119">MAY</em> be supported by a Service Consumer is listed in Table 4.2.</p>
+<p><strong>Table 4.2 The endpoints that <em class="rfc2119">MAY</em> be supported by a compliant CASE Service Consumer.</strong></p>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>Service Call</strong></th>
+<th align="center"><strong>Endpoint</strong></th>
+<th><strong>HTTP Verb</strong></th>
+<th><strong>Mode</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">getCFPackage</td>
+<td align="center">/CFPackages/{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">getAllCFDocuments</td>
+<td align="center">/CFDocuments</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">getCFDocument</td>
+<td align="center">/CFDocuments/{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">getCFItemAssociations</td>
+<td align="center">/CFItemAssociations/{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">getCFAssociation</td>
+<td align="center">/CFAssociations/{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">getCFAssociationGrouping</td>
+<td align="center">/CFAssociationGroupings/{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">getCFConcept</td>
+<td align="center">/CFConcepts/{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">getCFItemType</td>
+<td align="center">/CFItemTypes/{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">getCFLicense</td>
+<td align="center">/CFLicenses/{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">getCFSubject</td>
+<td align="center">/CFSubjects/{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+<tr>
+<td align="center">getCFRubric</td>
+<td align="center">/CFRubrics /{sourcedId}</td>
+<td>GET</td>
+<td>Init</td>
+</tr>
+</tbody></table>
+</section></section><section id="service-consumer-compliance-0"><div class="header-wrapper"><h3 id="service-consumer-compliance"><bdi class="secno">1.13 </bdi>Service Consumer Compliance</h3><a class="self-link" href="#service-consumer-compliance" aria-label="Permalink for Section 1.13"></a></div>
+<p>The functional capabilities of such systems are:</p>
+<ul>
+<li>They must support all of the required endpoints;</li>
+<li>They must 'handle' all of the required data fields in the JSON payloads;</li>
+<li>They may 'handle' any of the optional data fields in the JSON payloads;</li>
+<li>The presence of extension data fields in the JSON payloads should not cause the systems to fail but the handling of these messages is implementation dependent;</li>
+<li>They may support the endpoint payload pagination query parameters. If supported the corresponding response HTTP header extensions <em class="rfc2119">MUST</em> be supported;</li>
+<li>They may support the endpoint payload filtering query parameters;</li>
+<li>They may support the endpoint payload sorting query parameters;</li>
+<li>They may support the endpoint payload field selection query parameter.</li>
+</ul>
+<p>NOTE: From a conformance perspective, 'handle' means that the consumer must store the data in a persistent manner and must demonstrate that storage. Conceptually, if a read request was made to the service consumer for that record then all of the data supplied by the service provider should be recovered.</p>
+<p>The Conformance Test System used to certify a CASE 1.1 Service Consumer is available at: <a href="https://validate.imsglobal.org/CASEv1p1_CTS_Consumer/">https://validate.imsglobal.org/CASEv1p1_CTS_Consumer/</a></p>
+</section><section id="case-service-certifications-0"><div class="header-wrapper"><h3 id="case-service-certifications"><bdi class="secno">1.14 </bdi>CASE Service Certifications</h3><a class="self-link" href="#case-service-certifications" aria-label="Permalink for Section 1.14"></a></div>
+<p>A system that successfully achieves CASE Service certification will have a certain set of functional capabilities. CASE Service certification does NOT guarantee interoperability for ALL features between ALL other CASE Service compliant solutions. The set of functional properties that a CASE Service certified product may have is shown in Table 5.1.</p>
+<p><strong>Table 5.1 A comparison of the certifications available for a CASE Service compliant product.</strong></p>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>Service Call</strong></th>
+<th align="center"><strong>Endpoint</strong></th>
+<th><strong>Provider</strong></th>
+<th><strong>Consumer</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">getCFPackage</td>
+<td align="center">/CFPackages/{sourcedId}</td>
+<td>Required</td>
+<td>Required as a minimum <strong>either</strong> a CFPackage or CFItem must be supported</td>
+</tr>
+<tr>
+<td align="center">getAllCFDocuments</td>
+<td align="center">/CFDocuments</td>
+<td>Required</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td align="center">getCFDocument</td>
+<td align="center">/CFDocuments/{sourcedId}</td>
+<td>Required</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td align="center">getCFItem</td>
+<td align="center">/CFItems/{sourcedId}</td>
+<td>Required</td>
+<td>Required as a minimum <strong>either</strong> a CFPackage or CFItem must be supported</td>
+</tr>
+<tr>
+<td align="center">getCFItemAssociations</td>
+<td align="center">/CFItemAssociations/{sourcedId}</td>
+<td>Required</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td align="center">getCFAssociation</td>
+<td align="center">/CFAssociations/{sourcedId}</td>
+<td>Required</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td align="center">getCFAssociationGrouping</td>
+<td align="center">/CFAssociationGroupings/{sourcedId}</td>
+<td>Required</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td align="center">getCFConcept</td>
+<td align="center">/CFConcepts/{sourcedId}</td>
+<td>Required</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td align="center">getCFItemType</td>
+<td align="center">/CFItemTypes/{sourcedId}</td>
+<td>Required</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td align="center">getCFLicense</td>
+<td align="center">/CFLicenses/{sourcedId}</td>
+<td>Required</td>
+<td>Optional</td>
+</tr>
+<tr>
+<td align="center">getCFSubject</td>
+<td align="center">/CFSubjects/{sourcedId}</td>
+<td>Required</td>
+<td>Optional</td>
+</tr>
+</tbody></table>
+<p>Some key points to note from Table 5.1 are:</p>
+<ul>
+<li>A system could be certified as a service provider, a service consumer or a service provider/service consumer;</li>
+<li>For a service provider ONLY the 'getCFRubric' operation is <em class="rfc2119">OPTIONAL</em>;</li>
+<li>For a service consumer ONLY the 'getCFItem' <strong>OR</strong> 'getCFPackage' operation is <em class="rfc2119">REQUIRED</em>;</li>
+<li>ALL systems <em class="rfc2119">MUST</em> support the 'getCFItem' operation.</li>
+</ul>
+</section><section id="about-this-document-0"><div class="header-wrapper"><h3 id="about-this-document"><bdi class="secno">1.15 </bdi>About this Document</h3><a class="self-link" href="#about-this-document" aria-label="Permalink for Section 1.15"></a></div>
+<p><strong>Title:</strong> 1EdTech Competencies and Academic Standards Exchange Service (CASE) v1.1: Conformance and Certification</p>
+<p><strong>Editors:</strong></p>
+<p>Susan Haught, 1EdTech Consortium, Inc.
+Colin Smythe, 1EdTech Consortium, Inc.</p>
+<p><strong>Co-chair:</strong></p>
+<p>Pepper Williams, Common Good Learning Tools, Inc.</p>
+<p><strong>Version:</strong>	1.1</p>
+<p><strong>Version Date:</strong>	24th, January, 2025</p>
+<p><strong>Status:</strong>	1EdTech Final Release</p>
+<p><strong>Summary:</strong>	The 1EdTech Competencies and Academic Standards Exchange (CASE) Service is used to exchange information about the learning and education competencies. This standard defines a set of data models for competency frameworks, competency documents, competency definitions, competency associations, rubrics, rubric criterions and rubric criterion levels. It also describes how this data can be exchanged using a set of service calls. This document contains the definition of conformance and certification for service consumers and service providers.</p>
+<p><strong>Revision Information:</strong>	First release of this specification.</p>
+<p><strong>Purpose:</strong> For public adoption.</p>
+<p><strong>Document Location:</strong> <a href="/case/">https://www.imsglobal.org/case/</a></p>
+<p><strong>Revision History</strong></p>
+<p><em>This section is non-normative.</em></p>
+<table>
+<thead>
+<tr>
+<th align="center"><strong>Version</strong></th>
+<th align="center"><strong>Release Date</strong></th>
+<th><strong>Comments</strong></th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">CASE 1.1 Conformance and Certification Final Release</td>
+<td align="center">April 8th, 2025</td>
+<td>Update to the CASE 1.1 Final Release Conformance and Certification Guide to add as a minimum of either a CFPackage or CFItem for CASE 1.1 Consumer Certification.</td>
+</tr>
+<tr>
+<td align="center">CASE 1.1 Conformance and Certification Candidate Final Release</td>
+<td align="center">March 1st, 2024</td>
+<td>CASE 1.1 first Final Release. The first formal Candidate Final Release that is ready for adoption and implementation.</td>
+</tr>
+<tr>
+<td align="center">CASE 1.1 Conformance and Certification Final Release</td>
+<td align="center">January 24, 2025</td>
+<td>First Release of CASE 1.1 Final Release. Document location: <a href="/case/">https://www.imsglobal.org/case/</a></td>
+</tr>
+<tr>
+<td align="center">CASE 1.1 Final Release</td>
+<td align="center">January 24, 2025</td>
+<td>The first formal Final Release that is ready for public adoption and implementation.</td>
+</tr>
+</tbody></table>
+</section></section>
+    <section id="conformance"><div class="header-wrapper"><h2 id="conformance-statements"><bdi class="secno">2. </bdi>Conformance Statements</h2><a class="self-link" href="#conformance-statements" aria-label="Permalink for Section 2."></a></div>
+      <p>
+      As well as sections marked as non-normative, all authoring guidelines, diagrams, examples, and notes in this specification are non-normative. Everything else in this specification is normative.
+    </p><p>
+          The key words
+          <em class="rfc2119">MAY</em>, <em class="rfc2119">MUST</em>, <em class="rfc2119">MUST NOT</em>, <em class="rfc2119">OPTIONAL</em>, <em class="rfc2119">RECOMMENDED</em>, <em class="rfc2119">REQUIRED</em>, <em class="rfc2119">SHALL</em>, <em class="rfc2119">SHALL NOT</em>, <em class="rfc2119">SHOULD</em>, and <em class="rfc2119">SHOULD NOT</em>
+          in this document $are to be interpreted as described in $[object Object].
+          </p><p>An implementation of this specification that fails to implement a MUST/REQUIRED/SHALL requirement or fails to abide by a MUST NOT/SHALL NOT prohibition is considered nonconformant. SHOULD/SHOULD NOT/RECOMMENDED statements constitute a best practice. Ignoring a best practice does not violate conformance but a decision to disregard such guidance should be carefully considered. MAY/OPTIONAL statements indicate that implementers are entirely free to choose whether or not to implement the option.</p>
+    </section>
+  
+
+<section id="references" class="appendix"><div class="header-wrapper"><h2 id="a-references"><bdi class="secno">A. </bdi>References</h2><a class="self-link" href="#references" aria-label="Permalink for Appendix A."></a></div><section id="normative-references"><div class="header-wrapper"><h3 id="a-1-normative-references"><bdi class="secno">A.1 </bdi>Normative references</h3><a class="self-link" href="#normative-references" aria-label="Permalink for Appendix A.1"></a></div>
+    
+    <dl class="bibliography"><dt id="bib-rfc2119">[RFC2119]</dt><dd>
+      <a href="https://www.rfc-editor.org/rfc/rfc2119"><cite>Key words for use in RFCs to Indicate Requirement Levels</cite></a>. S. Bradner.  IETF. March 1997. Best Current Practice. URL: <a href="https://www.rfc-editor.org/rfc/rfc2119">https://www.rfc-editor.org/rfc/rfc2119</a>
+    </dd></dl>
+  </section></section><section id="contributors" class="appendix"><div class="header-wrapper"><h2 id="b-list-of-contributors"><bdi class="secno">B. </bdi>List of Contributors</h2><a class="self-link" href="#contributors" aria-label="Permalink for Appendix B."></a></div>
+    
+    <p>The following individuals contributed to the development of this document:</p>
+    <table class="contributors" title="List of Contributors" summary="The list of contributors to this work.">
+      <thead>
+        <tr><th>Name</th>
+        <th>Organization</th>
+        <th>Role</th>
+      </tr></thead>
+      <tbody>
+          <tr><td class="name">Susan Haught</td><td class="co">1EdTech Consortium, Inc.</td><td class="role">Editor</td></tr><tr><td class="name">Colin Smythe</td><td class="co">1EdTech Consortium, Inc.</td><td class="role"></td></tr><tr><td class="name">Bracken Mosbacker</td><td class="co">1EdTech Consortium, Inc.</td><td class="role"></td></tr><tr><td class="name">Pepper Williams</td><td class="co">Common Good Learning Tools, Inc.</td><td class="role"></td></tr><tr><td class="name">Ed Jung</td><td class="co">Learning Mate</td><td class="role"></td></tr><tr><td class="name">Joshua Marks</td><td class="co">Public Consulting Group</td><td class="role"></td></tr><tr><td class="name">Raymond Baranoski</td><td class="co">SAFARI Montage</td><td class="role"></td></tr><tr><td class="name">Jared Booth	</td><td class="co">HMH </td><td class="role"></td></tr><tr><td class="name">Barry Brahier</td><td class="co">Infinite Campus</td><td class="role"></td></tr><tr><td class="name">Deb Everhart</td><td class="co">Credential Engine</td><td class="role"></td></tr><tr><td class="name">Jeff Grann</td><td class="co">Capella University</td><td class="role"></td></tr><tr><td class="name">Bob Grogan</td><td class="co">eLumen</td><td class="role"></td></tr><tr><td class="name">Joel Hernandez</td><td class="co">eLumen</td><td class="role"></td></tr><tr><td class="name">David Ward</td><td class="co">PCG </td><td class="role"></td></tr><tr><td class="name">Stuart Sutton</td><td class="co">Credential Engine</td><td class="role"></td></tr><tr><td class="name">Andrew Brown </td><td class="co">eLumen</td><td class="role"></td></tr><tr><td class="name">Ben Herndon </td><td class="co">PowerSchool</td><td class="role"></td></tr><tr><td class="name">Brian Wales</td><td class="co">SAFARI Montage</td><td class="role"></td></tr><tr><td class="name">Christian Clark</td><td class="co">Southern New Hampshire University</td><td class="role"></td></tr><tr><td class="name">C. London </td><td class="co">	Southern New Hampshire University</td><td class="role"></td></tr><tr><td class="name">Carrie Vail</td><td class="co">PowerSchool</td><td class="role"></td></tr><tr><td class="name">C. Brown </td><td class="co">Unicon, Inc.</td><td class="role"></td></tr><tr><td class="name">Darcy Wither </td><td class="co">D2L</td><td class="role"></td></tr><tr><td class="name">David Mayes </td><td class="co">Gwinnett County Public Schools</td><td class="role"></td></tr><tr><td class="name">Diego del Blanco</td><td class="co">Unicon, Inc.</td><td class="role"></td></tr><tr><td class="name">Davonne Eldridge </td><td class="co">North Dakota Information Technology Deparment</td><td class="role"></td></tr><tr><td class="name">Emma Lee</td><td class="co">University of Montana</td><td class="role"></td></tr><tr><td class="name">Heather Carle </td><td class="co">Territorium</td><td class="role"></td></tr><tr><td class="name">Joshua Heyman</td><td class="co">Southern New Hampshire Universtiy</td><td class="role"></td></tr><tr><td class="name">Joe Green </td><td class="co">Territoruim</td><td class="role"></td></tr><tr><td class="name">Christophe Konstantinos </td><td class="co">	TAO Testing</td><td class="role"></td></tr><tr><td class="name">Keith Osburn </td><td class="co">Georgia Department of Education</td><td class="role"></td></tr><tr><td class="name">Lori Griffin </td><td class="co">SAFARI Montage</td><td class="role"></td></tr><tr><td class="name">Luke Zenger </td><td class="co">Infinite Campus</td><td class="role"></td></tr><tr><td class="name">Mark Ohringer </td><td class="co">Randa Solutions</td><td class="role"></td></tr><tr><td class="name">Marty Reed</td><td class="co">	Randa Solutions</td><td class="role"></td></tr><tr><td class="name">Matthew Richards</td><td class="co">Infinite Campus</td><td class="role"></td></tr><tr><td class="name">Monica Dalvi</td><td class="co">Amplify</td><td class="role"></td></tr><tr><td class="name">Michael Moore</td><td class="co">D2L</td><td class="role"></td></tr><tr><td class="name">Paul Katula</td><td class="co">Maryland Department of Education</td><td class="role"></td></tr><tr><td class="name">Radian Baskoro</td><td class="co">PowerSchool</td><td class="role"></td></tr><tr><td class="name">Raymond Baranoski</td><td class="co">SAFARI Montage</td><td class="role"></td></tr><tr><td class="name">Scott Murray </td><td class="co">PowerSchool</td><td class="role"></td></tr><tr><td class="name">Shana Rafalaski</td><td class="co">	SAFARI Montage</td><td class="role"></td></tr><tr><td class="name">Steve Buettner </td><td class="co">Edina Public Schools</td><td class="role"></td></tr><tr><td class="name">Timothy Beekman </td><td class="co">SAFARI Montage</td><td class="role"></td></tr><tr><td class="name">Korsmo, Tracy A.</td><td class="co">North Dakota Department of Public Instruction</td><td class="role"></td></tr><tr><td class="name">Viktor Haag</td><td class="co">D2L</td><td class="role"></td></tr><tr><td class="name">Wendy Stephens</td><td class="co">South Carolina Department of Education</td><td class="role"></td></tr><tr><td class="name">Michelle Wagner </td><td class="co">Broward County Public Schools</td><td class="role"></td></tr><tr><td class="name">Xavi Aracil</td><td class="co">1EdTech</td><td class="role"></td></tr><tr><td class="name">Tom Hoffmann </td><td class="co">1EdTech</td><td class="role"></td></tr><tr><td class="name">Monica Watts</td><td class="co">1EdTech</td><td class="role"></td></tr><tr><td class="name">Mark Leuba</td><td class="co">1EdTech</td><td class="role"></td></tr><tr><td class="name">Beatriz Arnillas</td><td class="co">1EdTech</td><td class="role"></td></tr><tr><td class="name">Joshua McGhee</td><td class="co">	1EdTech</td><td class="role"></td></tr>
+      </tbody>
+    </table>
+    </section><p role="navigation" id="back-to-top">
+    <a href="#title"><abbr title="Back to Top">↑</abbr></a>
+  </p><script src="https://purl.imsglobal.org/spec/fixup.js"></script><footer>
+    <div id="endWarranty">
+      <p>1EdTech™ Consortium, Inc. ("1EdTech") is publishing the information contained in this document ("Specification") for purposes of scientific, experimental, and scholarly collaboration only.</p>
+      <p>1EdTech makes no warranty or representation regarding the accuracy or completeness of the Specification.</p>
+      <p>This material is provided on an "As Is" and "As Available" basis.</p>
+      <p>The Specification is at all times subject to change and revision without notice.</p>
+      <p>It is your sole responsibility to evaluate the usefulness, accuracy, and completeness of the Specification as it relates to you.</p>
+      <p>1EdTech would appreciate receiving your comments and suggestions.</p>
+      <p>
+        Please contact 1EdTech through our website at <a href="https://www.1edtech.org">www.1edtech.org</a>
+      </p>
+      <p>
+        Please refer to Document Name: Competencies and Academic Standards Exchange (CASE) Service v.1.1: Conformance and Certification
+        1.1
+      </p>
+      <p>Date: January 24th, 2025</p>
+      <div></div>
+    </div>
+  </footer></div></div></div><div class="field field-name-field-ims-openapi-definition field-type-file field-label-hidden"><div class="field-items"></div></div>  </div>
+
+  
+  
+</div>
+  </div>
+</div>
+  </div>
+              </div></div> <!-- /.section, /#content -->
+
+              <div id="sidebar-first" class="column sidebar"><div class="section">
+            <div class="region region-sidebar-first">
+    <div id="block-block-81" class="block block-block">
+
+    
+  <div class="content">
+    <div style="display: none;">Sharebar?</div>  </div>
+</div>
+  </div>
+        </div></div> <!-- /.section, /#sidebar-first -->
+      
+      
+    </div></div> <!-- /#main, /#main-wrapper -->
+
+    <div id="footer"><div class="section">
+        <div class="region region-footer">
+    <div id="block-block-6" class="block block-block">
+
+    
+  <div class="content">
+    <p><a href="https://www.1edtech.org/about/legal">&copy; 2001-2023 1EdTech Consortium Inc.</a> All Rights Reserved. <a href="https://www.1edtech.org/about/legal/privacy">Privacy Policy</a></p>
+  </div>
+</div>
+  </div>
+    </div></div> <!-- /.section, /#footer -->
+
+  </div></div> <!-- /#page, /#page-wrapper -->
+<script type="text/javascript" src="https://www.imsglobal.org/sites/default/files/js/js_Yddmc_XBpJYAVeyudHICPhIzBbZBMYSzml0FOyvZ9Bw.js"></script>
+
+</body>
+</html>

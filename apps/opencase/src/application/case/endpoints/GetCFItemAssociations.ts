@@ -41,9 +41,8 @@ export class GetCFItemAssociations {
     })
 
     return {
-      CFAssociationSet: {
-        CFAssociations: associations.map(a => a.toJSON())
-      }
+      CFItem: item.toJSON(),
+      CFAssociations: associations.map(a => a.toJSON())
     }
   }
 }

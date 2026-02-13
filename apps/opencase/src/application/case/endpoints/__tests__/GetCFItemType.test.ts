@@ -52,9 +52,7 @@ describe('GetCFItemType', () => {
 
       const result = await getCFItemType.execute({ tenantId, caseVersion, sourcedId: itemTypeId })
 
-      expect(result).toEqual({
-        CFItemType: itemType
-      })
+      expect(result).toEqual(itemType)
       expect(mockStore.getDefinitionById).toHaveBeenCalledWith(tenantId, caseVersion, 'CFItemTypes', itemTypeId)
     })
   })

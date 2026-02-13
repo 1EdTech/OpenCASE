@@ -18,7 +18,7 @@ export class GetCFLicense {
   async execute (query: GetCFLicenseQuery) {
     const entry = this.store.getDefinitionById(query.tenantId, query.caseVersion, 'CFLicenses', query.sourcedId)
     if (!entry) return null
-    return { CFLicense: entry.value }
+    return entry.value
   }
 }
 

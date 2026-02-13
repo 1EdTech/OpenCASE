@@ -17,7 +17,7 @@ export class GetCFAssociationGrouping {
   async execute (query: GetCFAssociationGroupingQuery) {
     const entry = this.store.getDefinitionById(query.tenantId, query.caseVersion, 'CFAssociationGroupings', query.sourcedId)
     if (!entry) return null
-    return { CFAssociationGrouping: entry.value }
+    return entry.value
   }
 }
 

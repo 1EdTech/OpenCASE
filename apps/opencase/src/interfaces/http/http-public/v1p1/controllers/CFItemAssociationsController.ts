@@ -51,20 +51,19 @@ export class CFItemAssociationsControllerV1p1 {
         return res.status(404).json(StatusInfoFormatter.notFound('The requested CFItem was not found.'))
       }
 
-      // Apply query params to the association set (filter/sort/paging/fields)
-      let wrapped: any = result
-      if (result?.CFAssociationSet?.CFAssociations) {
-        const applied = applyQueryToArray(result.CFAssociationSet.CFAssociations, parsed.value)
+      // Apply query params to the associations array (filter/sort/paging/fields)
+      let responseBody: any = { ...result }
+      if (result?.CFAssociations) {
+        const applied = applyQueryToArray(result.CFAssociations, parsed.value)
         if (!applied.ok) return res.status(applied.status).json(applied.body)
-        wrapped = {
-          CFAssociationSet: {
-            CFAssociations: applied.items
-          }
+        responseBody = {
+          CFItem: result.CFItem,
+          CFAssociations: applied.items
         }
       }
 
       const baseUrl = getBaseUrl(req)
-      let body = absolutizeCaseUris(wrapped, baseUrl)
+      let body = absolutizeCaseUris(responseBody, baseUrl)
       if (!wantsOpenCaseExtensions(req)) { body = stripExtensions(body) }
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)

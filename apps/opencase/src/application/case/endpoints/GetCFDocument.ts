@@ -35,9 +35,7 @@ export class GetCFDocument {
       documentJSON.CFPackageURI = packageURI
     }
 
-    return {
-      CFDocument: documentJSON
-    }
+    return documentJSON
   }
 }
 

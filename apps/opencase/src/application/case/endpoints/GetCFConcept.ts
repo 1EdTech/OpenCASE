@@ -18,7 +18,7 @@ export class GetCFConcept {
   async execute (query: GetCFConceptQuery) {
     const entry = this.store.getDefinitionById(query.tenantId, query.caseVersion, 'CFConcepts', query.sourcedId)
     if (!entry) return null
-    return { CFConcept: entry.value }
+    return entry.value
   }
 }
 

@@ -124,30 +124,28 @@ describe('GetCFPackage', () => {
       const result = await getCFPackage.execute({ tenantId, caseVersion, docId });
 
       expect(result).toEqual({
-        CFPackage: {
-          CFDocument: expect.objectContaining({
-            identifier: docId,
-            title: 'Test Document',
-            CFPackageURI: expect.objectContaining({
-              identifier: docId
-            })
-          }),
-          CFItems: expect.arrayContaining([
-            expect.objectContaining({ identifier: 'item-1' }),
-            expect.objectContaining({ identifier: 'item-2' })
-          ]),
-          CFAssociations: expect.arrayContaining([
-            expect.objectContaining({ identifier: 'assoc-1' })
-          ]),
-          CFRubrics: expect.arrayContaining([
-            expect.objectContaining({
-              identifier: 'rubric-1',
-              uri: '/ims/case/v1p1/CFRubrics/rubric-1',
-              lastChangeDateTime: '2024-01-01T00:00:00.000Z',
-              title: 'test'
-            })
-          ])
-        }
+        CFDocument: expect.objectContaining({
+          identifier: docId,
+          title: 'Test Document',
+          CFPackageURI: expect.objectContaining({
+            identifier: docId
+          })
+        }),
+        CFItems: expect.arrayContaining([
+          expect.objectContaining({ identifier: 'item-1' }),
+          expect.objectContaining({ identifier: 'item-2' })
+        ]),
+        CFAssociations: expect.arrayContaining([
+          expect.objectContaining({ identifier: 'assoc-1' })
+        ]),
+        CFRubrics: expect.arrayContaining([
+          expect.objectContaining({
+            identifier: 'rubric-1',
+            uri: '/ims/case/v1p1/CFRubrics/rubric-1',
+            lastChangeDateTime: '2024-01-01T00:00:00.000Z',
+            title: 'test'
+          })
+        ])
       });
     });
 
@@ -174,17 +172,15 @@ describe('GetCFPackage', () => {
       const result = await getCFPackage.execute({ tenantId, caseVersion, docId });
 
       expect(result).toEqual({
-        CFPackage: {
-          CFDocument: expect.objectContaining({
-            identifier: docId,
-            title: 'Test Document',
-            CFPackageURI: expect.objectContaining({
-              identifier: docId
-            })
-          }),
-          CFItems: [],
-          CFAssociations: []
-        }
+        CFDocument: expect.objectContaining({
+          identifier: docId,
+          title: 'Test Document',
+          CFPackageURI: expect.objectContaining({
+            identifier: docId
+          })
+        }),
+        CFItems: [],
+        CFAssociations: []
       });
     });
 
@@ -212,7 +208,7 @@ describe('GetCFPackage', () => {
       const result = await getCFPackage.execute({ tenantId, caseVersion, docId });
 
       expect(result).not.toBeNull();
-      expect(result?.CFPackage.CFDocument.adoptionStatus).toBe('Retired');
+      expect(result?.CFDocument.adoptionStatus).toBe('Retired');
     });
 
     it('should return deprecated document when getting by ID (archived documents always returned)', async () => {
@@ -239,7 +235,7 @@ describe('GetCFPackage', () => {
       const result = await getCFPackage.execute({ tenantId, caseVersion, docId });
 
       expect(result).not.toBeNull();
-      expect(result?.CFPackage.CFDocument.adoptionStatus).toBe('Deprecated');
+      expect(result?.CFDocument.adoptionStatus).toBe('Deprecated');
     });
   });
 });

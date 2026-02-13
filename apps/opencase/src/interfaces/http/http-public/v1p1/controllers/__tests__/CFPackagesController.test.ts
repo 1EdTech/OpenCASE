@@ -47,16 +47,14 @@ describe('CFPackagesControllerV1p1', () => {
   describe('getById', () => {
     it('should return CFPackage when found', async () => {
       const result = {
-        CFPackage: {
-          CFDocument: { 
-            identifier: 'doc-123', 
-            title: 'Test',
-            lastChangeDateTime: '2024-01-01T00:00:00.000Z'
-          },
-          CFItems: [],
-          CFAssociations: [],
-          CFRubrics: []
-        }
+        CFDocument: { 
+          identifier: 'doc-123', 
+          title: 'Test',
+          lastChangeDateTime: '2024-01-01T00:00:00.000Z'
+        },
+        CFItems: [],
+        CFAssociations: [],
+        CFRubrics: []
       };
 
       mockGetCFPackage.execute.mockResolvedValue(result);
@@ -76,16 +74,14 @@ describe('CFPackagesControllerV1p1', () => {
 
     it('should resolve tenantId from global lookup (not from request)', async () => {
       const result = {
-        CFPackage: {
-          CFDocument: { 
-            identifier: 'doc-123', 
-            title: 'Test',
-            lastChangeDateTime: '2024-01-01T00:00:00.000Z'
-          },
-          CFItems: [],
-          CFAssociations: [],
-          CFRubrics: []
-        }
+        CFDocument: { 
+          identifier: 'doc-123', 
+          title: 'Test',
+          lastChangeDateTime: '2024-01-01T00:00:00.000Z'
+        },
+        CFItems: [],
+        CFAssociations: [],
+        CFRubrics: []
       };
 
       mockGetCFPackage.execute.mockResolvedValue(result);

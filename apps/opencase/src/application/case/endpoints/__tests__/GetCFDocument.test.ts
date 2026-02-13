@@ -52,15 +52,13 @@ describe('GetCFDocument', () => {
 
       const result = await getCFDocument.execute({ tenantId, caseVersion, sourcedId: docId })
 
-      expect(result).toEqual({
-        CFDocument: expect.objectContaining({
-          identifier: docId,
-          title: 'Test Document',
-          CFPackageURI: expect.objectContaining({
-            identifier: docId
-          })
+      expect(result).toEqual(expect.objectContaining({
+        identifier: docId,
+        title: 'Test Document',
+        CFPackageURI: expect.objectContaining({
+          identifier: docId
         })
-      })
+      }))
     })
   })
 })

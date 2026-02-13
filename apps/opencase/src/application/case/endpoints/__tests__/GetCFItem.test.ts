@@ -113,12 +113,10 @@ describe('GetCFItem', () => {
 
       const result = await getCFItem.execute({ tenantId, caseVersion, sourcedId: itemId })
 
-      expect(result).toEqual({
-        CFItem: expect.objectContaining({
-          identifier: itemId,
-          fullStatement: 'Test Statement'
-        })
-      })
+      expect(result).toEqual(expect.objectContaining({
+        identifier: itemId,
+        fullStatement: 'Test Statement'
+      }))
     })
   })
 })

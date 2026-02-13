@@ -43,13 +43,11 @@ describe('CFLicensesControllerV1p1', () => {
   describe('getById', () => {
     it('should return CFLicense when found', async () => {
       const result = {
-        CFLicense: {
-          identifier: 'license-123',
-          uri: '/ims/case/v1p1/CFLicenses/license-123',
-          title: 'Test License',
-          licenseText: 'License text here',
-          lastChangeDateTime: '2024-01-01T00:00:00.000Z'
-        }
+        identifier: 'license-123',
+        uri: '/ims/case/v1p1/CFLicenses/license-123',
+        title: 'Test License',
+        licenseText: 'License text here',
+        lastChangeDateTime: '2024-01-01T00:00:00.000Z'
       }
 
       mockGetCFLicense.execute.mockResolvedValue(result)

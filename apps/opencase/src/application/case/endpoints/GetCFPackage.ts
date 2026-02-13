@@ -39,11 +39,9 @@ export class GetCFPackage {
     }
 
     const result: any = {
-      CFPackage: {
-        CFDocument: documentJSON,
-        CFItems: pkg.items.map(i => i.toJSON()),
-        CFAssociations: pkg.associations.map(a => a.toJSON())
-      }
+      CFDocument: documentJSON,
+      CFItems: pkg.items.map(i => i.toJSON()),
+      CFAssociations: pkg.associations.map(a => a.toJSON())
     }
 
     // Add CFDefinitions (optional field [0..1]) using tenant defaults, overridden by per-framework definitions.
@@ -66,7 +64,7 @@ export class GetCFPackage {
     const referencedLicenseIds = new Set<string>()
     const docLicenseId = documentJSON.licenseURI?.identifier as string | undefined
     if (docLicenseId) referencedLicenseIds.add(docLicenseId)
-    for (const item of result.CFPackage.CFItems ?? []) {
+    for (const item of result.CFItems ?? []) {
       const itemLicenseId = (item as any)?.licenseURI?.identifier as string | undefined
       if (itemLicenseId) referencedLicenseIds.add(itemLicenseId)
     }
@@ -103,17 +101,17 @@ export class GetCFPackage {
       (mergedDefinitions as any).extensions
 
     if (hasAnyDefinitions) {
-      result.CFPackage.CFDefinitions = mergedDefinitions
+      result.CFDefinitions = mergedDefinitions
     }
 
     // Add CFRubrics if present (optional field [0..*])
     if (pkg.rubrics && pkg.rubrics.length > 0) {
-      result.CFPackage.CFRubrics = pkg.rubrics.map(r => r.toJSON())
+      result.CFRubrics = pkg.rubrics.map(r => r.toJSON())
     }
 
     // Add extensions if present (optional field [0..1])
     if (query.caseVersion === '1.1' && pkg.extensions) {
-      result.CFPackage.extensions = pkg.extensions
+      result.extensions = pkg.extensions
     }
 
     return result

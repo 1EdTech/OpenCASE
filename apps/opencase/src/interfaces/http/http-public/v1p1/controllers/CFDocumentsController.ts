@@ -51,11 +51,11 @@ export class CFDocumentsControllerV1p1 {
       }
 
       const baseUrl = getBaseUrl(req)
-      const wrapped = { ...result } as any
-      if (wrapped.CFDocument && parsed.value.fields?.length) {
-        wrapped.CFDocument = applyFieldSelectionToEntity(wrapped.CFDocument, parsed.value.fields)
+      let entity = { ...result } as any
+      if (parsed.value.fields?.length) {
+        entity = applyFieldSelectionToEntity(entity, parsed.value.fields)
       }
-      let body = absolutizeCaseUris(wrapped, baseUrl)
+      let body = absolutizeCaseUris(entity, baseUrl)
       if (!wantsOpenCaseExtensions(req)) { body = stripExtensions(body) }
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)

@@ -43,12 +43,10 @@ describe('CFSubjectsControllerV1p1', () => {
   describe('getById', () => {
     it('should return CFSubject when found', async () => {
       const result = {
-        CFSubject: {
-          identifier: 'subject-123',
-          uri: '/ims/case/v1p1/CFSubjects/subject-123',
-          title: 'Mathematics',
-          lastChangeDateTime: '2024-01-01T00:00:00.000Z'
-        }
+        identifier: 'subject-123',
+        uri: '/ims/case/v1p1/CFSubjects/subject-123',
+        title: 'Mathematics',
+        lastChangeDateTime: '2024-01-01T00:00:00.000Z'
       }
 
       mockGetCFSubject.execute.mockResolvedValue(result)

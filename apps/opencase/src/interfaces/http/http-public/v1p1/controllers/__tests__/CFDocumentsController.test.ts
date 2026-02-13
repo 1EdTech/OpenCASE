@@ -44,13 +44,11 @@ describe('CFDocumentsControllerV1p1', () => {
   describe('getById', () => {
     it('should return CFDocument when found', async () => {
       const result = {
-        CFDocument: {
-          identifier: 'doc-123',
-          uri: '/ims/case/v1p1/CFDocuments/doc-123',
-          creator: 'Test Creator',
-          title: 'Test Document',
-          lastChangeDateTime: '2024-01-01T00:00:00.000Z'
-        }
+        identifier: 'doc-123',
+        uri: '/ims/case/v1p1/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        lastChangeDateTime: '2024-01-01T00:00:00.000Z'
       }
 
       mockGetCFDocument.execute.mockResolvedValue(result)

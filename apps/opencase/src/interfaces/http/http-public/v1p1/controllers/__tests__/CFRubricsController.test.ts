@@ -44,12 +44,10 @@ describe('CFRubricsControllerV1p1', () => {
   describe('getById', () => {
     it('should return CFRubric when found', async () => {
       const result = {
-        CFRubric: {
-          identifier: 'rubric-123',
-          uri: '/ims/case/v1p1/CFRubrics/rubric-123',
-          title: 'Test Rubric',
-          lastChangeDateTime: '2024-01-01T00:00:00.000Z'
-        }
+        identifier: 'rubric-123',
+        uri: '/ims/case/v1p1/CFRubrics/rubric-123',
+        title: 'Test Rubric',
+        lastChangeDateTime: '2024-01-01T00:00:00.000Z'
       }
 
       mockGetCFRubric.execute.mockResolvedValue(result)

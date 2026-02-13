@@ -44,22 +44,20 @@ describe('CFAssociationsControllerV1p1', () => {
   describe('getById', () => {
     it('should return CFAssociation when found', async () => {
       const result = {
-        CFAssociation: {
-          identifier: 'assoc-123',
-          uri: '/ims/case/v1p1/CFAssociations/assoc-123',
-          associationType: 'isChildOf',
-          originNodeURI: {
-            title: 'Origin',
-            identifier: 'item-1',
-            uri: '/ims/case/v1p1/CFItems/item-1'
-          },
-          destinationNodeURI: {
-            title: 'Destination',
-            identifier: 'item-2',
-            uri: '/ims/case/v1p1/CFItems/item-2'
-          },
-          lastChangeDateTime: '2024-01-01T00:00:00.000Z'
-        }
+        identifier: 'assoc-123',
+        uri: '/ims/case/v1p1/CFAssociations/assoc-123',
+        associationType: 'isChildOf',
+        originNodeURI: {
+          title: 'Origin',
+          identifier: 'item-1',
+          uri: '/ims/case/v1p1/CFItems/item-1'
+        },
+        destinationNodeURI: {
+          title: 'Destination',
+          identifier: 'item-2',
+          uri: '/ims/case/v1p1/CFItems/item-2'
+        },
+        lastChangeDateTime: '2024-01-01T00:00:00.000Z'
       }
 
       mockGetCFAssociation.execute.mockResolvedValue(result)

@@ -51,9 +51,7 @@ describe('GetCFLicense', () => {
 
       const result = await getCFLicense.execute({ tenantId, caseVersion, sourcedId: licenseId })
 
-      expect(result).toEqual({
-        CFLicense: license
-      })
+      expect(result).toEqual(license)
       expect(mockStore.getDefinitionById).toHaveBeenCalledWith(tenantId, caseVersion, 'CFLicenses', licenseId)
     })
   })

@@ -73,9 +73,7 @@ describe('GetCFRubric', () => {
 
       const result = await getCFRubric.execute({ tenantId, caseVersion, sourcedId: rubricId })
 
-      expect(result).toEqual({
-        CFRubric: rubric.toJSON()
-      })
+      expect(result).toEqual(rubric.toJSON())
     })
   })
 })

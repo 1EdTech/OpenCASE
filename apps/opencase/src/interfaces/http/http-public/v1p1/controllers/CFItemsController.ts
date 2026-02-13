@@ -53,11 +53,11 @@ export class CFItemsControllerV1p1 {
       }
 
       const baseUrl = getBaseUrl(req)
-      const wrapped = { ...result } as any
-      if (wrapped.CFItem && parsed.value.fields?.length) {
-        wrapped.CFItem = applyFieldSelectionToEntity(wrapped.CFItem, parsed.value.fields)
+      let entity = { ...result } as any
+      if (parsed.value.fields?.length) {
+        entity = applyFieldSelectionToEntity(entity, parsed.value.fields)
       }
-      let body = absolutizeCaseUris(wrapped, baseUrl)
+      let body = absolutizeCaseUris(entity, baseUrl)
       if (!wantsOpenCaseExtensions(req)) { body = stripExtensions(body) }
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)

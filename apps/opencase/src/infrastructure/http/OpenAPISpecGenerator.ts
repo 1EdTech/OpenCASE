@@ -242,12 +242,7 @@ export class OpenAPISpecGenerator {
                 description: 'This is the response when the request has been completed successfully.',
                 content: {
                   'application/json': {
-                    schema: {
-                      type: 'object',
-                      properties: {
-                        CFDocument: { $ref: '#/components/schemas/CFDocumentDType' }
-                      }
-                    }
+                    schema: { $ref: '#/components/schemas/CFDocumentDType' }
                   }
                 }
               },
@@ -282,12 +277,7 @@ export class OpenAPISpecGenerator {
                 description: 'This is the response when the request has been completed successfully.',
                 content: {
                   'application/json': {
-                    schema: {
-                      type: 'object',
-                      properties: {
-                        CFItem: { $ref: '#/components/schemas/CFItemDType' }
-                      }
-                    }
+                    schema: { $ref: '#/components/schemas/CFItemDType' }
                   }
                 }
               },
@@ -357,12 +347,7 @@ export class OpenAPISpecGenerator {
                 description: 'This is the response when the request has been completed successfully.',
                 content: {
                   'application/json': {
-                    schema: {
-                      type: 'object',
-                      properties: {
-                        CFAssociation: { $ref: '#/components/schemas/CFAssociationDType' }
-                      }
-                    }
+                    schema: { $ref: '#/components/schemas/CFAssociationDType' }
                   }
                 }
               },
@@ -397,12 +382,7 @@ export class OpenAPISpecGenerator {
                 description: 'This is the response when the request has been completed successfully.',
                 content: {
                   'application/json': {
-                    schema: {
-                      type: 'object',
-                      properties: {
-                        CFRubric: { $ref: '#/components/schemas/CFRubricDType' }
-                      }
-                    }
+                    schema: { $ref: '#/components/schemas/CFRubricDType' }
                   }
                 }
               },
@@ -437,12 +417,7 @@ export class OpenAPISpecGenerator {
                 description: 'This is the response when the request has been completed successfully.',
                 content: {
                   'application/json': {
-                    schema: {
-                      type: 'object',
-                      properties: {
-                        CFSubject: { $ref: '#/components/schemas/CFSubjectDType' }
-                      }
-                    }
+                    schema: { $ref: '#/components/schemas/CFSubjectDType' }
                   }
                 }
               },
@@ -477,12 +452,7 @@ export class OpenAPISpecGenerator {
                 description: 'This is the response when the request has been completed successfully.',
                 content: {
                   'application/json': {
-                    schema: {
-                      type: 'object',
-                      properties: {
-                        CFConcept: { $ref: '#/components/schemas/CFConceptDType' }
-                      }
-                    }
+                    schema: { $ref: '#/components/schemas/CFConceptDType' }
                   }
                 }
               },
@@ -517,12 +487,7 @@ export class OpenAPISpecGenerator {
                 description: 'This is the response when the request has been completed successfully.',
                 content: {
                   'application/json': {
-                    schema: {
-                      type: 'object',
-                      properties: {
-                        CFAssociationGrouping: { $ref: '#/components/schemas/CFAssociationGroupingDType' }
-                      }
-                    }
+                    schema: { $ref: '#/components/schemas/CFAssociationGroupingDType' }
                   }
                 }
               },
@@ -557,12 +522,7 @@ export class OpenAPISpecGenerator {
                 description: 'This is the response when the request has been completed successfully.',
                 content: {
                   'application/json': {
-                    schema: {
-                      type: 'object',
-                      properties: {
-                        CFItemType: { $ref: '#/components/schemas/CFItemTypeDType' }
-                      }
-                    }
+                    schema: { $ref: '#/components/schemas/CFItemTypeDType' }
                   }
                 }
               },
@@ -597,12 +557,7 @@ export class OpenAPISpecGenerator {
                 description: 'This is the response when the request has been completed successfully.',
                 content: {
                   'application/json': {
-                    schema: {
-                      type: 'object',
-                      properties: {
-                        CFLicense: { $ref: '#/components/schemas/CFLicenseDType' }
-                      }
-                    }
+                    schema: { $ref: '#/components/schemas/CFLicenseDType' }
                   }
                 }
               },
@@ -1668,41 +1623,35 @@ export class OpenAPISpecGenerator {
         schemas: {
           CFPackageDType: {
             type: 'object',
-            required: ['CFPackage'],
+            required: ['CFDocument', 'CFItems', 'CFAssociations'],
             properties: {
-              CFPackage: {
-                type: 'object',
-                required: ['CFDocument', 'CFItems', 'CFAssociations'],
-                properties: {
-                  CFDocument: {
-                    $ref: '#/components/schemas/CFDocumentDType'
-                  },
-                  CFItems: {
-                    type: 'array',
-                    items: {
-                      $ref: '#/components/schemas/CFItemDType'
-                    }
-                  },
-                  CFAssociations: {
-                    type: 'array',
-                    items: {
-                      $ref: '#/components/schemas/CFAssociationDType'
-                    }
-                  },
-                  CFDefinitions: {
-                    $ref: '#/components/schemas/CFDefinitionDType'
-                  },
-                  CFRubrics: {
-                    type: 'array',
-                    items: {
-                      $ref: '#/components/schemas/CFRubricDType'
-                    }
-                  },
-                  extensions: {
-                    type: 'object',
-                    additionalProperties: true
-                  }
+              CFDocument: {
+                $ref: '#/components/schemas/CFDocumentDType'
+              },
+              CFItems: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/CFItemDType'
                 }
+              },
+              CFAssociations: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/CFAssociationDType'
+                }
+              },
+              CFDefinitions: {
+                $ref: '#/components/schemas/CFDefinitionDType'
+              },
+              CFRubrics: {
+                type: 'array',
+                items: {
+                  $ref: '#/components/schemas/CFRubricDType'
+                }
+              },
+              extensions: {
+                type: 'object',
+                additionalProperties: true
               }
             }
           },
@@ -1941,16 +1890,11 @@ export class OpenAPISpecGenerator {
           },
           CFDocumentSetDType: {
             type: 'object',
+            required: ['CFDocuments'],
             properties: {
-              CFDocumentSet: {
-                type: 'object',
-                required: ['CFDocuments'],
-                properties: {
-                  CFDocuments: {
-                    type: 'array',
-                    items: { $ref: '#/components/schemas/CFDocumentDType' }
-                  }
-                }
+              CFDocuments: {
+                type: 'array',
+                items: { $ref: '#/components/schemas/CFDocumentDType' }
               },
               total: { type: 'integer' },
               limit: { type: 'integer' },
@@ -1959,16 +1903,12 @@ export class OpenAPISpecGenerator {
           },
           CFAssociationSetDType: {
             type: 'object',
+            required: ['CFItem', 'CFAssociations'],
             properties: {
-              CFAssociationSet: {
-                type: 'object',
-                required: ['CFAssociations'],
-                properties: {
-                  CFAssociations: {
-                    type: 'array',
-                    items: { $ref: '#/components/schemas/CFAssociationDType' }
-                  }
-                }
+              CFItem: { $ref: '#/components/schemas/CFItemDType' },
+              CFAssociations: {
+                type: 'array',
+                items: { $ref: '#/components/schemas/CFAssociationDType' }
               }
             }
           },

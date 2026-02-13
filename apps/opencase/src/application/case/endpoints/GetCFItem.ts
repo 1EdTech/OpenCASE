@@ -30,9 +30,7 @@ export class GetCFItem {
     const item = pkg.items.find(i => i.sourcedId === query.sourcedId)
     if (!item) return null
 
-    return {
-      CFItem: item.toJSON()
-    }
+    return item.toJSON()
   }
 }
 

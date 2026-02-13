@@ -34,11 +34,11 @@ export class CFAssociationGroupingsControllerV1p0 {
       if (!result) return res.status(404).json(StatusInfoFormatter.notFound('The requested CFAssociationGrouping was not found.'))
 
       const baseUrl = getBaseUrl(req)
-      const wrapped = { ...result } as any
-      if (wrapped.CFAssociationGrouping && parsed.value.fields?.length) {
-        wrapped.CFAssociationGrouping = applyFieldSelectionToEntity(wrapped.CFAssociationGrouping, parsed.value.fields)
+      let entity = { ...result } as any
+      if (parsed.value.fields?.length) {
+        entity = applyFieldSelectionToEntity(entity, parsed.value.fields)
       }
-      let body = absolutizeCaseUris(wrapped, baseUrl, '1.0')
+      let body = absolutizeCaseUris(entity, baseUrl, '1.0')
       if (!wantsOpenCaseExtensions(req)) { body = stripExtensions(body) }
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)

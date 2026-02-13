@@ -43,12 +43,10 @@ describe('CFAssociationGroupingsControllerV1p1', () => {
   describe('getById', () => {
     it('should return CFAssociationGrouping when found', async () => {
       const result = {
-        CFAssociationGrouping: {
-          identifier: 'grouping-123',
-          uri: '/ims/case/v1p1/CFAssociationGroupings/grouping-123',
-          title: 'Test Grouping',
-          lastChangeDateTime: '2024-01-01T00:00:00.000Z'
-        }
+        identifier: 'grouping-123',
+        uri: '/ims/case/v1p1/CFAssociationGroupings/grouping-123',
+        title: 'Test Grouping',
+        lastChangeDateTime: '2024-01-01T00:00:00.000Z'
       }
 
       mockGetCFAssociationGrouping.execute.mockResolvedValue(result)

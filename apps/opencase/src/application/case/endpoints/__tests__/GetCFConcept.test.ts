@@ -48,9 +48,7 @@ describe('GetCFConcept', () => {
 
       const result = await getCFConcept.execute({ tenantId, caseVersion, sourcedId: conceptId })
 
-      expect(result).toEqual({
-        CFConcept: concept
-      })
+      expect(result).toEqual(concept)
       expect(mockStore.getDefinitionById).toHaveBeenCalledWith(tenantId, caseVersion, 'CFConcepts', conceptId)
     })
   })

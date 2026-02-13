@@ -44,16 +44,14 @@ describe('CFItemsControllerV1p1', () => {
   describe('getById', () => {
     it('should return CFItem when found', async () => {
       const result = {
-        CFItem: {
-          identifier: 'item-123',
-          uri: '/ims/case/v1p1/CFItems/item-123',
-          fullStatement: 'Test Statement',
-          lastChangeDateTime: '2024-01-01T00:00:00.000Z',
-          CFDocumentURI: {
-            title: 'CFDocument',
-            identifier: 'doc-123',
-            uri: '/ims/case/v1p1/CFDocuments/doc-123'
-          }
+        identifier: 'item-123',
+        uri: '/ims/case/v1p1/CFItems/item-123',
+        fullStatement: 'Test Statement',
+        lastChangeDateTime: '2024-01-01T00:00:00.000Z',
+        CFDocumentURI: {
+          title: 'CFDocument',
+          identifier: 'doc-123',
+          uri: '/ims/case/v1p1/CFDocuments/doc-123'
         }
       }
 

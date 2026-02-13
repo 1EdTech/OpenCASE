@@ -61,7 +61,18 @@ export class KeycloakAdminClient {
     }
 
     await this.requestJson('PUT', `/admin/realms/${encodeURIComponent(realm)}`, body)
-    logger.info({ realm }, 'Configured realm settings (resetPassword, loginWithEmail, SMTP)')
+
+    // Ensure CASE OAuth2 client scopes exist in the realm so that
+    // client_credentials grants with scope=case.read (etc.) are accepted.
+    for (const scopeName of ['case.read', 'case.write', 'case.owner', 'case.admin']) {
+      try {
+        await this.ensureClientScope(scopeName)
+      } catch (err) {
+        logger.warn({ scopeName, err }, 'Could not create client scope (non-fatal)')
+      }
+    }
+
+    logger.info({ realm }, 'Configured realm settings (resetPassword, loginWithEmail, SMTP, CASE scopes)')
   }
 
   async ensureClient (client: {
@@ -179,6 +190,71 @@ export class KeycloakAdminClient {
     await this.requestJson('POST', `/admin/realms/${encodeURIComponent(realm)}/users/${encodeURIComponent(userId)}/role-mappings/clients/${encodeURIComponent(clientUuid)}`, roles)
   }
 
+  // ── OAuth2 client scope helpers ──────────────────────────────────
+
+  /**
+   * Ensure an OAuth2 client scope exists in the realm (idempotent).
+   * Returns the Keycloak-internal UUID of the scope.
+   */
+  async ensureClientScope (scopeName: string): Promise<{ id: string }> {
+    const realm = this.cfg.realm
+    const scopes = await this.requestJson('GET', `/admin/realms/${encodeURIComponent(realm)}/client-scopes`)
+    const existing = Array.isArray(scopes)
+      ? scopes.find((s: any) => s?.name === scopeName)
+      : undefined
+    if (existing?.id) return { id: existing.id }
+
+    await this.requestJson('POST', `/admin/realms/${encodeURIComponent(realm)}/client-scopes`, {
+      name: scopeName,
+      protocol: 'openid-connect',
+      attributes: { 'display.on.consent.screen': 'false' }
+    })
+
+    const scopes2 = await this.requestJson('GET', `/admin/realms/${encodeURIComponent(realm)}/client-scopes`)
+    const created = Array.isArray(scopes2)
+      ? scopes2.find((s: any) => s?.name === scopeName)
+      : undefined
+    if (!created?.id) throw new Error(`Failed to create client scope '${scopeName}'`)
+    return { id: created.id }
+  }
+
+  /**
+   * Assign an optional client scope to a Keycloak client (idempotent).
+   * Optional scopes are available when explicitly requested via the `scope` parameter.
+   */
+  async assignOptionalClientScope (clientUuid: string, scopeId: string): Promise<void> {
+    const realm = this.cfg.realm
+    // Check if already assigned
+    const existing = await this.requestJson(
+      'GET',
+      `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/optional-client-scopes`
+    )
+    if (Array.isArray(existing) && existing.some((s: any) => s?.id === scopeId)) return
+
+    await this.requestRaw(
+      'PUT',
+      `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/optional-client-scopes/${encodeURIComponent(scopeId)}`
+    )
+  }
+
+  /**
+   * Assign a default client scope to a Keycloak client (idempotent).
+   * Default scopes are always included in token responses.
+   */
+  async assignDefaultClientScope (clientUuid: string, scopeId: string): Promise<void> {
+    const realm = this.cfg.realm
+    const existing = await this.requestJson(
+      'GET',
+      `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/default-client-scopes`
+    )
+    if (Array.isArray(existing) && existing.some((s: any) => s?.id === scopeId)) return
+
+    await this.requestRaw(
+      'PUT',
+      `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/default-client-scopes/${encodeURIComponent(scopeId)}`
+    )
+  }
+
   // ── API-key (confidential client) helpers ────────────────────────
 
   /**
@@ -207,6 +283,17 @@ export class KeycloakAdminClient {
 
     const created = await this.findClientByClientId(opts.clientId)
     if (!created) throw new Error(`Failed to create confidential client '${opts.clientId}'`)
+
+    // Assign CASE OAuth2 client scopes so the client_credentials grant
+    // accepts scope=case.read (etc.) without returning invalid_scope.
+    for (const scopeName of ['case.read', 'case.write', 'case.owner', 'case.admin']) {
+      try {
+        const { id: scopeId } = await this.ensureClientScope(scopeName)
+        await this.assignOptionalClientScope(created.id, scopeId)
+      } catch (err) {
+        logger.warn({ scopeName, err }, 'Could not assign client scope to confidential client (non-fatal)')
+      }
+    }
 
     const secret = await this.getClientSecret(created.id)
     return { id: created.id, clientId: opts.clientId, secret }

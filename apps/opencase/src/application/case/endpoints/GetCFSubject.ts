@@ -18,7 +18,7 @@ export class GetCFSubject {
   async execute (query: GetCFSubjectQuery) {
     const entry = this.store.getDefinitionById(query.tenantId, query.caseVersion, 'CFSubjects', query.sourcedId)
     if (!entry) return null
-    return { CFSubject: entry.value }
+    return entry.value
   }
 }
 

@@ -18,7 +18,7 @@ export class GetCFItemType {
   async execute (query: GetCFItemTypeQuery) {
     const entry = this.store.getDefinitionById(query.tenantId, query.caseVersion, 'CFItemTypes', query.sourcedId)
     if (!entry) return null
-    return { CFItemType: entry.value }
+    return entry.value
   }
 }
 

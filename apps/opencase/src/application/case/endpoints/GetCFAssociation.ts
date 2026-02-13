@@ -29,9 +29,7 @@ export class GetCFAssociation {
     const association = pkg.associations.find(a => a.sourcedId === query.sourcedId)
     if (!association) return null
 
-    return {
-      CFAssociation: association.toJSON()
-    }
+    return association.toJSON()
   }
 }
 

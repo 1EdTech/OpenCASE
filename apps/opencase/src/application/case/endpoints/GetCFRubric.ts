@@ -31,9 +31,7 @@ export class GetCFRubric {
       })
 
       if (rubric) {
-        return {
-          CFRubric: rubric.toJSON()
-        }
+        return rubric.toJSON()
       }
     }
 

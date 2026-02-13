@@ -116,12 +116,10 @@ describe('GetCFAssociation', () => {
 
       const result = await getCFAssociation.execute({ tenantId, caseVersion, sourcedId: assocId })
 
-      expect(result).toEqual({
-        CFAssociation: expect.objectContaining({
-          identifier: assocId,
-          associationType: 'isChildOf'
-        })
-      })
+      expect(result).toEqual(expect.objectContaining({
+        identifier: assocId,
+        associationType: 'isChildOf'
+      }))
     })
   })
 })

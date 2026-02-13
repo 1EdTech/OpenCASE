@@ -43,12 +43,10 @@ describe('CFConceptsControllerV1p1', () => {
   describe('getById', () => {
     it('should return CFConcept when found', async () => {
       const result = {
-        CFConcept: {
-          identifier: 'concept-123',
-          uri: '/ims/case/v1p1/CFConcepts/concept-123',
-          title: 'Test Concept',
-          lastChangeDateTime: '2024-01-01T00:00:00.000Z'
-        }
+        identifier: 'concept-123',
+        uri: '/ims/case/v1p1/CFConcepts/concept-123',
+        title: 'Test Concept',
+        lastChangeDateTime: '2024-01-01T00:00:00.000Z'
       }
 
       mockGetCFConcept.execute.mockResolvedValue(result)

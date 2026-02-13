@@ -36,8 +36,8 @@ export class GetAllCFDocumentsControllerV1p0 {
       })
 
       // Access control: unauthenticated requests only see public frameworks
-      if (!(req as any).isAuthenticated && result.CFDocumentSet?.CFDocuments) {
-        result.CFDocumentSet.CFDocuments = result.CFDocumentSet.CFDocuments.filter(
+      if (!(req as any).isAuthenticated && result.CFDocuments) {
+        result.CFDocuments = result.CFDocuments.filter(
           (doc: any) => this.store.isDocumentPublicGlobal(doc.identifier)
         )
       }

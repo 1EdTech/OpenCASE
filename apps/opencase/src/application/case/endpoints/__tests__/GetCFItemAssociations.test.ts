@@ -65,7 +65,7 @@ describe('GetCFItemAssociations', () => {
       expect(result).toBeNull()
     })
 
-    it('should return CFAssociationSet with associations for the item', async () => {
+    it('should return CFItem with associations for the item', async () => {
       const document = CFDocument.create({
         tenantId,
         caseVersion,
@@ -124,13 +124,15 @@ describe('GetCFItemAssociations', () => {
       const result = await getCFItemAssociations.execute({ tenantId, caseVersion, sourcedId: itemId })
 
       expect(result).toEqual({
-        CFAssociationSet: {
-          CFAssociations: expect.arrayContaining([
-            expect.objectContaining({
-              identifier: 'assoc-123'
-            })
-          ])
-        }
+        CFItem: expect.objectContaining({
+          identifier: itemId,
+          fullStatement: 'Test Statement'
+        }),
+        CFAssociations: expect.arrayContaining([
+          expect.objectContaining({
+            identifier: 'assoc-123'
+          })
+        ])
       })
     })
   })

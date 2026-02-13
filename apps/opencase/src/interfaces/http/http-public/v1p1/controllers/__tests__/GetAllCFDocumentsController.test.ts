@@ -39,17 +39,15 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
   describe('getAll', () => {
     it('should return CFDocumentSet when found', async () => {
       const result = {
-        CFDocumentSet: {
-          CFDocuments: [
-            {
-              identifier: 'doc-123',
-              uri: '/ims/case/v1p1/CFDocuments/doc-123',
-              creator: 'Test Creator',
-              title: 'Test Document',
-              lastChangeDateTime: '2024-01-01T00:00:00.000Z'
-            }
-          ]
-        }
+        CFDocuments: [
+          {
+            identifier: 'doc-123',
+            uri: '/ims/case/v1p1/CFDocuments/doc-123',
+            creator: 'Test Creator',
+            title: 'Test Document',
+            lastChangeDateTime: '2024-01-01T00:00:00.000Z'
+          }
+        ]
       }
 
       mockGetAllCFDocuments.execute.mockResolvedValue(result)
@@ -75,9 +73,7 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
 
     it('should handle query parameters', async () => {
       const result = {
-        CFDocumentSet: {
-          CFDocuments: []
-        },
+        CFDocuments: [],
         total: 10,
         limit: 5,
         offset: 0

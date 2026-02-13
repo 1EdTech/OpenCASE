@@ -130,9 +130,7 @@ export class GetAllCFDocuments {
     })
 
     return {
-      CFDocumentSet: {
-        CFDocuments: cfDocuments
-      },
+      CFDocuments: cfDocuments,
       // Pagination metadata (if pagination is used)
       ...(limit !== undefined && {
         total,

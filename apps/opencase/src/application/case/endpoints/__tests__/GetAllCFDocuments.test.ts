@@ -23,9 +23,7 @@ describe('GetAllCFDocuments', () => {
       const result = await getAllCFDocuments.execute({ tenantId, caseVersion })
 
       expect(result).toEqual({
-        CFDocumentSet: {
-          CFDocuments: []
-        }
+        CFDocuments: []
       })
     })
 
@@ -64,26 +62,24 @@ describe('GetAllCFDocuments', () => {
       const result = await getAllCFDocuments.execute({ tenantId, caseVersion })
 
       expect(result).toEqual({
-        CFDocumentSet: {
-          CFDocuments: expect.arrayContaining([
-            expect.objectContaining({
-              identifier: 'doc-1',
-              title: 'Document 1',
-              caseVersion: '1.0',
-              CFPackageURI: expect.objectContaining({
-                identifier: 'doc-1'
-              })
-            }),
-            expect.objectContaining({
-              identifier: 'doc-2',
-              title: 'Document 2',
-              caseVersion: '1.1',
-              CFPackageURI: expect.objectContaining({
-                identifier: 'doc-2'
-              })
+        CFDocuments: expect.arrayContaining([
+          expect.objectContaining({
+            identifier: 'doc-1',
+            title: 'Document 1',
+            caseVersion: '1.0',
+            CFPackageURI: expect.objectContaining({
+              identifier: 'doc-1'
             })
-          ])
-        }
+          }),
+          expect.objectContaining({
+            identifier: 'doc-2',
+            title: 'Document 2',
+            caseVersion: '1.1',
+            CFPackageURI: expect.objectContaining({
+              identifier: 'doc-2'
+            })
+          })
+        ])
       })
     })
 
@@ -105,20 +101,18 @@ describe('GetAllCFDocuments', () => {
       })
 
       expect(result).toEqual({
-        CFDocumentSet: {
-          CFDocuments: expect.arrayContaining([
-            expect.objectContaining({ identifier: 'doc-2' }),
-            expect.objectContaining({ identifier: 'doc-3' }),
-            expect.objectContaining({ identifier: 'doc-4' }),
-            expect.objectContaining({ identifier: 'doc-5' }),
-            expect.objectContaining({ identifier: 'doc-6' })
-          ])
-        },
+        CFDocuments: expect.arrayContaining([
+          expect.objectContaining({ identifier: 'doc-2' }),
+          expect.objectContaining({ identifier: 'doc-3' }),
+          expect.objectContaining({ identifier: 'doc-4' }),
+          expect.objectContaining({ identifier: 'doc-5' }),
+          expect.objectContaining({ identifier: 'doc-6' })
+        ]),
         total: 10,
         limit: 5,
         offset: 2
       })
-      expect(result.CFDocumentSet.CFDocuments).toHaveLength(5)
+      expect(result.CFDocuments).toHaveLength(5)
     })
 
     it('should apply sorting', async () => {
@@ -146,8 +140,8 @@ describe('GetAllCFDocuments', () => {
         orderBy: 'asc'
       })
 
-      expect(result.CFDocumentSet.CFDocuments[0].title).toBe('A Document')
-      expect(result.CFDocumentSet.CFDocuments[1].title).toBe('B Document')
+      expect(result.CFDocuments[0].title).toBe('A Document')
+      expect(result.CFDocuments[1].title).toBe('B Document')
     })
 
     it('should apply filtering', async () => {
@@ -176,8 +170,8 @@ describe('GetAllCFDocuments', () => {
         filter: 'mathematics'
       })
 
-      expect(result.CFDocumentSet.CFDocuments).toHaveLength(1)
-      expect(result.CFDocumentSet.CFDocuments[0].title).toBe('Mathematics Framework')
+      expect(result.CFDocuments).toHaveLength(1)
+      expect(result.CFDocuments[0].title).toBe('Mathematics Framework')
     })
 
     it('should apply field selection', async () => {
@@ -199,7 +193,7 @@ describe('GetAllCFDocuments', () => {
         fields: ['identifier', 'title']
       })
 
-      expect(result.CFDocumentSet.CFDocuments[0]).toEqual({
+      expect(result.CFDocuments[0]).toEqual({
         identifier: 'doc-1',
         title: 'Test Document'
       })
@@ -240,8 +234,8 @@ describe('GetAllCFDocuments', () => {
 
       // Only the server-level archived document should be filtered out.
       // Retired documents without archived flag should still appear.
-      expect(result.CFDocumentSet.CFDocuments).toHaveLength(2)
-      expect(result.CFDocumentSet.CFDocuments.map((d: any) => d.identifier)).toEqual(['doc-1', 'doc-3'])
+      expect(result.CFDocuments).toHaveLength(2)
+      expect(result.CFDocuments.map((d: any) => d.identifier)).toEqual(['doc-1', 'doc-3'])
     })
 
     it('should include archived documents when includeArchived is true', async () => {
@@ -271,7 +265,7 @@ describe('GetAllCFDocuments', () => {
         includeArchived: true
       })
 
-      expect(result.CFDocumentSet.CFDocuments).toHaveLength(2)
+      expect(result.CFDocuments).toHaveLength(2)
     })
   })
 })
