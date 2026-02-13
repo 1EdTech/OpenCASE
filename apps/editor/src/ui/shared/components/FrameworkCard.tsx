@@ -103,14 +103,13 @@ export function FrameworkCard({
   const description = (cfDocument as { description?: string }).description
 
   const clickable = Boolean(onClick)
-  const Root = clickable ? 'button' : 'div'
 
   const relDate = formatRelativeDate(lastChanged)
   const statusInfo = adoptionStatus ? STATUS_STYLE[adoptionStatus] : undefined
 
   return (
-    <Root
-      type={clickable ? 'button' : undefined}
+    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+    <div
       onClick={clickable ? onClick : undefined}
       className={cn(
         'group relative flex h-full w-full flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all hover:shadow-lg',
@@ -249,6 +248,6 @@ export function FrameworkCard({
       ) : null}
 
       {children}
-    </Root>
+    </div>
   )
 }
