@@ -153,9 +153,16 @@ function AppInner() {
       })
       .catch(() => {
         // In React StrictMode, a duplicate callback attempt can fail after a successful sign-in.
-        if (authStatusRef.current !== 'authenticated') {
-          setAuthCallbackState('error')
-        }
+        // Wait briefly for auth state to propagate before declaring failure.
+        setTimeout(() => {
+          if (authStatusRef.current === 'authenticated') {
+            globalThis.history?.replaceState(null, '', '/#/')
+            setAuthCallbackState('idle')
+            setRoute(getRoute())
+          } else {
+            setAuthCallbackState('error')
+          }
+        }, 500)
       })
   }, [completeSignIn])
 
