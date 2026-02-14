@@ -173,6 +173,7 @@ export class CFDocument {
     // CASE 1.0 strictness: do not emit CASE 1.1-only fields
     if (effectiveVersion === '1.0') {
       delete result.frameworkType
+      delete result.subjectURI
       delete result.extensions
     }
     

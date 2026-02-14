@@ -96,21 +96,24 @@ export class GetAllCFDocuments {
     const total = documents.length
     const paginatedDocs = limit ? documents.slice(offset, offset + limit) : documents.slice(offset)
 
-    // Generate CFDocument objects with proper structure
+    // Generate CFDocument objects with proper structure.
+    // Use the requested caseVersion for URI generation (not the storage version),
+    // so URIs are correct regardless of where the data is stored.
+    const requestedBasePath = query.caseVersion === '1.1' ? '/ims/case/v1p1' : '/ims/case/v1p0'
+    const isV1p0 = query.caseVersion === '1.0'
+
     const cfDocuments = paginatedDocs.map(({ meta: docMeta, caseVersion }) => {
-      const basePath = caseVersion === '1.1' ? '/ims/case/v1p1' : '/ims/case/v1p0'
       const packageURI: LinkData = {
         title: 'CFPackage',
         identifier: docMeta.sourcedId,
-        uri: `${basePath}/CFPackages/${docMeta.sourcedId}`
+        uri: `${requestedBasePath}/CFPackages/${docMeta.sourcedId}`
       }
 
       const doc: any = {
         identifier: docMeta.sourcedId,
-        uri: `${basePath}/CFDocuments/${docMeta.sourcedId}`,
+        uri: `${requestedBasePath}/CFDocuments/${docMeta.sourcedId}`,
         title: docMeta.title,
         lastChangeDateTime: docMeta.lastChangeDateTime.toISOString(),
-        caseVersion,
         CFPackageURI: packageURI
       }
 
@@ -118,13 +121,18 @@ export class GetAllCFDocuments {
       if (docMeta.description) doc.description = docMeta.description
       if (docMeta.creator) doc.creator = docMeta.creator
       if (docMeta.language) doc.language = docMeta.language
-      if (docMeta.frameworkType) doc.frameworkType = docMeta.frameworkType
       if (docMeta.subject) doc.subject = docMeta.subject
       if (docMeta.version) doc.version = docMeta.version
       if (docMeta.adoptionStatus) doc.adoptionStatus = docMeta.adoptionStatus
       if (docMeta.sourcePackageURI) doc.sourcePackageURI = docMeta.sourcePackageURI
       if (docMeta.isModifiedFromSource) doc.isModifiedFromSource = docMeta.isModifiedFromSource
       if (docMeta.archived) doc.archived = true
+
+      // CASE v1.1-only fields: only include when not serving via v1p0
+      if (!isV1p0) {
+        doc.caseVersion = caseVersion
+        if (docMeta.frameworkType) doc.frameworkType = docMeta.frameworkType
+      }
 
       // Apply field selection if specified
       if (query.fields && query.fields.length > 0) {

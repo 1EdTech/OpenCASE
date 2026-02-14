@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "OpenCASE API",
-    "description": "Complete Postman collection for the OpenCASE CASE Provider & Management API.\n\n## Setup\n1. Set the `base_url` variable to your OpenCASE instance (default: `http://localhost:3000`)\n2. Set `tenant_id` to your tenant (e.g. `demo`)\n3. Use the **Get Access Token** request (under Auth) to obtain a Bearer token — it auto-saves to the `access_token` variable\n4. All authenticated endpoints inherit the Bearer token from the collection\n\n## Folders\n- **Auth** — Token requests (client_credentials, password grant)\n- **Public** — Unauthenticated endpoints (health, tenant lookup, discovery)\n- **CASE Provider v1p0** — Standard CASE 1.0 read endpoints\n- **CASE Provider v1p1** — Standard CASE 1.1 read endpoints\n- **Management › Tenants** — Tenant CRUD (requires `case.admin`)\n- **Management › CFPackages** — Framework create/import/delete/restore\n- **Management › CFDocuments** — Document update/delete\n- **Management › CFItems** — Item update/delete\n- **Management › CFAssociations** — Association update/delete\n- **Management › Licenses** — License listing\n- **Management › API Keys** — API key CRUD (requires `case.owner` or `case.admin`)",
+    "description": "Complete Postman collection for the OpenCASE CASE Provider & Management API.\n\n## Setup\n1. Import an environment file (Local / Staging / Production)\n2. Set `tenant_id`, `client_id`, `client_secret` etc. in your active environment\n3. Use the **Get Access Token** request (under Auth) to obtain a Bearer token — it auto-saves to `access_token`\n4. Run **Get CFPackage** to auto-populate all entity IDs (`item_id`, `association_id`, `subject_id`, etc.)\n5. All authenticated endpoints inherit the Bearer token from the collection\n\n## Folders\n- **Auth** — Token requests (client_credentials, password grant)\n- **Public** — Unauthenticated endpoints (health, tenant lookup, discovery)\n- **CASE Provider v1p0** — Standard CASE 1.0 read endpoints\n- **CASE Provider v1p1** — Standard CASE 1.1 read endpoints\n- **Management › Tenants** — Tenant CRUD (requires `case.admin`)\n- **Management › CFPackages** — Framework create/import/delete/restore\n- **Management › CFDocuments** — Document update/delete\n- **Management › CFItems** — Item update/delete\n- **Management › CFAssociations** — Association update/delete\n- **Management › Licenses** — License listing\n- **Management › API Keys** — API key CRUD (requires `case.owner` or `case.admin`)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -14,20 +14,6 @@
       }
     ]
   },
-  "variable": [
-    { "key": "base_url", "value": "http://localhost:3000", "type": "string" },
-    { "key": "keycloak_realm_url", "value": "http://localhost:3000/realms/opencase", "type": "string" },
-    { "key": "tenant_id", "value": "demo", "type": "string" },
-    { "key": "client_id", "value": "tenant-{{tenant_id}}", "type": "string" },
-    { "key": "client_secret", "value": "", "type": "string" },
-    { "key": "username", "value": "", "type": "string" },
-    { "key": "password", "value": "", "type": "string" },
-    { "key": "access_token", "value": "", "type": "string" },
-    { "key": "doc_id", "value": "", "type": "string" },
-    { "key": "item_id", "value": "", "type": "string" },
-    { "key": "association_id", "value": "", "type": "string" },
-    { "key": "api_key_id", "value": "", "type": "string" }
-  ],
   "item": [
     {
       "name": "Auth",
@@ -43,7 +29,7 @@
                 "exec": [
                   "if (pm.response.code === 200) {",
                   "  var json = pm.response.json();",
-                  "  pm.collectionVariables.set('access_token', json.access_token);",
+                  "  pm.environment.set('access_token', json.access_token);",
                   "  pm.test('Token received', function () {",
                   "    pm.expect(json.access_token).to.be.a('string');",
                   "  });",
@@ -71,7 +57,7 @@
               "host": ["{{keycloak_realm_url}}"],
               "path": ["protocol", "openid-connect", "token"]
             },
-            "description": "Obtain an access token using the `client_credentials` grant.\n\nSet `client_id` and `client_secret` from an API key. The token is auto-saved to the `access_token` collection variable."
+            "description": "Obtain an access token using the `client_credentials` grant.\n\nSet `client_id` and `client_secret` from an API key. The token is auto-saved to the `access_token` environment variable."
           }
         },
         {
@@ -84,7 +70,7 @@
                 "exec": [
                   "if (pm.response.code === 200) {",
                   "  var json = pm.response.json();",
-                  "  pm.collectionVariables.set('access_token', json.access_token);",
+                  "  pm.environment.set('access_token', json.access_token);",
                   "  pm.test('Token received', function () {",
                   "    pm.expect(json.access_token).to.be.a('string');",
                   "  });",
@@ -113,7 +99,7 @@
               "host": ["{{keycloak_realm_url}}"],
               "path": ["protocol", "openid-connect", "token"]
             },
-            "description": "Obtain an access token using the `password` grant (direct access).\n\nSet `username` and `password` for the user. The tenant's SPA client must have direct access grants enabled.\nThe token is auto-saved to the `access_token` collection variable."
+            "description": "Obtain an access token using the `password` grant (direct access).\n\nSet `username` and `password` for the user. The tenant's SPA client must have direct access grants enabled.\nThe token is auto-saved to the `access_token` environment variable."
           }
         }
       ]
@@ -202,13 +188,80 @@
         },
         {
           "name": "Get CFPackage",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  // Handle both wrapped (v1.1: {CFPackage:{...}}) and flat responses",
+                  "  var pkg = json.CFPackage || json;",
+                  "",
+                  "  function safeId(obj) {",
+                  "    if (!obj) return '';",
+                  "    return obj.identifier || obj.sourcedId || '';",
+                  "  }",
+                  "",
+                  "  // Document ID",
+                  "  var docId = safeId(pkg.CFDocument);",
+                  "  if (docId) pm.environment.set('doc_id', docId);",
+                  "",
+                  "  // First item",
+                  "  var items = pkg.CFItems || [];",
+                  "  pm.environment.set('item_id', items.length > 0 ? safeId(items[0]) : '');",
+                  "",
+                  "  // First association",
+                  "  var assocs = pkg.CFAssociations || [];",
+                  "  pm.environment.set('association_id', assocs.length > 0 ? safeId(assocs[0]) : '');",
+                  "",
+                  "  // Definitions",
+                  "  var defs = pkg.CFDefinitions || {};",
+                  "",
+                  "  var subjects = defs.CFSubjects || [];",
+                  "  pm.environment.set('subject_id', subjects.length > 0 ? safeId(subjects[0]) : '');",
+                  "",
+                  "  var concepts = defs.CFConcepts || [];",
+                  "  pm.environment.set('concept_id', concepts.length > 0 ? safeId(concepts[0]) : '');",
+                  "",
+                  "  var groupings = defs.CFAssociationGroupings || [];",
+                  "  pm.environment.set('association_grouping_id', groupings.length > 0 ? safeId(groupings[0]) : '');",
+                  "",
+                  "  var itemTypes = defs.CFItemTypes || [];",
+                  "  pm.environment.set('item_type_id', itemTypes.length > 0 ? safeId(itemTypes[0]) : '');",
+                  "",
+                  "  var licenses = defs.CFLicenses || [];",
+                  "  pm.environment.set('license_id', licenses.length > 0 ? safeId(licenses[0]) : '');",
+                  "",
+                  "  // Rubrics",
+                  "  var rubrics = pkg.CFRubrics || [];",
+                  "  pm.environment.set('rubric_id', rubrics.length > 0 ? safeId(rubrics[0]) : '');",
+                  "",
+                  "  console.log('Auto-populated IDs from CFPackage:', {",
+                  "    doc_id: pm.environment.get('doc_id'),",
+                  "    item_id: pm.environment.get('item_id'),",
+                  "    association_id: pm.environment.get('association_id'),",
+                  "    subject_id: pm.environment.get('subject_id'),",
+                  "    concept_id: pm.environment.get('concept_id'),",
+                  "    association_grouping_id: pm.environment.get('association_grouping_id'),",
+                  "    item_type_id: pm.environment.get('item_type_id'),",
+                  "    license_id: pm.environment.get('license_id'),",
+                  "    rubric_id: pm.environment.get('rubric_id')",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/ims/case/v1p0/CFPackages/{{doc_id}}",
               "host": ["{{base_url}}"],
               "path": ["ims", "case", "v1p0", "CFPackages", "{{doc_id}}"]
-            }
+            },
+            "description": "Get a full CFPackage by document ID.\n\n**Auto-populates** all entity ID environment variables (`item_id`, `association_id`, `subject_id`, `concept_id`, `association_grouping_id`, `item_type_id`, `license_id`, `rubric_id`) from the first instance of each entity in the response. Missing entities are set to empty string."
           }
         },
         {
@@ -250,10 +303,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p0/CFRubrics/:id",
+              "raw": "{{base_url}}/ims/case/v1p0/CFRubrics/{{rubric_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p0", "CFRubrics", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p0", "CFRubrics", "{{rubric_id}}"]
             }
           }
         },
@@ -262,10 +314,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p0/CFSubjects/:id",
+              "raw": "{{base_url}}/ims/case/v1p0/CFSubjects/{{subject_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p0", "CFSubjects", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p0", "CFSubjects", "{{subject_id}}"]
             }
           }
         },
@@ -274,10 +325,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p0/CFConcepts/:id",
+              "raw": "{{base_url}}/ims/case/v1p0/CFConcepts/{{concept_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p0", "CFConcepts", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p0", "CFConcepts", "{{concept_id}}"]
             }
           }
         },
@@ -286,10 +336,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p0/CFAssociationGroupings/:id",
+              "raw": "{{base_url}}/ims/case/v1p0/CFAssociationGroupings/{{association_grouping_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p0", "CFAssociationGroupings", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p0", "CFAssociationGroupings", "{{association_grouping_id}}"]
             }
           }
         },
@@ -298,10 +347,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p0/CFItemTypes/:id",
+              "raw": "{{base_url}}/ims/case/v1p0/CFItemTypes/{{item_type_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p0", "CFItemTypes", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p0", "CFItemTypes", "{{item_type_id}}"]
             }
           }
         },
@@ -310,10 +358,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p0/CFLicenses/:id",
+              "raw": "{{base_url}}/ims/case/v1p0/CFLicenses/{{license_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p0", "CFLicenses", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p0", "CFLicenses", "{{license_id}}"]
             }
           }
         }
@@ -368,13 +415,80 @@
         },
         {
           "name": "Get CFPackage",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  var json = pm.response.json();",
+                  "  // Handle both wrapped (v1.1: {CFPackage:{...}}) and flat responses",
+                  "  var pkg = json.CFPackage || json;",
+                  "",
+                  "  function safeId(obj) {",
+                  "    if (!obj) return '';",
+                  "    return obj.identifier || obj.sourcedId || '';",
+                  "  }",
+                  "",
+                  "  // Document ID",
+                  "  var docId = safeId(pkg.CFDocument);",
+                  "  if (docId) pm.environment.set('doc_id', docId);",
+                  "",
+                  "  // First item",
+                  "  var items = pkg.CFItems || [];",
+                  "  pm.environment.set('item_id', items.length > 0 ? safeId(items[0]) : '');",
+                  "",
+                  "  // First association",
+                  "  var assocs = pkg.CFAssociations || [];",
+                  "  pm.environment.set('association_id', assocs.length > 0 ? safeId(assocs[0]) : '');",
+                  "",
+                  "  // Definitions",
+                  "  var defs = pkg.CFDefinitions || {};",
+                  "",
+                  "  var subjects = defs.CFSubjects || [];",
+                  "  pm.environment.set('subject_id', subjects.length > 0 ? safeId(subjects[0]) : '');",
+                  "",
+                  "  var concepts = defs.CFConcepts || [];",
+                  "  pm.environment.set('concept_id', concepts.length > 0 ? safeId(concepts[0]) : '');",
+                  "",
+                  "  var groupings = defs.CFAssociationGroupings || [];",
+                  "  pm.environment.set('association_grouping_id', groupings.length > 0 ? safeId(groupings[0]) : '');",
+                  "",
+                  "  var itemTypes = defs.CFItemTypes || [];",
+                  "  pm.environment.set('item_type_id', itemTypes.length > 0 ? safeId(itemTypes[0]) : '');",
+                  "",
+                  "  var licenses = defs.CFLicenses || [];",
+                  "  pm.environment.set('license_id', licenses.length > 0 ? safeId(licenses[0]) : '');",
+                  "",
+                  "  // Rubrics",
+                  "  var rubrics = pkg.CFRubrics || [];",
+                  "  pm.environment.set('rubric_id', rubrics.length > 0 ? safeId(rubrics[0]) : '');",
+                  "",
+                  "  console.log('Auto-populated IDs from CFPackage:', {",
+                  "    doc_id: pm.environment.get('doc_id'),",
+                  "    item_id: pm.environment.get('item_id'),",
+                  "    association_id: pm.environment.get('association_id'),",
+                  "    subject_id: pm.environment.get('subject_id'),",
+                  "    concept_id: pm.environment.get('concept_id'),",
+                  "    association_grouping_id: pm.environment.get('association_grouping_id'),",
+                  "    item_type_id: pm.environment.get('item_type_id'),",
+                  "    license_id: pm.environment.get('license_id'),",
+                  "    rubric_id: pm.environment.get('rubric_id')",
+                  "  });",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "url": {
               "raw": "{{base_url}}/ims/case/v1p1/CFPackages/{{doc_id}}",
               "host": ["{{base_url}}"],
               "path": ["ims", "case", "v1p1", "CFPackages", "{{doc_id}}"]
-            }
+            },
+            "description": "Get a full CFPackage by document ID.\n\n**Auto-populates** all entity ID environment variables (`item_id`, `association_id`, `subject_id`, `concept_id`, `association_grouping_id`, `item_type_id`, `license_id`, `rubric_id`) from the first instance of each entity in the response. Missing entities are set to empty string."
           }
         },
         {
@@ -416,10 +530,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p1/CFRubrics/:id",
+              "raw": "{{base_url}}/ims/case/v1p1/CFRubrics/{{rubric_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p1", "CFRubrics", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p1", "CFRubrics", "{{rubric_id}}"]
             }
           }
         },
@@ -428,10 +541,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p1/CFSubjects/:id",
+              "raw": "{{base_url}}/ims/case/v1p1/CFSubjects/{{subject_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p1", "CFSubjects", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p1", "CFSubjects", "{{subject_id}}"]
             }
           }
         },
@@ -440,10 +552,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p1/CFConcepts/:id",
+              "raw": "{{base_url}}/ims/case/v1p1/CFConcepts/{{concept_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p1", "CFConcepts", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p1", "CFConcepts", "{{concept_id}}"]
             }
           }
         },
@@ -452,10 +563,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p1/CFAssociationGroupings/:id",
+              "raw": "{{base_url}}/ims/case/v1p1/CFAssociationGroupings/{{association_grouping_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p1", "CFAssociationGroupings", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p1", "CFAssociationGroupings", "{{association_grouping_id}}"]
             }
           }
         },
@@ -464,10 +574,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p1/CFItemTypes/:id",
+              "raw": "{{base_url}}/ims/case/v1p1/CFItemTypes/{{item_type_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p1", "CFItemTypes", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p1", "CFItemTypes", "{{item_type_id}}"]
             }
           }
         },
@@ -476,10 +585,9 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/ims/case/v1p1/CFLicenses/:id",
+              "raw": "{{base_url}}/ims/case/v1p1/CFLicenses/{{license_id}}",
               "host": ["{{base_url}}"],
-              "path": ["ims", "case", "v1p1", "CFLicenses", ":id"],
-              "variable": [{ "key": "id", "value": "" }]
+              "path": ["ims", "case", "v1p1", "CFLicenses", "{{license_id}}"]
             }
           }
         }
@@ -894,6 +1002,27 @@
                   "host": ["{{base_url}}"],
                   "path": ["management", "tenants", "{{tenant_id}}", "ims", "case", "v1p1", "CFAssociations", "{{association_id}}"]
                 }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Definitions",
+          "description": "Tenant-wide definition catalogue — all definition types across all frameworks.",
+          "item": [
+            {
+              "name": "Get Tenant Definitions",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/management/tenants/{{tenant_id}}/definitions?caseVersion=1.1",
+                  "host": ["{{base_url}}"],
+                  "path": ["management", "tenants", "{{tenant_id}}", "definitions"],
+                  "query": [
+                    { "key": "caseVersion", "value": "1.1" }
+                  ]
+                },
+                "description": "Returns the full catalogue of CFItemTypes, CFSubjects, CFConcepts, CFAssociationGroupings, and CFLicenses for this tenant."
               }
             }
           ]

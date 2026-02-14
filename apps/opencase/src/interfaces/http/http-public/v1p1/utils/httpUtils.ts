@@ -61,8 +61,16 @@ function isRelativeCasePath (uri: unknown): uri is string {
 }
 
 /**
- * Normalize the version segment in a relative CASE path to match the target caseVersion.
+ * Check if a string is an absolute CASE URI (e.g. http://host/ims/case/v1p1/...).
+ */
+function isAbsoluteCaseUri (uri: unknown): uri is string {
+  return typeof uri === 'string' && /https?:\/\/[^/]+\/ims\/case\/v1p[01]\//.test(uri)
+}
+
+/**
+ * Normalize the version segment in a CASE path (relative or absolute) to match the target caseVersion.
  * e.g. '/ims/case/v1p1/CFItems/abc' → '/ims/case/v1p0/CFItems/abc' when caseVersion is '1.0'
+ * e.g. 'http://host/ims/case/v1p1/CFItems/abc' → 'http://host/ims/case/v1p0/CFItems/abc'
  */
 function normalizeCaseVersionInPath (path: string, caseVersion: CaseVersion): string {
   const targetSegment = caseVersion === '1.0' ? 'v1p0' : 'v1p1'
@@ -79,24 +87,29 @@ function normalizeCaseVersionInPath (path: string, caseVersion: CaseVersion): st
 export function absolutizeCaseUris<T> (payload: T, baseUrl: string, caseVersion: CaseVersion = '1.1'): T {
   const seen = new WeakSet<object>()
 
+  /** Normalize a single string URI: absolutize relative paths, rewrite URNs, and
+   *  normalize the version segment in both relative and already-absolute CASE URIs. */
+  const normalizeUri = (v: string): string => {
+    // Handle URN Case URIs (defense-in-depth - should already be transformed on input)
+    if (UrnCaseUriHelper.isUrnCaseUri(v)) {
+      const relativePath = UrnCaseUriHelper.urnCaseToRelativePath(v, caseVersion)
+      if (UrnCaseUriHelper.isUrnCaseUri(relativePath)) return v // parsing failed
+      return `${baseUrl}${relativePath}`
+    }
+    // Handle relative CASE paths — normalize version segment before absolutizing
+    if (isRelativeCasePath(v)) {
+      return `${baseUrl}${normalizeCaseVersionInPath(v, caseVersion)}`
+    }
+    // Handle already-absolute CASE URIs — normalize the version segment in-place
+    if (isAbsoluteCaseUri(v)) {
+      return normalizeCaseVersionInPath(v, caseVersion)
+    }
+    return v
+  }
+
   const walk = (value: any): any => {
     if (!value) return value
-    if (typeof value === 'string') {
-      // Handle URN Case URIs (defense-in-depth - should already be transformed on input)
-      if (UrnCaseUriHelper.isUrnCaseUri(value)) {
-        const relativePath = UrnCaseUriHelper.urnCaseToRelativePath(value, caseVersion)
-        // If parsing failed, relativePath will be the original URN - don't absolutize it
-        if (UrnCaseUriHelper.isUrnCaseUri(relativePath)) {
-          return value // Return original URN as-is if we can't parse it
-        }
-        return `${baseUrl}${relativePath}`
-      }
-      // Handle relative CASE paths — normalize version segment before absolutizing
-      if (isRelativeCasePath(value)) {
-        return `${baseUrl}${normalizeCaseVersionInPath(value, caseVersion)}`
-      }
-      return value
-    }
+    if (typeof value === 'string') return normalizeUri(value)
     if (typeof value !== 'object') return value
     if (seen.has(value)) return value
     seen.add(value)
@@ -108,24 +121,7 @@ export function absolutizeCaseUris<T> (payload: T, baseUrl: string, caseVersion:
     const out: any = {}
     for (const [k, v] of Object.entries(value)) {
       if (k === 'uri') {
-        // Transform URN or relative path to absolute URL
-        if (typeof v === 'string') {
-          if (UrnCaseUriHelper.isUrnCaseUri(v)) {
-            const relativePath = UrnCaseUriHelper.urnCaseToRelativePath(v, caseVersion)
-            // If parsing failed, relativePath will be the original URN - don't absolutize it
-            if (UrnCaseUriHelper.isUrnCaseUri(relativePath)) {
-              out[k] = v // Return original URN as-is if we can't parse it
-            } else {
-              out[k] = `${baseUrl}${relativePath}`
-            }
-          } else if (isRelativeCasePath(v)) {
-            out[k] = `${baseUrl}${normalizeCaseVersionInPath(v, caseVersion)}`
-          } else {
-            out[k] = v
-          }
-        } else {
-          out[k] = walk(v)
-        }
+        out[k] = typeof v === 'string' ? normalizeUri(v) : walk(v)
       } else {
         out[k] = walk(v)
       }
