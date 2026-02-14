@@ -10,6 +10,8 @@ export type FrameworkMetadata = {
   title?: string
   description?: string
   creator?: string
+  /** Original CASE document URI (preserved for round-trip fidelity) */
+  caseUri?: string
   /** Entity that publishes / distributes the framework */
   publisher?: string
   frameworkType?: string

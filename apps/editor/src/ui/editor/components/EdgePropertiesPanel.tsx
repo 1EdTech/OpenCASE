@@ -222,7 +222,13 @@ export default memo(function EdgePropertiesPanel({ edge, nodes, onClose, onChang
             {/* ── Association Type ── */}
             <SidebarSection
               title="Association type"
-              subtitle={isLockedType ? 'Locked — framework root connections are visual only.' : involvesExternalFrameworkNode ? 'External framework — must use "Is Part Of".' : 'How the origin item relates to the destination.'}
+              subtitle={
+                isLockedType
+                  ? 'Locked — framework root connections are visual only.'
+                  : involvesExternalFrameworkNode
+                    ? 'External framework — must use "Is Part Of".'
+                    : 'How the origin item relates to the destination.'
+              }
               defaultOpen
             >
               {isLockedType ? (

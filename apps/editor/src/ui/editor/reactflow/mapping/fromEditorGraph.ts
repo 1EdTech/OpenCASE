@@ -49,6 +49,7 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     title: doc?.title,
     description: doc?.description,
     creator: doc?.creator,
+    caseUri: doc?.uri,
     publisher: doc?.publisher,
     frameworkType: doc?.frameworkType,
     adoptionStatus: doc?.adoptionStatus,
@@ -77,10 +78,18 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
         alternativeLabel: cf?.alternativeLabel,
         humanCodingScheme: cf?.humanCodingScheme,
         CFItemType: cf?.CFItemType,
+        CFItemTypeURI: cf?.CFItemTypeURI,
+        listEnumeration: cf?.listEnumeration,
         subject: cf?.subject,
+        subjectURI: cf?.subjectURI,
         educationLevel: cf?.educationLevel,
         conceptKeywords: cf?.conceptKeywords,
+        conceptKeywordsURI: cf?.conceptKeywordsURI,
         notes: cf?.notes,
+        language: cf?.language,
+        licenseURI: cf?.licenseURI,
+        statusStartDate: cf?.statusStartDate,
+        statusEndDate: cf?.statusEndDate,
         colorBand: cf?.colorBand,
         lastChangeDateTime: cf?.lastChangeDateTime,
         caseUri: cf?.uri,
@@ -100,7 +109,7 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     const edgeData = e.data as {
       associationType?: string
       sequenceNumber?: number
-      cfAssociation?: { identifier?: string; sequenceNumber?: number; associationType?: string; CFAssociationGroupingURI?: { identifier?: string; title?: string; uri?: string }; extensions?: Record<string, unknown> }
+      cfAssociation?: { identifier?: string; uri?: string; sequenceNumber?: number; associationType?: string; CFAssociationGroupingURI?: { identifier?: string; title?: string; uri?: string }; notes?: string; lastChangeDateTime?: string; extensions?: Record<string, unknown> }
     } | undefined
 
     // Framework→item edges represent top-level isChildOf associations (item isChildOf document).
@@ -122,11 +131,14 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
         toItemId: fwNodeId as unknown as ItemId,   // document (destination)
         associationType: 'isChildOf',
         metadata: {
+          caseUri: edgeData?.cfAssociation?.uri,
           sequenceNumber: edgeData?.sequenceNumber ?? edgeData?.cfAssociation?.sequenceNumber,
           originHandle,
           destinationHandle,
           CFAssociationGroupingIdentifier: fwGroupingURI?.identifier,
           CFAssociationGroupingTitle: fwGroupingURI?.title,
+          notes: edgeData?.cfAssociation?.notes,
+          lastChangeDateTime: edgeData?.cfAssociation?.lastChangeDateTime,
           extensions: edgeData?.cfAssociation?.extensions,
         },
       }
@@ -150,17 +162,23 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     const destinationHandle = (isHierarchical ? e.sourceHandle : e.targetHandle) ?? undefined
     
     const groupingURI = edgeData?.cfAssociation?.CFAssociationGroupingURI
+    // Recover original association identifier from cfAssociation if available (e.g. for hierarchical edges
+    // where toReactFlow assigns a synthetic e_parent_child edge ID)
+    const assocId = edgeData?.cfAssociation?.identifier ?? e.id
     const assoc: Association = {
-      id: e.id as unknown as AssociationId,
+      id: assocId as unknown as AssociationId,
       fromItemId: (isHierarchical ? target : source) as unknown as ItemId,
       toItemId: (isHierarchical ? source : target) as unknown as ItemId,
       associationType,
       metadata: {
+        caseUri: edgeData?.cfAssociation?.uri,
         sequenceNumber: edgeData?.cfAssociation?.sequenceNumber,
         originHandle,
         destinationHandle,
         CFAssociationGroupingIdentifier: groupingURI?.identifier,
         CFAssociationGroupingTitle: groupingURI?.title,
+        notes: edgeData?.cfAssociation?.notes,
+        lastChangeDateTime: edgeData?.cfAssociation?.lastChangeDateTime,
         extensions: edgeData?.cfAssociation?.extensions,
       },
     }

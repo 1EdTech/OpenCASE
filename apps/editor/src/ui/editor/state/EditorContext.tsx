@@ -16,7 +16,7 @@ import type {
   CaseItemNodeType,
   ExternalFrameworkNodeData,
 } from '@/ui/editor/reactflow/types'
-import type { CFAssociationGrouping, CFDocument, CFItem, CFItemType, CFSubject, CFConcept } from '@/domain/case/types'
+import type { CFAssociationGrouping, CFDocument, CFItem, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
 import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
 import type { EditorSettings } from '@/ui/editor/components/SettingsModal'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
@@ -61,6 +61,7 @@ type EditorContextValue = {
   cfConcepts: CFConcept[]
   addCfConcept: (_concept: CFConcept) => void
   ensureCfConcept: (_title: string) => CFConcept | null
+  cfLicenses: CFLicense[]
   cfAssociationGroupings: CFAssociationGrouping[]
   addCfAssociationGrouping: (_grouping: CFAssociationGrouping) => void
   ensureCfAssociationGrouping: (_title: string) => CFAssociationGrouping | null
@@ -109,6 +110,7 @@ export function EditorProvider({
   initialCfItemTypes,
   initialCfSubjects,
   initialCfConcepts,
+  initialCfLicenses,
   initialCfAssociationGroupings,
 }: Readonly<{
   children: ReactNode
@@ -125,6 +127,8 @@ export function EditorProvider({
   initialCfSubjects?: CFSubject[]
   /** Seed CFConcept definitions loaded from the definitions index */
   initialCfConcepts?: CFConcept[]
+  /** Seed CFLicense definitions loaded from the definitions index */
+  initialCfLicenses?: CFLicense[]
   /** Seed CFAssociationGrouping definitions */
   initialCfAssociationGroupings?: CFAssociationGrouping[]
 }>) {
@@ -236,6 +240,10 @@ export function EditorProvider({
     addCfConcept(newConcept)
     return newConcept
   }, [cfConcepts, addCfConcept])
+
+  // ── CFLicense definitions ────────────────────────────────────────────
+  const [cfLicenses, setCfLicenses] = useState<CFLicense[]>(initialCfLicenses ?? [])
+  useEffect(() => { setCfLicenses(initialCfLicenses ?? []) }, [initialCfLicenses])
 
   // ── CFAssociationGrouping definitions ─────────────────────────────────
   const [cfAssociationGroupings, setCfAssociationGroupings] = useState<CFAssociationGrouping[]>(initialCfAssociationGroupings ?? [])
@@ -646,6 +654,7 @@ export function EditorProvider({
       cfConcepts,
       addCfConcept,
       ensureCfConcept,
+      cfLicenses,
       cfAssociationGroupings,
       addCfAssociationGrouping,
       ensureCfAssociationGrouping,
@@ -681,7 +690,7 @@ export function EditorProvider({
       caseVersion, cfItemTypes, addCfItemType, ensureCfItemType,
       cfSubjects, addCfSubject, ensureCfSubject,
       cfConcepts, addCfConcept, ensureCfConcept,
-      cfAssociationGroupings, addCfAssociationGrouping, ensureCfAssociationGrouping,
+      cfLicenses, cfAssociationGroupings, addCfAssociationGrouping, ensureCfAssociationGrouping,
       activeGroupingFilter, setActiveGroupingFilter,
       settings, updateSettings,
       onSelectionChange, onNodesChange, onEdgesChange, onConnect,

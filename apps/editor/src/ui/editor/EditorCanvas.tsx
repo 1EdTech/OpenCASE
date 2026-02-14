@@ -18,13 +18,10 @@ import AddExternalFrameworkDialog from '@/ui/editor/components/AddExternalFramew
 import ViewCFPackageDialog from '@/ui/editor/components/ViewCFPackageDialog'
 import { useEditor } from '@/ui/editor/state/EditorContext'
 import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/types'
-import type { CFDocument, CFItem, CFLicense, CFPackage } from '@/domain/case/types'
+import type { CFDocument, CFItem, CFPackage } from '@/domain/case/types'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
 import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
-import { getAppConfig } from '@/app/config'
-import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
-import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 
 type EditorCanvasProps = {
   onBack?: () => void
@@ -36,7 +33,7 @@ type EditorCanvasProps = {
 }
 
 export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework }: Readonly<EditorCanvasProps>) {
-  const { status: authStatus, userName, tenantId, signOut, getAccessToken, changePassword } = useAuth()
+  const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
     nodesWithCallbacks,
@@ -61,6 +58,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     ensureCfSubject,
     cfConcepts,
     ensureCfConcept,
+    cfLicenses,
     cfAssociationGroupings,
     ensureCfAssociationGrouping,
     activeGroupingFilter,
@@ -94,18 +92,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  // Available licenses fetched from OpenCASE
-  const [availableLicenses, setAvailableLicenses] = useState<CFLicense[]>([])
-
-  // Fetch available licenses when authenticated
-  useEffect(() => {
-    if (!tenantId) return
-    const cfg = getAppConfig()
-    const api = new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken }))
-    api.listLicenses({ tenantId }).then(setAvailableLicenses).catch(() => {
-      // best-effort; ignore failures
-    })
-  }, [tenantId, getAccessToken])
+  // Available licenses from context (loaded via App.tsx definitions pipeline)
+  const availableLicenses = cfLicenses
   
   // Track Shift key for selection cursor styling only (DOM class, no React state).
   const shiftHeldRef = useRef(false)
@@ -148,8 +136,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   // ── Refs for save/export (keeps callbacks stable, avoids re-renders) ──
   const graphRef = useRef({ nodes, edges: editorEdges })
   graphRef.current = { nodes, edges: editorEdges }
-  const saveCtxRef = useRef({ caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings })
-  saveCtxRef.current = { caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings }
+  const saveCtxRef = useRef({ caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings })
+  saveCtxRef.current = { caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings }
 
   // Generate CFPackage from current editor state and open the viewer
   const handleViewCFPackage = useCallback(() => {
@@ -160,7 +148,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       framework, layout, incrementVersion: false,
       caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
       cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
-      cfConcepts: ctx.cfConcepts, cfAssociationGroupings: ctx.cfAssociationGroupings,
+      cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
     })
     setGeneratedCfPackage(cfPackage)
     setCfPackageDialogOpen(true)
@@ -175,7 +163,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       framework, layout, incrementVersion: true,
       caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
       cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
-      cfConcepts: ctx.cfConcepts, cfAssociationGroupings: ctx.cfAssociationGroupings,
+      cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
     })
     const openCasePackage = toOpenCaseFormat(cfPackage)
     console.log('[Save] Generated OpenCASE package:', openCasePackage)
@@ -226,32 +214,81 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   // Apply the custom labeled edge type to all edges, passing the path style in data.
   // Per-element cache: only create new objects for edges whose data actually changed.
   // Selection-only changes reuse the previous output so React Flow skips re-rendering.
-  const edgesCacheRef = useRef(new Map<string, { input: CaseEditorEdge; edgeType: string; filter: string | null; output: CaseEditorEdge }>())
+  const edgesCacheRef = useRef(new Map<string, { input: CaseEditorEdge; edgeType: string; filter: string | null; parallelIndex: number; parallelCount: number; output: CaseEditorEdge }>())
 
   const edgesWithType = useMemo<CaseEditorEdge[]>(() => {
     const prev = edgesCacheRef.current
-    const next = new Map<string, { input: CaseEditorEdge; edgeType: string; filter: string | null; output: CaseEditorEdge }>()
+    const next = new Map<string, { input: CaseEditorEdge; edgeType: string; filter: string | null; parallelIndex: number; parallelCount: number; output: CaseEditorEdge }>()
     const globalEdgeType = settings.edgeType
+    const parallelOffsetsByEdgeId = new Map<string, { parallelIndex: number; parallelCount: number }>()
+
+    // Group edges by node pair (direction-agnostic) to fan out parallel labels.
+    // This keeps multiple associations (e.g. precedes + exactMatchOf) readable.
+    const byPair = new Map<string, CaseEditorEdge[]>()
+    for (const edge of editorEdges) {
+      const pairKey =
+        edge.source < edge.target
+          ? `${edge.source}__${edge.target}`
+          : `${edge.target}__${edge.source}`
+      const arr = byPair.get(pairKey)
+      if (arr) arr.push(edge)
+      else byPair.set(pairKey, [edge])
+    }
+    for (const arr of byPair.values()) {
+      if (arr.length <= 1) continue
+      const centeredStart = -(arr.length - 1) / 2
+      arr
+        .slice()
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .forEach((edge, index) => {
+          parallelOffsetsByEdgeId.set(edge.id, {
+            parallelIndex: centeredStart + index,
+            parallelCount: arr.length,
+          })
+        })
+    }
 
     const result = editorEdges.map((edge) => {
       const cached = prev.get(edge.id)
+      const parallel = parallelOffsetsByEdgeId.get(edge.id)
+      const parallelIndex = parallel?.parallelIndex ?? 0
+      const parallelCount = parallel?.parallelCount ?? 1
 
       // Fast path: exact same input + same global params → reuse entire output
-      if (cached && cached.input === edge && cached.edgeType === globalEdgeType && cached.filter === effectiveGroupingFilter) {
+      if (
+        cached &&
+        cached.input === edge &&
+        cached.edgeType === globalEdgeType &&
+        cached.filter === effectiveGroupingFilter &&
+        cached.parallelIndex === parallelIndex &&
+        cached.parallelCount === parallelCount
+      ) {
         next.set(edge.id, cached)
         return cached.output
       }
 
       // If only selected/position changed (data ref is same) and global params unchanged,
       // reuse the output's data/style but merge the new edge shell
-      if (cached && edge.data === cached.input.data && cached.edgeType === globalEdgeType && cached.filter === effectiveGroupingFilter) {
+      if (
+        cached &&
+        edge.data === cached.input.data &&
+        cached.edgeType === globalEdgeType &&
+        cached.filter === effectiveGroupingFilter &&
+        cached.parallelIndex === parallelIndex &&
+        cached.parallelCount === parallelCount
+      ) {
         const output: CaseEditorEdge = { ...edge, type: 'labeled' as const, data: cached.output.data, style: cached.output.style }
-        next.set(edge.id, { input: edge, edgeType: globalEdgeType, filter: effectiveGroupingFilter, output })
+        next.set(edge.id, { input: edge, edgeType: globalEdgeType, filter: effectiveGroupingFilter, parallelIndex, parallelCount, output })
         return output
       }
 
       // Full recompute
-      const baseData = { ...edge.data, edgeType: edge.data?.edgeType ?? globalEdgeType }
+      const baseData = {
+        ...edge.data,
+        edgeType: edge.data?.edgeType ?? globalEdgeType,
+        parallelIndex,
+        parallelCount,
+      }
       let style = edge.style
 
       if (effectiveGroupingFilter) {
@@ -269,7 +306,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       }
 
       const output: CaseEditorEdge = { ...edge, type: 'labeled' as const, data: baseData, style }
-      next.set(edge.id, { input: edge, edgeType: globalEdgeType, filter: effectiveGroupingFilter, output })
+      next.set(edge.id, { input: edge, edgeType: globalEdgeType, filter: effectiveGroupingFilter, parallelIndex, parallelCount, output })
       return output
     })
 

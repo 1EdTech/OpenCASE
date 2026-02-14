@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorProvider } from '@/ui/editor/state/EditorContext'
 import EditorCanvas from '@/ui/editor/EditorCanvas'
 import HomeScreen from '@/ui/home/HomeScreen'
@@ -13,7 +13,7 @@ import { loadFrameworkFromCfPackage } from '@/application/framework/services/Fra
 import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage } from '@/ui/editor/reactflow/mapping'
 import type { LayoutState } from '@/ui/editor/reactflow/mapping'
 import type { CaseVersion } from '@/application/framework/mappers/case/CasePackageSnapshot'
-import type { CFAssociationGrouping, CFItemType, CFSubject, CFConcept } from '@/domain/case/types'
+import type { CFAssociationGrouping, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
 import LoginScreen from '@/ui/auth/LoginScreen'
 import { detectTopology } from '@/ui/editor/layout/detectTopology'
 import { applyInitialLayout } from '@/ui/editor/layout/applyInitialLayout'
@@ -23,6 +23,7 @@ function extractCfDefinitions(pkg: unknown): {
   CFItemTypes?: CFItemType[]
   CFSubjects?: CFSubject[]
   CFConcepts?: CFConcept[]
+  CFLicenses?: CFLicense[]
   CFAssociationGroupings?: CFAssociationGrouping[]
 } {
   const p = pkg as Record<string, unknown> | null
@@ -35,6 +36,7 @@ function extractCfDefinitions(pkg: unknown): {
     CFItemTypes: Array.isArray(defs.CFItemTypes) ? (defs.CFItemTypes as CFItemType[]) : undefined,
     CFSubjects: Array.isArray(defs.CFSubjects) ? (defs.CFSubjects as CFSubject[]) : undefined,
     CFConcepts: Array.isArray(defs.CFConcepts) ? (defs.CFConcepts as CFConcept[]) : undefined,
+    CFLicenses: Array.isArray(defs.CFLicenses) ? (defs.CFLicenses as CFLicense[]) : undefined,
     CFAssociationGroupings: Array.isArray(defs.CFAssociationGroupings) ? (defs.CFAssociationGroupings as CFAssociationGrouping[]) : undefined,
   }
 }
@@ -66,6 +68,7 @@ function AppInner() {
   const [tenantCfItemTypes, setTenantCfItemTypes] = useState<CFItemType[]>([])
   const [tenantCfSubjects, setTenantCfSubjects] = useState<CFSubject[]>([])
   const [tenantCfConcepts, setTenantCfConcepts] = useState<CFConcept[]>([])
+  const [tenantCfLicenses, setTenantCfLicenses] = useState<CFLicense[]>([])
   const [tenantCfAssociationGroupings, setTenantCfAssociationGroupings] = useState<CFAssociationGrouping[]>([])
 
   // Track which framework IDs have been published to OpenCASE
@@ -96,6 +99,13 @@ function AppInner() {
         return newOnes.length > 0 ? [...prev, ...newOnes] : prev
       })
     }
+    if (defs.CFLicenses?.length) {
+      setTenantCfLicenses((prev) => {
+        const ids = new Set(prev.map((d) => d.identifier))
+        const newOnes = defs.CFLicenses!.filter((d) => !ids.has(d.identifier))
+        return newOnes.length > 0 ? [...prev, ...newOnes] : prev
+      })
+    }
     if (defs.CFAssociationGroupings?.length) {
       setTenantCfAssociationGroupings((prev) => {
         const ids = new Set(prev.map((d) => d.identifier))
@@ -107,6 +117,8 @@ function AppInner() {
 
   const [authCallbackState, setAuthCallbackState] = useState<'idle' | 'processing' | 'error'>('idle')
   const [remoteOpenState, setRemoteOpenState] = useState<'idle' | 'loading'>('idle')
+  const authStatusRef = useRef(authStatus)
+  authStatusRef.current = authStatus
 
   const getRoute = useCallback((): 'authCallback' | 'login' | 'app' => {
     const hash = globalThis.location?.hash ?? ''
@@ -140,7 +152,10 @@ function AppInner() {
         setRoute(getRoute())
       })
       .catch(() => {
-        setAuthCallbackState('error')
+        // In React StrictMode, a duplicate callback attempt can fail after a successful sign-in.
+        if (authStatusRef.current !== 'authenticated') {
+          setAuthCallbackState('error')
+        }
       })
   }, [completeSignIn])
 
@@ -164,6 +179,7 @@ function AppInner() {
         CFItemTypes: defs.CFItemTypes?.length ?? 0,
         CFSubjects: defs.CFSubjects?.length ?? 0,
         CFConcepts: defs.CFConcepts?.length ?? 0,
+        CFLicenses: defs.CFLicenses?.length ?? 0,
         CFAssociationGroupings: defs.CFAssociationGroupings?.length ?? 0,
       })
       if (defs.CFItemTypes && defs.CFItemTypes.length > 0) {
@@ -174,6 +190,9 @@ function AppInner() {
       }
       if (defs.CFConcepts && defs.CFConcepts.length > 0) {
         setTenantCfConcepts(defs.CFConcepts)
+      }
+      if (defs.CFLicenses && defs.CFLicenses.length > 0) {
+        setTenantCfLicenses(defs.CFLicenses)
       }
       if (defs.CFAssociationGroupings && defs.CFAssociationGroupings.length > 0) {
         setTenantCfAssociationGroupings(defs.CFAssociationGroupings)
@@ -455,6 +474,7 @@ function AppInner() {
       initialCfItemTypes={tenantCfItemTypes}
       initialCfSubjects={tenantCfSubjects}
       initialCfConcepts={tenantCfConcepts}
+      initialCfLicenses={tenantCfLicenses}
       initialCfAssociationGroupings={tenantCfAssociationGroupings}
     >
       <EditorCanvas

@@ -1,4 +1,4 @@
-import type { CFAssociation, CFAssociationGrouping, CFConcept, CFDefinition, CFDocument, CFItem, CFItemType, CFSubject, CFPackage, CaseExtensions, LinkURI } from '@/domain/case/types'
+import type { CFAssociation, CFAssociationGrouping, CFConcept, CFDefinition, CFDocument, CFItem, CFItemType, CFLicense, CFSubject, CFPackage, CaseExtensions, LinkURI } from '@/domain/case/types'
 import type { Framework } from '@/domain/framework/model/types'
 import type { CaseVersion } from './CasePackageSnapshot'
 import type { LayoutState, NodeLayout } from '@/ui/editor/reactflow/mapping/types'
@@ -164,7 +164,7 @@ function frameworkToCfDocument(
   const document: CFDocument & { sourcedId: string } = {
     identifier: fwId,
     sourcedId: fwId, // OpenCASE requires sourcedId
-    uri: `urn:case:document:${fwId}`,
+    uri: meta.caseUri ?? `urn:case:document:${fwId}`,
     creator: meta.creator ?? 'OpenCASE',
     title: docTitle,
     description: meta.description,
@@ -244,7 +244,7 @@ function itemToCfItem(
     subjectURI: (md.subjectURI as LinkURI[] | undefined) ?? undefined,
     language: s('language'),
     educationLevel: a('educationLevel'),
-    licenseURI: undefined,
+    licenseURI: (md.licenseURI as LinkURI | undefined) ?? undefined,
     statusStartDate: s('statusStartDate'),
     statusEndDate: s('statusEndDate'),
     lastChangeDateTime: s('lastChangeDateTime') ?? nowIso(),
@@ -366,8 +366,10 @@ export function frameworkToCfPackage(params: {
   cfConcepts?: CFConcept[]
   /** CFAssociationGrouping definitions to include in CFDefinitions (from editor state) */
   cfAssociationGroupings?: CFAssociationGrouping[]
+  /** CFLicense definitions to include in CFDefinitions (from editor state) */
+  cfLicenses?: CFLicense[]
 }): CFPackage {
-  const { framework, caseVersion, layout, incrementVersion, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings } = params
+  const { framework, caseVersion, layout, incrementVersion, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses } = params
   const fwId = String(framework.id)
 
   // Build CFDocument
@@ -432,6 +434,16 @@ export function frameworkToCfPackage(params: {
     (c) => refConceptIds.has(c.identifier),
   ) ?? []
 
+  // Collect referenced license identifiers from document and items
+  const refLicenseIds = new Set<string>()
+  if (document.licenseURI?.identifier) refLicenseIds.add(document.licenseURI.identifier)
+  for (const item of items) {
+    if (item.licenseURI?.identifier) refLicenseIds.add(item.licenseURI.identifier)
+  }
+  const filteredLicenses = cfLicenses?.filter(
+    (l) => refLicenseIds.has(l.identifier),
+  ) ?? []
+
   // Collect referenced grouping identifiers from built CFAssociations
   const refGroupingIds = new Set<string>()
   for (const assoc of associations) {
@@ -441,7 +453,7 @@ export function frameworkToCfPackage(params: {
     (g) => refGroupingIds.has(g.identifier),
   ) ?? []
 
-  if (filteredItemTypes.length > 0 || filteredSubjects.length > 0 || filteredConcepts.length > 0 || filteredGroupings.length > 0) {
+  if (filteredItemTypes.length > 0 || filteredSubjects.length > 0 || filteredConcepts.length > 0 || filteredGroupings.length > 0 || filteredLicenses.length > 0) {
     cfDefinitions = {}
 
     if (filteredItemTypes.length > 0) {
@@ -468,6 +480,15 @@ export function frameworkToCfPackage(params: {
         description: c.description || c.title || '',
         hierarchyCode: c.hierarchyCode || '1',
         lastChangeDateTime: c.lastChangeDateTime || now,
+      }))
+    }
+
+    if (filteredLicenses.length > 0) {
+      cfDefinitions.CFLicenses = filteredLicenses.map((l) => ({
+        ...l,
+        description: l.description || l.title || '',
+        licenseText: l.licenseText || l.description || l.title || '',
+        lastChangeDateTime: l.lastChangeDateTime || now,
       }))
     }
 
@@ -541,12 +562,15 @@ export type CaseV1p1Item = {
   alternativeLabel?: string
   abbreviatedStatement?: string
   CFItemType?: string
-  CFItemTypeURI?: unknown
+  CFItemTypeURI?: CaseLinkURI
   conceptKeywords?: string[]
+  conceptKeywordsURI?: CaseLinkURI
   notes?: string
   language?: string
   subject?: string | string[]
+  subjectURI?: CaseLinkURI[]
   educationLevel?: string[]
+  licenseURI?: CaseLinkURI
   statusStartDate?: string
   statusEndDate?: string
   extensions?: Record<string, unknown>
@@ -563,6 +587,8 @@ export type CaseV1p1Association = {
   destinationNodeURI: CaseLinkURI
   lastChangeDateTime: string
   sequenceNumber?: number
+  CFAssociationGroupingURI?: CaseLinkURI
+  notes?: string
   CFDocumentURI?: CaseLinkURI
   extensions?: Record<string, unknown>
 }
@@ -659,12 +685,15 @@ export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
       alternativeLabel: it.alternativeLabel,
       abbreviatedStatement: it.abbreviatedStatement,
       CFItemType: it.CFItemType,
-      CFItemTypeURI: it.CFItemTypeURI,
+      CFItemTypeURI: it.CFItemTypeURI ? { title: it.CFItemTypeURI.title ?? '', identifier: it.CFItemTypeURI.identifier ?? '', uri: it.CFItemTypeURI.uri } : undefined,
       conceptKeywords: it.conceptKeywords,
+      conceptKeywordsURI: it.conceptKeywordsURI ? { title: it.conceptKeywordsURI.title ?? '', identifier: it.conceptKeywordsURI.identifier ?? '', uri: it.conceptKeywordsURI.uri } : undefined,
       notes: it.notes,
       language: it.language,
       subject: it.subject,
+      subjectURI: it.subjectURI?.map((s) => ({ title: s.title ?? '', identifier: s.identifier ?? '', uri: s.uri })),
       educationLevel: it.educationLevel,
+      licenseURI: it.licenseURI ? { title: it.licenseURI.title ?? '', identifier: it.licenseURI.identifier ?? '', uri: it.licenseURI.uri } : undefined,
       statusStartDate: it.statusStartDate,
       statusEndDate: it.statusEndDate,
       extensions: it.extensions,
@@ -697,6 +726,12 @@ export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
       },
       lastChangeDateTime: a.lastChangeDateTime,
       sequenceNumber: a.sequenceNumber,
+      CFAssociationGroupingURI: a.CFAssociationGroupingURI ? {
+        title: a.CFAssociationGroupingURI.title ?? '',
+        identifier: a.CFAssociationGroupingURI.identifier ?? '',
+        uri: a.CFAssociationGroupingURI.uri,
+      } : undefined,
+      notes: a.notes,
       CFDocumentURI: {
         title: docTitle,
         identifier: docId,

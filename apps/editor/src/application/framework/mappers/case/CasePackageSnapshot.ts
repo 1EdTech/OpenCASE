@@ -69,6 +69,11 @@ export type CaseItemSnapshot = {
   notes?: string
   /** Item language (e.g., "en") */
   language?: string
+  /** Link to the CFLicense governing this item */
+  licenseURI?: { title?: string; identifier: string; uri: string }
+  /** Item-level lifecycle dates */
+  statusStartDate?: string
+  statusEndDate?: string
   lastChangeDateTime?: string
   extensions?: Record<string, unknown>
 }
@@ -80,6 +85,8 @@ export type CaseItemSnapshot = {
  */
 export type CaseAssociationSnapshot = {
   identifier: string
+  /** The association's own URI */
+  uri?: string
   associationType?: string
   originIdentifier?: string
   destinationIdentifier?: string
@@ -94,6 +101,8 @@ export type CaseAssociationSnapshot = {
   CFAssociationGroupingIdentifier?: string
   /** Title of the CFAssociationGrouping (for display) */
   CFAssociationGroupingTitle?: string
+  /** v1p1: Notes about this association */
+  notes?: string
   lastChangeDateTime?: string
   extensions?: Record<string, unknown>
 }

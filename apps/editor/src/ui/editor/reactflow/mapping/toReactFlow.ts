@@ -84,7 +84,7 @@ function mapDomainFrameworkToCfDocument(framework: Framework): CFDocument {
   const id = framework.id as unknown as string
   return {
     identifier: id,
-    uri: `urn:case:document:${id}`,
+    uri: meta.caseUri ?? `urn:case:document:${id}`,
     creator: meta.creator ?? 'District Curriculum Team',
     title: meta.title ?? 'Untitled framework',
     description: meta.description,
@@ -127,10 +127,18 @@ function mapDomainItemToCfItem(framework: Framework, itemId: string): CFItem {
     alternativeLabel: s('alternativeLabel'),
     humanCodingScheme: s('humanCodingScheme'),
     CFItemType: s('CFItemType') ?? item?.type,
+    CFItemTypeURI: md.CFItemTypeURI as CFItem['CFItemTypeURI'],
+    listEnumeration: s('listEnumeration'),
     subject: a('subject'),
+    subjectURI: md.subjectURI as CFItem['subjectURI'],
     educationLevel: a('educationLevel'),
     conceptKeywords: a('conceptKeywords'),
+    conceptKeywordsURI: md.conceptKeywordsURI as CFItem['conceptKeywordsURI'],
     notes: s('notes'),
+    language: s('language'),
+    licenseURI: md.licenseURI as CFItem['licenseURI'],
+    statusStartDate: s('statusStartDate'),
+    statusEndDate: s('statusEndDate'),
     colorBand: colorBand || undefined,
     lastChangeDateTime: s('lastChangeDateTime') ?? nowIso(),
     extensions: rawExtensions ?? undefined,
@@ -221,11 +229,17 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
   // Map child -> parent and track associations by their origin/destination for edge data
   const parentByChild = new Map<string, string>()
   const associationByEdgeKey = new Map<string, Association>()
+  const associatedItemIds = new Set<string>()
   
   for (const a of framework.associations.values()) {
     const fromId = a.fromItemId as unknown as string
     const toId = a.toItemId as unknown as string
     if (!fromId || !toId) continue
+
+    // Track whether each item participates in any association.
+    // Used to avoid recreating synthetic framework "starts" edges for connected items.
+    associatedItemIds.add(fromId)
+    associatedItemIds.add(toId)
     
     if (a.associationType === 'isChildOf' || a.associationType === 'isPartOf') {
       parentByChild.set(fromId, toId)
@@ -240,7 +254,12 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
   let y = HEADER_SAFE_Y + 160 + NODE_VERTICAL_GAP
 
   for (const itemId of itemIds) {
-    const parentId = parentByChild.get(itemId) ?? fwId
+    const explicitParentId = parentByChild.get(itemId)
+    const hasAnyAssociation = associatedItemIds.has(itemId)
+    // Only synthesize a framework-root parent for truly isolated items.
+    // If a node is connected through any non-hierarchical relationship, preserve
+    // the user's intent when they removed the root "starts" edge.
+    const parentId = explicitParentId ?? (hasAnyAssociation ? undefined : fwId)
     const cfItem = mapDomainItemToCfItem(framework, itemId)
 
     const itemLayout = getLayout(layout, itemId, { x: 0, y, w: DEFAULT_NODE_WIDTH, h: DEFAULT_NODE_HEIGHT })
@@ -274,7 +293,14 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
   // Semantic relationship: child isChildOf parent (or __startsFrom for framework connections)
   // Arrow points to child (markerEnd on target)
   for (const itemId of itemIds) {
-    const parentId = parentByChild.get(itemId) ?? fwId
+    const explicitParentId = parentByChild.get(itemId)
+    const hasAnyAssociation = associatedItemIds.has(itemId)
+    if (!explicitParentId && hasAnyAssociation) {
+      // Connected item without a hierarchical parent: don't recreate a synthetic
+      // framework-root edge that the user intentionally removed.
+      continue
+    }
+    const parentId = explicitParentId ?? fwId
     const association = associationByEdgeKey.get(`${parentId}_${itemId}`) ?? associationByEdgeKey.get(`${itemId}_${parentId}`)
     const cfAssociation = association ? mapDomainAssociationToCfAssociation(framework, association) : undefined
     const md = (association?.metadata ?? {}) as Record<string, unknown>

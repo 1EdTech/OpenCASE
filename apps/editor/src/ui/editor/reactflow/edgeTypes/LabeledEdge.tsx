@@ -24,6 +24,10 @@ type LabeledEdgeData = {
   edgeType?: 'default' | 'straight' | 'step' | 'smoothstep'
   /** Where to position the label along the edge path */
   labelPosition?: 'center' | 'target'
+  /** Visual offset index for parallel edges between the same node pair */
+  parallelIndex?: number
+  /** Total number of parallel edges between the same node pair */
+  parallelCount?: number
 }
 
 export type LabeledEdge = Edge<LabeledEdgeData, 'labeled'>
@@ -95,6 +99,10 @@ function LabeledEdge(props: EdgeProps) {
   const sequenceNumber = edgeData?.sequenceNumber
   const hasSequence = sequenceNumber !== undefined && sequenceNumber !== null
   const typeLabel = formatAssociationType(associationType)
+  const parallelIndex = edgeData?.parallelIndex ?? 0
+  const parallelCount = edgeData?.parallelCount ?? 1
+  const LABEL_PARALLEL_SPACING = 22
+  const parallelOffsetY = parallelCount > 1 ? parallelIndex * LABEL_PARALLEL_SPACING : 0
 
   return (
     <>
@@ -109,7 +117,7 @@ function LabeledEdge(props: EdgeProps) {
         <div
           style={{
             position: 'absolute',
-            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
+            transform: `translate(-50%, -50%) translate(${labelX}px,${labelY + parallelOffsetY}px)`,
             pointerEvents: 'all',
           }}
           className="nodrag nopan"

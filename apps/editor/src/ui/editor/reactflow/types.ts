@@ -113,6 +113,16 @@ export type CaseEdgeData = {
    * hierarchy sets 'smoothstep', star clears to undefined for bezier).
    */
   edgeType?: string
+  /**
+   * Visual offset index for parallel edges between the same node pair.
+   * Used only for rendering (not persisted into CASE semantics).
+   */
+  parallelIndex?: number
+  /**
+   * Count of parallel edges between the same node pair.
+   * Used only for rendering (not persisted into CASE semantics).
+   */
+  parallelCount?: number
 }
 
 export type CaseEditorEdge = Edge<CaseEdgeData>

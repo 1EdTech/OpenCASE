@@ -387,6 +387,20 @@ export default memo(function NodePropertiesPanel({
                     <input id="node-alternativeLabel" className={INPUT_CLS} value={cfItem?.alternativeLabel ?? ''} onChange={(e) => updateItem({ alternativeLabel: e.target.value })} placeholder="A short, human-friendly title" />
                   </div>
                   <div>
+                    <label className={LABEL_CLS} htmlFor="node-abbreviatedStatement">Abbreviated statement</label>
+                    <input id="node-abbreviatedStatement" className={INPUT_CLS} value={cfItem?.abbreviatedStatement ?? ''} onChange={(e) => updateItem({ abbreviatedStatement: e.target.value })} placeholder="Shortened version of the full statement" />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS} htmlFor="node-listEnumeration">List enumeration</label>
+                    <input id="node-listEnumeration" className={INPUT_CLS} value={cfItem?.listEnumeration ?? ''} onChange={(e) => updateItem({ listEnumeration: e.target.value })} placeholder="e.g., 1, 1.1, a" />
+                    <div className={HINT_CLS}>Ordering hint for display purposes.</div>
+                  </div>
+                  <div>
+                    <label className={LABEL_CLS} htmlFor="node-language">Language</label>
+                    <input id="node-language" className={INPUT_CLS} value={cfItem?.language ?? ''} onChange={(e) => updateItem({ language: e.target.value })} placeholder="e.g., en, fr, es" />
+                    <div className={HINT_CLS}>Override the document-level language for this item.</div>
+                  </div>
+                  <div>
                     <label className={LABEL_CLS} htmlFor="node-concept">Concept</label>
                     <ComboboxInput
                       id="node-concept"
@@ -419,6 +433,46 @@ export default memo(function NodePropertiesPanel({
                 </div>
               )}
             </SidebarSection>
+
+            {/* ── Item lifecycle (items only) ── */}
+            {!isFramework && !isExternalFramework && cfItem ? (
+              <SidebarSection title="Lifecycle" subtitle="Validity dates and license for this item." accentColor={accentColor} defaultOpen={false}>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={LABEL_CLS} htmlFor="node-item-start-date">Start date</label>
+                      <input id="node-item-start-date" type="date" className={INPUT_CLS} value={cfItem.statusStartDate ?? ''} onChange={(e) => updateItem({ statusStartDate: e.target.value || undefined })} />
+                    </div>
+                    <div>
+                      <label className={LABEL_CLS} htmlFor="node-item-end-date">End date</label>
+                      <input id="node-item-end-date" type="date" className={INPUT_CLS} value={cfItem.statusEndDate ?? ''} onChange={(e) => updateItem({ statusEndDate: e.target.value || undefined })} />
+                    </div>
+                  </div>
+                  {availableLicenses && availableLicenses.length > 0 ? (
+                    <div>
+                      <label className={LABEL_CLS} htmlFor="node-item-license">License</label>
+                      <select
+                        id="node-item-license"
+                        className={INPUT_CLS}
+                        value={cfItem.licenseURI?.identifier ?? ''}
+                        onChange={(e) => {
+                          const selectedId = e.target.value
+                          if (!selectedId) { updateItem({ licenseURI: undefined }); return }
+                          const lic = availableLicenses.find((l) => l.identifier === selectedId)
+                          if (lic) { updateItem({ licenseURI: { title: lic.title, identifier: lic.identifier, uri: lic.uri } }) }
+                        }}
+                      >
+                        <option value="">Inherit from framework</option>
+                        {availableLicenses.map((lic) => (
+                          <option key={lic.identifier} value={lic.identifier}>{lic.title}</option>
+                        ))}
+                      </select>
+                      <div className={HINT_CLS}>Override the framework license for this item.</div>
+                    </div>
+                  ) : null}
+                </div>
+              </SidebarSection>
+            ) : null}
 
             {/* ── License (framework only) ── */}
             {isFramework && availableLicenses && availableLicenses.length > 0 ? (

@@ -242,6 +242,9 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
         conceptKeywordsURI: extractLinkURISingle(r.conceptKeywordsURI),
         notes: asString(r.notes),
         language: asString(r.language),
+        licenseURI: extractLinkURISingle(r.licenseURI),
+        statusStartDate: asString(r.statusStartDate),
+        statusEndDate: asString(r.statusEndDate),
         lastChangeDateTime: asString(r.lastChangeDateTime),
         extensions: asRecord(r.extensions) ?? undefined,
       }
@@ -267,6 +270,7 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
 
       return {
         identifier: id,
+        uri: asString(r.uri),
         associationType: asString(r.associationType),
         originIdentifier: origin.identifier,
         destinationIdentifier: dest.identifier,
@@ -276,6 +280,7 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
         sequenceNumber: asNumber(r.sequenceNumber),
         CFAssociationGroupingIdentifier: groupingLink.identifier,
         CFAssociationGroupingTitle: groupingObj ? asString(groupingObj.title) : undefined,
+        notes: asString(r.notes),
         lastChangeDateTime: asString(r.lastChangeDateTime),
         extensions: asRecord(r.extensions) ?? undefined,
       }
