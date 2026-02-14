@@ -115,6 +115,8 @@ type OpencaseExtension = {
   destinationHandle?: string
   /** Edge rendering style for this framework (e.g. 'default', 'smoothstep', 'straight') */
   edgeType?: string
+  /** Visual color band hex color for item nodes */
+  colorBand?: string
 }
 
 /**
@@ -128,7 +130,7 @@ function mergeOpencaseExtension(
   const extensions = { ...base }
   
   // Only add if there's data to store
-  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType) {
+  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType || opencaseData.colorBand) {
     const existing = (extensions[OPENCASE_EXT_KEY] as OpencaseExtension | undefined) ?? {}
     extensions[OPENCASE_EXT_KEY] = {
       ...existing,
@@ -247,7 +249,9 @@ function itemToCfItem(
       identifier: fwId,
       title: fwTitle,
     },
-    extensions: layout ? mergeOpencaseExtension(existingExtensions, { layout }) : existingExtensions,
+    extensions: (layout || s('colorBand'))
+      ? mergeOpencaseExtension(existingExtensions, { layout, colorBand: s('colorBand') })
+      : existingExtensions,
   }
 
   return cfItem

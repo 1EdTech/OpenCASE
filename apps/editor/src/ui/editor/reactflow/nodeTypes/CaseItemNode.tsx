@@ -30,6 +30,7 @@ export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemN
       subject?: string[]
       educationLevel?: string[]
       conceptKeywords?: string[]
+      colorBand?: string
     }
     onAddChild?: (_parentId: string) => void
   }
@@ -43,11 +44,12 @@ export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemN
   const extraSubjectCount = subjects.length > 1 ? subjects.length - 1 : 0
   const educationLevel = typedData?.cfItem?.educationLevel?.slice(0, 2) ?? []
   const keywords = typedData?.cfItem?.conceptKeywords?.slice(0, 3) ?? []
+  const colorBand = typedData?.cfItem?.colorBand
 
   return (
     <div
       className={[
-        'group relative h-full w-full rounded-lg border bg-white shadow-sm transition-all hover:shadow-md',
+        'group relative flex min-h-full w-full flex-col rounded-lg border bg-white shadow-sm transition-all hover:shadow-md',
         selected ? 'border-[#662F90] shadow-md ring-2 ring-[#662F90]/15' : 'border-gray-200',
         isValidTarget ? 'border-emerald-400 ring-2 ring-emerald-400/30 shadow-lg shadow-emerald-100' : '',
       ].join(' ')}
@@ -117,56 +119,68 @@ export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemN
         </button>
       </div>
 
-      <div className="px-3 py-2">
-        <div className="mb-2 flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {code ? (
-                <div className="rounded-md bg-[#000072]/8 px-1.5 py-0.5 text-[11px] font-semibold text-[#000072]">
-                  {code}
-                </div>
-              ) : null}
-              {subject ? (
-                <div className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">
-                  {subject}{extraSubjectCount > 0 ? ` +${extraSubjectCount}` : ''}
-                </div>
-              ) : null}
-              {educationLevel.length ? (
-                <div className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">
-                  {educationLevel.join(' • ')}
-                </div>
-              ) : null}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Optional color band stripe with padding and rounded ends */}
+        {colorBand ? (
+          <div className="flex shrink-0 items-stretch py-2 pl-2">
+            <div
+              className="w-[5px] rounded-full"
+              style={{ backgroundColor: colorBand }}
+            />
+          </div>
+        ) : null}
+
+        <div className="min-w-0 flex-1 px-3 py-2">
+          <div className="mb-2 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {code ? (
+                  <div className="rounded-md bg-[#000072]/8 px-1.5 py-0.5 text-[11px] font-semibold text-[#000072]">
+                    {code}
+                  </div>
+                ) : null}
+                {subject ? (
+                  <div className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">
+                    {subject}{extraSubjectCount > 0 ? ` +${extraSubjectCount}` : ''}
+                  </div>
+                ) : null}
+                {educationLevel.length ? (
+                  <div className="rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">
+                    {educationLevel.join(' • ')}
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="text-[12px] leading-snug text-[#2E2F2F]">
-          {statement ? (
-            <div className="line-clamp-5">{statement}</div>
-          ) : (
-            <div className="text-gray-400">No statement yet</div>
-          )}
-        </div>
-
-        {altLabel ? (
-          <div className="mt-1 text-[11px] text-gray-600">
-            <span className="font-semibold text-[#2E2F2F]">Label:</span> <span className="line-clamp-1">{altLabel}</span>
+          <div className="text-[12px] leading-snug text-[#2E2F2F]">
+            {statement ? (
+              <div className="line-clamp-5">{statement}</div>
+            ) : (
+              <div className="text-gray-400">No statement yet</div>
+            )}
           </div>
-        ) : null}
 
-        {keywords.length ? (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {keywords.map((k, idx) => (
-              <div
-                key={`${idx}-${k}`}
-                className="rounded-full border border-[#662F90]/15 bg-[#662F90]/5 px-2 py-0.5 text-[10px] font-medium text-[#662F90]"
-                title={k}
-              >
-                {k}
-              </div>
-            ))}
-          </div>
-        ) : null}
+          {altLabel ? (
+            <div className="mt-1 text-[11px] text-gray-600">
+              <span className="font-semibold text-[#2E2F2F]">Label:</span> <span className="line-clamp-1">{altLabel}</span>
+            </div>
+          ) : null}
+
+          {keywords.length ? (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {keywords.map((k, idx) => (
+                <div
+                  key={`${idx}-${k}`}
+                  className="rounded-full border border-[#662F90]/15 bg-[#662F90]/5 px-2 py-0.5 text-[10px] font-medium text-[#662F90]"
+                  title={k}
+                >
+                  {k}
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {/* Bidirectional handles on all four sides - graph style connections */}

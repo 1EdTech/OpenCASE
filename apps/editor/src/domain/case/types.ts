@@ -108,6 +108,9 @@ export interface CFItem {
    */
   CFDocumentURI?: LinkURI
 
+  /** Editor-only: visual color band hex color, persisted in ext:opencase */
+  colorBand?: string
+
   extensions?: CaseExtensions
 }
 

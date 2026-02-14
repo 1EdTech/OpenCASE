@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
-import type { CaseEditorEdge, CaseEditorNodeType, CaseEdgeDataPatch } from '../reactflow/types'
+import type { CaseEditorEdge, CaseEditorNodeType, CaseEdgeDataPatch, CaseEditorNodeDataPatch } from '../reactflow/types'
 import { CASE_ASSOCIATION_TYPES, FRAMEWORK_ROOT_ASSOCIATION_TYPE } from '../reactflow/types'
+import ColorBandPicker from '@/ui/editor/components/ColorBandPicker'
 
 /** Human-friendly labels for CASE association types */
 const ASSOCIATION_TYPE_LABELS: Record<string, string> = {
@@ -23,6 +24,7 @@ type Props = {
   onClose?: () => void
   onDeleteSelected?: () => void
   onChangeEdge?: (_edgeId: string, _patch: CaseEdgeDataPatch) => void
+  onChangeNode?: (_nodeId: string, _patch: CaseEditorNodeDataPatch) => void
 }
 
 export default function MultiSelectionPanel({
@@ -33,6 +35,7 @@ export default function MultiSelectionPanel({
   onClose,
   onDeleteSelected,
   onChangeEdge,
+  onChangeNode,
 }: Readonly<Props>) {
   const nodeCount = selectedNodeIds.length
   const edgeCount = selectedEdgeIds.length
@@ -77,6 +80,29 @@ export default function MultiSelectionPanel({
   }, [selectedNodes])
 
   const { items: itemCount, frameworks: frameworkCount, externals: externalCount } = counts
+
+  // Item nodes for bulk color band editing
+  const selectedItemNodes = useMemo(
+    () => selectedNodes.filter((n) => n.type === 'caseItemNode'),
+    [selectedNodes],
+  )
+
+  // Common color band across selected items (undefined if mixed)
+  const commonColorBand = useMemo(() => {
+    if (selectedItemNodes.length === 0) return undefined
+    const first = (selectedItemNodes[0].data as { cfItem?: { colorBand?: string } })?.cfItem?.colorBand ?? ''
+    const allSame = selectedItemNodes.every(
+      (n) => ((n.data as { cfItem?: { colorBand?: string } })?.cfItem?.colorBand ?? '') === first,
+    )
+    return allSame ? (first || undefined) : undefined
+  }, [selectedItemNodes])
+
+  const handleBulkColorChange = (color: string | undefined) => {
+    if (!onChangeNode) return
+    for (const n of selectedItemNodes) {
+      onChangeNode(n.id, { cfItem: { colorBand: color ?? '' } })
+    }
+  }
 
   const handleBulkAssocTypeChange = (newType: string) => {
     if (!onChangeEdge) return
@@ -147,6 +173,23 @@ export default function MultiSelectionPanel({
               ) : null}
             </div>
           </div>
+
+          {/* Bulk color band */}
+          {selectedItemNodes.length > 0 ? (
+            <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+              <div className="mb-3">
+                <div className="text-sm font-semibold text-slate-900">Color band</div>
+                <div className="text-xs text-slate-500">
+                  Apply to {selectedItemNodes.length} selected {selectedItemNodes.length === 1 ? 'item' : 'items'}
+                </div>
+              </div>
+              <ColorBandPicker
+                value={commonColorBand}
+                onChange={handleBulkColorChange}
+                label=""
+              />
+            </div>
+          ) : null}
 
           {/* Bulk edge type change */}
           {editableEdges.length > 0 ? (

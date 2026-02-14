@@ -73,6 +73,7 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
         educationLevel: cf?.educationLevel,
         conceptKeywords: cf?.conceptKeywords,
         notes: cf?.notes,
+        colorBand: cf?.colorBand,
         lastChangeDateTime: cf?.lastChangeDateTime,
         caseUri: cf?.uri,
         extensions: cf?.extensions,

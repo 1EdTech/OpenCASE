@@ -18,6 +18,7 @@ import { useEditor } from '@/ui/editor/state/EditorContext'
 import { EDUCATION_LEVEL_OPTIONS } from '@/ui/editor/terminology/educationLevels'
 import type { EducationLevelOption } from '@/ui/editor/terminology/educationLevels'
 import { getAppConfig } from '@/app/config'
+import ColorBandPicker from '@/ui/editor/components/ColorBandPicker'
 
 type Props = {
   node: CaseEditorNodeType | null
@@ -436,6 +437,13 @@ export default function NodePropertiesPanel({ node, onClose, onChangeNode, onVie
                     />
                   )}
                 </div>
+
+                {!isFramework ? (
+                  <ColorBandPicker
+                    value={cfItem?.colorBand}
+                    onChange={(color) => updateItem({ colorBand: color ?? '' })}
+                  />
+                ) : null}
 
                 <div>
                   <label className="mb-1 block text-xs font-semibold text-slate-700" htmlFor="node-subject">

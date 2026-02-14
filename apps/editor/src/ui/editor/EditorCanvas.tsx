@@ -685,6 +685,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
           void onBeforeDelete({ nodes: selectedNodes, edges: selectedEdgesForDelete })
         }}
         onChangeEdge={updateEdgeData}
+        onChangeNode={updateNodeData}
       />
 
       <AddItemDialog

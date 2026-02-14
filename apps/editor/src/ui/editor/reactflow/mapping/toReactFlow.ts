@@ -105,6 +105,11 @@ function mapDomainItemToCfItem(framework: Framework, itemId: string): CFItem {
   const s = (k: string) => (typeof md[k] === 'string' ? (md[k] as string) : undefined)
   const a = (k: string) => (Array.isArray(md[k]) ? (md[k] as unknown[]).filter((x): x is string => typeof x === 'string') : undefined)
 
+  // Extract colorBand from ext:opencase extension (may be in extensions map or flattened into metadata)
+  const rawExtensions = md.extensions as Record<string, unknown> | undefined
+  const opencaseExt = (rawExtensions?.[OPENCASE_EXT_KEY] ?? md[OPENCASE_EXT_KEY]) as Record<string, unknown> | undefined
+  const colorBand = typeof opencaseExt?.colorBand === 'string' ? opencaseExt.colorBand : s('colorBand')
+
   return {
     identifier: itemId,
     uri: s('caseUri') ?? `urn:case:item:${itemId}`,
@@ -117,8 +122,9 @@ function mapDomainItemToCfItem(framework: Framework, itemId: string): CFItem {
     educationLevel: a('educationLevel'),
     conceptKeywords: a('conceptKeywords'),
     notes: s('notes'),
+    colorBand: colorBand || undefined,
     lastChangeDateTime: s('lastChangeDateTime') ?? nowIso(),
-    extensions: (md.extensions as Record<string, unknown> | undefined) ?? undefined,
+    extensions: rawExtensions ?? undefined,
     CFDocumentURI: { uri: `urn:case:document:${framework.id as unknown as string}` },
   }
 }
