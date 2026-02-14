@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
-import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon } from '@heroicons/react/24/solid'
+import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon, ShareIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
+import type { CFAssociationGrouping } from '@/domain/case/types'
 
 type MenuItem = {
   label: string
@@ -15,11 +16,17 @@ function PopoverMenu({
   icon: Icon,
   items,
   align = 'right',
+  showLabel = false,
+  active = false,
 }: Readonly<{
   label: string
   icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
   items: (MenuItem | 'divider')[]
   align?: 'left' | 'right'
+  /** Show the label text next to the icon */
+  showLabel?: boolean
+  /** Render in active/highlighted state */
+  active?: boolean
 }>) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -42,10 +49,16 @@ function PopoverMenu({
         aria-haspopup="menu"
         aria-expanded={open}
         title={label}
-        className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg text-[#2E2F2F]/60 transition-colors hover:bg-[#662F90]/8 hover:text-[#662F90] focus:outline-none focus:ring-2 focus:ring-[#662F90]/30"
+        className={[
+          'flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-[#662F90]/30',
+          active
+            ? 'bg-teal-100 text-teal-700 hover:bg-teal-200'
+            : 'text-[#2E2F2F]/60 hover:bg-[#662F90]/8 hover:text-[#662F90]',
+          !showLabel && 'h-8 w-8 justify-center',
+        ].filter(Boolean).join(' ')}
       >
-        {Icon ? <Icon className="h-4 w-4" aria-hidden={true} /> : null}
-        <span className="sr-only">{label}</span>
+        {Icon ? <Icon className="h-4 w-4 shrink-0" aria-hidden={true} /> : null}
+        {showLabel ? <span className="max-w-[140px] truncate text-xs font-medium">{label}</span> : <span className="sr-only">{label}</span>}
       </button>
 
       {open ? (
@@ -187,6 +200,9 @@ export default function CanvasHeader({
   onOpenSettings,
   onResetHierarchy,
   onResetStar,
+  cfAssociationGroupings,
+  activeGroupingFilter,
+  onSetGroupingFilter,
 }: {
   frameworkTitle: string
   frameworkSubtitle?: string
@@ -212,6 +228,12 @@ export default function CanvasHeader({
   onResetHierarchy?: () => void
   /** Re-layout graph in star/radial topology mode */
   onResetStar?: () => void
+  /** Association grouping definitions for filter dropdown */
+  cfAssociationGroupings?: CFAssociationGrouping[]
+  /** Currently active grouping filter (null = show all) */
+  activeGroupingFilter?: string | null
+  /** Set the active grouping filter */
+  onSetGroupingFilter?: (_id: string | null) => void
 }) {
   // Build user menu items
   const userMenuItems: (MenuItem | 'divider')[] = []
@@ -319,6 +341,33 @@ export default function CanvasHeader({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Pathway highlight dropdown */}
+          {cfAssociationGroupings && cfAssociationGroupings.length > 0 ? (
+            (() => {
+              const activeGrouping = activeGroupingFilter
+                ? cfAssociationGroupings.find((g) => g.identifier === activeGroupingFilter)
+                : null
+              return (
+                <PopoverMenu
+                  label={activeGrouping ? (activeGrouping.title ?? activeGrouping.identifier) : 'Pathways'}
+                  icon={ShareIcon}
+                  showLabel
+                  active={Boolean(activeGrouping)}
+                  items={[
+                    ...(activeGroupingFilter ? [{
+                      label: 'Clear highlight',
+                      onClick: () => onSetGroupingFilter?.(null),
+                    }, 'divider' as const] : []),
+                    ...cfAssociationGroupings.map((g) => ({
+                      label: activeGroupingFilter === g.identifier ? `✓ ${g.title ?? g.identifier}` : (g.title ?? g.identifier),
+                      onClick: () => onSetGroupingFilter?.(activeGroupingFilter === g.identifier ? null : g.identifier),
+                    })),
+                  ]}
+                />
+              )
+            })()
+          ) : null}
+
           {showSettings ? (
             <PopoverMenu
               label="Settings"

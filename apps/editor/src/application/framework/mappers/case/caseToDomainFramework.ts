@@ -88,6 +88,8 @@ export function mapCaseSnapshotToDomainFramework(snapshot: CasePackageSnapshot):
         originUri: a.originUri,
         destinationUri: a.destinationUri,
         sequenceNumber: a.sequenceNumber,
+        CFAssociationGroupingIdentifier: a.CFAssociationGroupingIdentifier,
+        CFAssociationGroupingTitle: a.CFAssociationGroupingTitle,
         ...a.extensions,
       },
     }

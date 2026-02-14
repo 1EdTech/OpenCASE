@@ -1,8 +1,11 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
+import { ComboboxInput } from '@/ui/shared/components/ui/combobox-input'
+import type { ComboboxOption } from '@/ui/shared/components/ui/combobox-input'
 import type { CaseEditorEdge, CaseEditorNodeType, CaseEdgeDataPatch, CaseEditorNodeDataPatch } from '../reactflow/types'
 import { CASE_ASSOCIATION_TYPES, FRAMEWORK_ROOT_ASSOCIATION_TYPE } from '../reactflow/types'
 import ColorBandPicker from '@/ui/editor/components/ColorBandPicker'
+import { useEditor } from '@/ui/editor/state/EditorContext'
 
 /** Human-friendly labels for CASE association types */
 const ASSOCIATION_TYPE_LABELS: Record<string, string> = {
@@ -102,6 +105,45 @@ export default function MultiSelectionPanel({
     for (const n of selectedItemNodes) {
       onChangeNode(n.id, { cfItem: { colorBand: color ?? '' } })
     }
+  }
+
+  // ── Association Grouping bulk editing ──────────────────────────────
+  const { cfAssociationGroupings, ensureCfAssociationGrouping } = useEditor()
+
+  const groupingOptions: ComboboxOption[] = useMemo(
+    () => cfAssociationGroupings.map((g) => ({ value: g.title ?? g.identifier, label: g.title ?? g.identifier, description: g.description })),
+    [cfAssociationGroupings],
+  )
+
+  // Common grouping across selected editable edges
+  const commonGroupingTitle = useMemo(() => {
+    if (editableEdges.length === 0) return null
+    const first = editableEdges[0].data?.cfAssociation?.CFAssociationGroupingURI?.title ?? ''
+    const allSame = editableEdges.every(
+      (e) => (e.data?.cfAssociation?.CFAssociationGroupingURI?.title ?? '') === first,
+    )
+    return allSame ? first : null
+  }, [editableEdges])
+
+  const [bulkGroupingInput, setBulkGroupingInput] = useState('')
+
+  const handleBulkGroupingChange = (title: string) => {
+    if (!onChangeEdge) return
+    if (!title.trim()) {
+      // Clear grouping on all
+      for (const edge of editableEdges) {
+        onChangeEdge(edge.id, { cfAssociation: { CFAssociationGroupingURI: undefined } })
+      }
+      setBulkGroupingInput('')
+      return
+    }
+    const groupDef = ensureCfAssociationGrouping(title)
+    if (!groupDef) return
+    const linkURI = { title: groupDef.title ?? '', identifier: groupDef.identifier, uri: groupDef.uri }
+    for (const edge of editableEdges) {
+      onChangeEdge(edge.id, { cfAssociation: { CFAssociationGroupingURI: linkURI } })
+    }
+    setBulkGroupingInput(groupDef.title ?? '')
   }
 
   const handleBulkAssocTypeChange = (newType: string) => {
@@ -216,6 +258,36 @@ export default function MultiSelectionPanel({
                   </option>
                 ))}
               </select>
+            </div>
+          ) : null}
+
+          {/* Bulk association grouping */}
+          {editableEdges.length > 0 ? (
+            <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+              <div className="mb-3">
+                <div className="text-sm font-semibold text-slate-900">Association grouping</div>
+                <div className="text-xs text-slate-500">
+                  Apply to {editableEdges.length} selected {editableEdges.length === 1 ? 'association' : 'associations'}
+                </div>
+              </div>
+              <ComboboxInput
+                id="bulk-grouping"
+                value={bulkGroupingInput}
+                onChange={(v) => setBulkGroupingInput(v)}
+                onCommit={(v) => handleBulkGroupingChange(v)}
+                options={groupingOptions}
+                placeholder={commonGroupingTitle === null ? 'Mixed — select to apply to all' : 'Select or type a grouping…'}
+                className="w-full"
+              />
+              {commonGroupingTitle ? (
+                <button
+                  type="button"
+                  onClick={() => handleBulkGroupingChange('')}
+                  className="mt-1 text-xs text-slate-500 hover:text-red-600"
+                >
+                  Clear grouping on all
+                </button>
+              ) : null}
             </div>
           ) : null}
 

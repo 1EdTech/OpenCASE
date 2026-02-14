@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
+import { ComboboxInput } from '@/ui/shared/components/ui/combobox-input'
+import type { ComboboxOption } from '@/ui/shared/components/ui/combobox-input'
 import type { CaseEdgeDataPatch, CaseEditorEdge, CaseAssociationType } from '../reactflow/types'
 import { CASE_ASSOCIATION_TYPES, FRAMEWORK_ROOT_ASSOCIATION_TYPE } from '../reactflow/types'
 import type { CaseEditorNodeType, CaseItemNodeType, CaseFrameworkNodeType } from '../reactflow/types'
+import { useEditor } from '@/ui/editor/state/EditorContext'
 
 type Props = {
   edge: CaseEditorEdge | null
@@ -37,8 +40,20 @@ const ASSOCIATION_TYPE_DESCRIPTIONS: Record<string, string> = {
 }
 
 export default function EdgePropertiesPanel({ edge, nodes, onClose, onChangeEdge, onFlipEdge }: Readonly<Props>) {
+  const { cfAssociationGroupings, ensureCfAssociationGrouping } = useEditor()
   const [copied, setCopied] = useState<null | 'uri'>(null)
   const [customType, setCustomType] = useState('')
+  const [groupingInput, setGroupingInput] = useState('')
+
+  // Sync grouping input with the current edge's grouping
+  useEffect(() => {
+    setGroupingInput(edge?.data?.cfAssociation?.CFAssociationGroupingURI?.title ?? '')
+  }, [edge?.id, edge?.data?.cfAssociation?.CFAssociationGroupingURI?.title])
+
+  const groupingOptions: ComboboxOption[] = useMemo(
+    () => cfAssociationGroupings.map((g) => ({ value: g.title ?? g.identifier, label: g.title ?? g.identifier, description: g.description })),
+    [cfAssociationGroupings],
+  )
 
   useEffect(() => {
     if (!edge) return
@@ -380,6 +395,57 @@ export default function EdgePropertiesPanel({ edge, nodes, onClose, onChangeEdge
                 className="w-full rounded-xl border border-black/15 bg-white px-3 py-2 text-sm text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2"
               />
             </div>
+
+            {/* Association Grouping */}
+            {!isLockedType ? (
+              <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+                <div className="mb-3">
+                  <div className="text-sm font-semibold text-slate-900">Association Grouping</div>
+                  <div className="text-xs text-slate-500">
+                    Group related associations for pathway visualization.
+                  </div>
+                </div>
+                <ComboboxInput
+                  id="edge-grouping"
+                  value={groupingInput}
+                  onChange={(v) => setGroupingInput(v)}
+                  onCommit={(v) => {
+                    if (!v.trim()) {
+                      // Clear grouping
+                      updateEdge({
+                        cfAssociation: { CFAssociationGroupingURI: undefined },
+                      })
+                      setGroupingInput('')
+                      return
+                    }
+                    const groupDef = ensureCfAssociationGrouping(v)
+                    if (groupDef) {
+                      updateEdge({
+                        cfAssociation: {
+                          CFAssociationGroupingURI: { title: groupDef.title ?? '', identifier: groupDef.identifier, uri: groupDef.uri },
+                        },
+                      })
+                      setGroupingInput(groupDef.title ?? '')
+                    }
+                  }}
+                  options={groupingOptions}
+                  placeholder="Select or type a grouping…"
+                  className="w-full"
+                />
+                {cfAssociation?.CFAssociationGroupingURI ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateEdge({ cfAssociation: { CFAssociationGroupingURI: undefined } })
+                      setGroupingInput('')
+                    }}
+                    className="mt-1 text-xs text-slate-500 hover:text-red-600"
+                  >
+                    Clear grouping
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
 
             {/* Notes */}
             <div className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">

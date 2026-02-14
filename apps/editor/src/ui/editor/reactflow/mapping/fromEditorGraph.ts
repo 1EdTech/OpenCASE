@@ -92,7 +92,7 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     const edgeData = e.data as {
       associationType?: string
       sequenceNumber?: number
-      cfAssociation?: { identifier?: string; sequenceNumber?: number; associationType?: string; extensions?: Record<string, unknown> }
+      cfAssociation?: { identifier?: string; sequenceNumber?: number; associationType?: string; CFAssociationGroupingURI?: { identifier?: string; title?: string; uri?: string }; extensions?: Record<string, unknown> }
     } | undefined
 
     // Framework→item edges represent top-level isChildOf associations (item isChildOf document).
@@ -107,6 +107,7 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
       const originHandle = e.targetHandle ?? undefined      // item's handle
       const destinationHandle = e.sourceHandle ?? undefined  // framework's handle
 
+      const fwGroupingURI = edgeData?.cfAssociation?.CFAssociationGroupingURI
       const assoc: Association = {
         id: originalId as unknown as AssociationId,
         fromItemId: target as unknown as ItemId,   // child (origin)
@@ -116,6 +117,8 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
           sequenceNumber: edgeData?.sequenceNumber ?? edgeData?.cfAssociation?.sequenceNumber,
           originHandle,
           destinationHandle,
+          CFAssociationGroupingIdentifier: fwGroupingURI?.identifier,
+          CFAssociationGroupingTitle: fwGroupingURI?.title,
           extensions: edgeData?.cfAssociation?.extensions,
         },
       }
@@ -138,6 +141,7 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     const originHandle = (isHierarchical ? e.targetHandle : e.sourceHandle) ?? undefined
     const destinationHandle = (isHierarchical ? e.sourceHandle : e.targetHandle) ?? undefined
     
+    const groupingURI = edgeData?.cfAssociation?.CFAssociationGroupingURI
     const assoc: Association = {
       id: e.id as unknown as AssociationId,
       fromItemId: (isHierarchical ? target : source) as unknown as ItemId,
@@ -147,6 +151,8 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
         sequenceNumber: edgeData?.cfAssociation?.sequenceNumber,
         originHandle,
         destinationHandle,
+        CFAssociationGroupingIdentifier: groupingURI?.identifier,
+        CFAssociationGroupingTitle: groupingURI?.title,
         extensions: edgeData?.cfAssociation?.extensions,
       },
     }

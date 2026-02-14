@@ -146,6 +146,13 @@ function mapDomainAssociationToCfAssociation(framework: Framework, association: 
   const opencaseExt = md[OPENCASE_EXT_KEY] as Record<string, unknown> | undefined
   const extensions = rawExtensions ?? (opencaseExt ? { [OPENCASE_EXT_KEY]: opencaseExt } : undefined)
 
+  // Reconstruct CFAssociationGroupingURI from metadata
+  const groupingId = s('CFAssociationGroupingIdentifier')
+  const groupingTitle = s('CFAssociationGroupingTitle')
+  const CFAssociationGroupingURI = groupingId
+    ? { identifier: groupingId, title: groupingTitle, uri: `urn:case:associationgrouping:${groupingId}` }
+    : undefined
+
   return {
     identifier: assocId,
     uri: s('caseUri') ?? `urn:case:association:${assocId}`,
@@ -159,6 +166,7 @@ function mapDomainAssociationToCfAssociation(framework: Framework, association: 
       uri: s('destinationUri') ?? `urn:case:item:${toId}`,
     },
     sequenceNumber: n('sequenceNumber'),
+    CFAssociationGroupingURI,
     notes: s('notes'),
     lastChangeDateTime: s('lastChangeDateTime') ?? nowIso(),
     CFDocumentURI: { uri: `urn:case:document:${fwId}` },

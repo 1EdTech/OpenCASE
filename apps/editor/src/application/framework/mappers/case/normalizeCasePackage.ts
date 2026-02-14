@@ -261,6 +261,10 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
       const origin = extractLinkIdentifier(r.originNodeURI)
       const dest = extractLinkIdentifier(r.destinationNodeURI)
 
+      // Extract CFAssociationGroupingURI if present
+      const groupingLink = extractLinkIdentifier(r.CFAssociationGroupingURI)
+      const groupingObj = asRecord(r.CFAssociationGroupingURI)
+
       return {
         identifier: id,
         associationType: asString(r.associationType),
@@ -270,6 +274,8 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
         destinationUri: dest.uri,
         // v1p1: sequenceNumber for ordering within associations
         sequenceNumber: asNumber(r.sequenceNumber),
+        CFAssociationGroupingIdentifier: groupingLink.identifier,
+        CFAssociationGroupingTitle: groupingObj ? asString(groupingObj.title) : undefined,
         lastChangeDateTime: asString(r.lastChangeDateTime),
         extensions: asRecord(r.extensions) ?? undefined,
       }
@@ -285,6 +291,26 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
         uri: asString(rawLicense.uri) ?? '',
       }
     : undefined
+
+  // Extract CFAssociationGroupings from CFDefinitions
+  const defs = asRecord(pkg.CFDefinitions)
+  const groupingsRaw = defs ? (Array.isArray(defs.CFAssociationGroupings) ? defs.CFAssociationGroupings : []) : []
+  const associationGroupings = groupingsRaw
+    .map((g) => {
+      const r = asRecord(g)
+      if (!r) return null
+      const gId = asString(r.identifier) ?? asString(r.sourcedId)
+      const gUri = asString(r.uri)
+      if (!gId || !gUri) return null
+      return {
+        identifier: gId,
+        uri: gUri,
+        title: asString(r.title),
+        description: asString(r.description),
+        lastChangeDateTime: asString(r.lastChangeDateTime),
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => Boolean(x))
 
   return {
     version,
@@ -305,5 +331,6 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
     },
     items,
     associations,
+    associationGroupings: associationGroupings.length > 0 ? associationGroupings : undefined,
   }
 }

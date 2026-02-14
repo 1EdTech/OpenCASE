@@ -282,3 +282,14 @@
   r: 14 !important;
 }
 
+/* Shift-select mode: crosshair on canvas, pointer on nodes */
+.shift-select-mode .react-flow__pane {
+  cursor: crosshair !important;
+}
+.shift-select-mode .react-flow__node {
+  cursor: pointer !important;
+}
+.shift-select-mode .react-flow__edge {
+  cursor: pointer !important;
+}
+

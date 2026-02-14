@@ -78,6 +78,10 @@ export type CaseAssociationSnapshot = {
    * Lower numbers appear first in ordered contexts.
    */
   sequenceNumber?: number
+  /** Identifier of the CFAssociationGrouping this association belongs to */
+  CFAssociationGroupingIdentifier?: string
+  /** Title of the CFAssociationGrouping (for display) */
+  CFAssociationGroupingTitle?: string
   lastChangeDateTime?: string
   extensions?: Record<string, unknown>
 }
@@ -94,6 +98,15 @@ export type CaseAssociationSnapshot = {
  * - Different array wrappers (CFItemSet vs CFItems)
  * - Different type specifications (CFItemTypeURI vs CFItemType)
  */
+/** Snapshot of a CFAssociationGrouping definition */
+export type CaseAssociationGroupingSnapshot = {
+  identifier: string
+  uri: string
+  title?: string
+  description?: string
+  lastChangeDateTime?: string
+}
+
 export type CasePackageSnapshot = {
   /** Detected or explicit CASE version */
   version: CaseVersion
@@ -103,4 +116,6 @@ export type CasePackageSnapshot = {
   items: CaseItemSnapshot[]
   /** All associations (relationships) between items */
   associations: CaseAssociationSnapshot[]
+  /** CFAssociationGrouping definitions from CFDefinitions */
+  associationGroupings?: CaseAssociationGroupingSnapshot[]
 }

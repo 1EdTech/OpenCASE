@@ -14,7 +14,7 @@ import type {
   CaseItemNodeData,
   ExternalFrameworkNodeData,
 } from '@/ui/editor/reactflow/types'
-import type { CFDocument, CFItem, CFItemType, CFSubject, CFConcept } from '@/domain/case/types'
+import type { CFAssociationGrouping, CFDocument, CFItem, CFItemType, CFSubject, CFConcept } from '@/domain/case/types'
 import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
 import type { EditorSettings } from '@/ui/editor/components/SettingsModal'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
@@ -59,6 +59,11 @@ type EditorContextValue = {
   cfConcepts: CFConcept[]
   addCfConcept: (_concept: CFConcept) => void
   ensureCfConcept: (_title: string) => CFConcept | null
+  cfAssociationGroupings: CFAssociationGrouping[]
+  addCfAssociationGrouping: (_grouping: CFAssociationGrouping) => void
+  ensureCfAssociationGrouping: (_title: string) => CFAssociationGrouping | null
+  activeGroupingFilter: string | null
+  setActiveGroupingFilter: (_id: string | null) => void
   settings: EditorSettings
   updateSettings: (_settings: EditorSettings) => void
   onSelectionChange: OnSelectionChangeFunc<CaseEditorNodeType>
@@ -102,6 +107,7 @@ export function EditorProvider({
   initialCfItemTypes,
   initialCfSubjects,
   initialCfConcepts,
+  initialCfAssociationGroupings,
 }: Readonly<{
   children: ReactNode
   initialGraph?: EditorGraph
@@ -117,6 +123,8 @@ export function EditorProvider({
   initialCfSubjects?: CFSubject[]
   /** Seed CFConcept definitions loaded from the definitions index */
   initialCfConcepts?: CFConcept[]
+  /** Seed CFAssociationGrouping definitions */
+  initialCfAssociationGroupings?: CFAssociationGrouping[]
 }>) {
   // ── CASE version ─────────────────────────────────────────────────────
   const [caseVersion, setCaseVersion] = useState<CaseVersion>(initialCaseVersion)
@@ -227,6 +235,36 @@ export function EditorProvider({
     return newConcept
   }, [cfConcepts, addCfConcept])
 
+  // ── CFAssociationGrouping definitions ─────────────────────────────────
+  const [cfAssociationGroupings, setCfAssociationGroupings] = useState<CFAssociationGrouping[]>(initialCfAssociationGroupings ?? [])
+  useEffect(() => { setCfAssociationGroupings(initialCfAssociationGroupings ?? []) }, [initialCfAssociationGroupings])
+
+  const addCfAssociationGrouping = useCallback((grouping: CFAssociationGrouping) => {
+    setCfAssociationGroupings((prev) => {
+      if (prev.some((g) => g.identifier === grouping.identifier)) return prev
+      return [...prev, grouping]
+    })
+  }, [])
+
+  const ensureCfAssociationGrouping = useCallback((title: string): CFAssociationGrouping | null => {
+    const trimmed = title.trim()
+    if (!trimmed) return null
+    const existing = cfAssociationGroupings.find((g) => g.title === trimmed)
+    if (existing) return existing
+    const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}_${Math.random().toString(16).slice(2)}`
+    const newGrouping: CFAssociationGrouping = {
+      identifier: id,
+      uri: `/ims/case/v1p1/CFAssociationGroupings/${id}`,
+      title: trimmed,
+      description: trimmed,
+    }
+    addCfAssociationGrouping(newGrouping)
+    return newGrouping
+  }, [cfAssociationGroupings, addCfAssociationGrouping])
+
+  // ── Active grouping filter (UI-only, not persisted) ──────────────────
+  const [activeGroupingFilter, setActiveGroupingFilter] = useState<string | null>(null)
+
   // ── Reducer state ────────────────────────────────────────────────────
   const seed = useMemo(() => initialGraph ?? DEFAULT_GRAPH, [initialGraph])
   const initialState: EditorState = useMemo(
@@ -281,6 +319,18 @@ export function EditorProvider({
   }, [graphKey, initialEdgeType])
 
   // ── Computed values ──────────────────────────────────────────────────
+
+  // Derive multi-selection IDs from React Flow's `selected` flags on nodes/edges.
+  // This avoids a second reducer dispatch (and re-render) on every selection change.
+  const selectedNodeIds = useMemo(
+    () => state.nodes.filter((n) => n.selected).map((n) => n.id),
+    [state.nodes],
+  )
+  const selectedEdgeIds = useMemo(
+    () => state.edges.filter((e) => e.selected).map((e) => e.id),
+    [state.edges],
+  )
+
   const selectedNode = useMemo(
     () => (state.selectedNodeId ? state.nodes.find((n) => n.id === state.selectedNodeId) ?? null : null),
     [state.nodes, state.selectedNodeId],
@@ -437,62 +487,83 @@ export function EditorProvider({
     [],
   )
 
+  // ── Stable callback wrappers for node data ──────────────────────────
+
+  const updateItem = useCallback(
+    (id: string, patch: Partial<CFItem>) => updateNodeData(id, { cfItem: patch }),
+    [updateNodeData],
+  )
+
+  const updateDocument = useCallback(
+    (id: string, patch: Partial<CFDocument>) => updateNodeData(id, { cfDocument: patch }),
+    [updateNodeData],
+  )
+
   // ── Nodes with callbacks ─────────────────────────────────────────────
+  // Reuse node objects when callbacks are already attached (avoids creating
+  // new objects on selection changes, which would cause React Flow to
+  // re-render every node).
 
   const nodesWithCallbacks = useMemo(() => {
     return state.nodes.map((n) => {
       if (isItemNode(n)) {
-        const data: CaseItemNodeData = {
-          ...n.data,
-          onAddChild: addChild,
-          onUpdateItem: (id, patch) => updateNodeData(id, { cfItem: patch }),
+        if (n.className === WRAPPER_NODE_CLASS && n.data.onAddChild === addChild && n.data.onUpdateItem === updateItem) {
+          return n
         }
-        return { ...n, className: WRAPPER_NODE_CLASS, data }
+        return { ...n, className: WRAPPER_NODE_CLASS, data: { ...n.data, onAddChild: addChild, onUpdateItem: updateItem } }
       }
 
       if (isFrameworkNode(n)) {
-        return {
-          ...n,
-          className: WRAPPER_NODE_CLASS,
-          data: {
-            ...n.data,
-            onAddChild: addChild,
-            onUpdateDocument: (id: string, patch: Partial<CFDocument>) => updateNodeData(id, { cfDocument: patch }),
-          },
+        if (n.className === WRAPPER_NODE_CLASS && n.data.onAddChild === addChild && n.data.onUpdateDocument === updateDocument) {
+          return n
         }
+        return { ...n, className: WRAPPER_NODE_CLASS, data: { ...n.data, onAddChild: addChild, onUpdateDocument: updateDocument } }
       }
 
       return n
     })
-  }, [state.nodes, addChild, updateNodeData])
+  }, [state.nodes, addChild, updateItem, updateDocument])
 
   // ── React Flow event handlers ────────────────────────────────────────
+
+  // Refs to avoid redundant dispatches from onSelectionChange
+  const singleSelRef = useRef<{ nodeId: string | null; edgeId: string | null }>({ nodeId: null, edgeId: null })
+  singleSelRef.current = { nodeId: state.selectedNodeId, edgeId: state.selectedEdgeId }
+
+  // Refs for clearSelection (keeps the callback stable without state deps)
+  const nodesRef = useRef(state.nodes)
+  nodesRef.current = state.nodes
+  const edgesRef = useRef(state.edges)
+  edgesRef.current = state.edges
 
   const onSelectionChange: OnSelectionChangeFunc<CaseEditorNodeType> = useCallback(({ nodes, edges }) => {
     const nodeCount = nodes?.length ?? 0
     const edgeCount = edges?.length ?? 0
     const totalCount = nodeCount + edgeCount
 
-    if (totalCount === 0) {
-      dispatch({ type: 'selection/clear' })
-    } else if (totalCount === 1 && nodeCount === 1) {
-      dispatch({ type: 'selection/setNode', nodeId: nodes[0].id })
+    // Only track single-selection for the properties panel.
+    // Multi-selection IDs are derived from node/edge `selected` flags (no extra dispatch).
+    if (totalCount === 1 && nodeCount === 1) {
+      if (singleSelRef.current.nodeId !== nodes[0].id) {
+        dispatch({ type: 'selection/setNode', nodeId: nodes[0].id })
+      }
     } else if (totalCount === 1 && edgeCount === 1) {
-      dispatch({ type: 'selection/setEdge', edgeId: edges[0].id })
-    } else {
-      // Multi-selection: track all selected IDs
-      dispatch({
-        type: 'selection/setMulti',
-        nodeIds: nodes.map((n) => n.id),
-        edgeIds: edges.map((e) => e.id),
-      })
+      if (singleSelRef.current.edgeId !== edges[0].id) {
+        dispatch({ type: 'selection/setEdge', edgeId: edges[0].id })
+      }
+    } else if (singleSelRef.current.nodeId !== null || singleSelRef.current.edgeId !== null) {
+      // Clear single-selection IDs (multi or empty) — only dispatch when needed
+      dispatch({ type: 'selection/clear' })
     }
+    // For multi → multi transitions, no dispatch needed — derived state handles it.
   }, [])
 
   const onEdgeSelectionChange = useCallback((edgeId: string | null) => {
     if (edgeId) {
-      dispatch({ type: 'selection/setEdge', edgeId })
-    } else {
+      if (singleSelRef.current.edgeId !== edgeId) {
+        dispatch({ type: 'selection/setEdge', edgeId })
+      }
+    } else if (singleSelRef.current.edgeId !== null) {
       dispatch({ type: 'selection/clear' })
     }
   }, [])
@@ -512,7 +583,22 @@ export function EditorProvider({
     [],
   )
 
-  const clearSelection = useCallback(() => dispatch({ type: 'selection/clear' }), [])
+  const clearSelection = useCallback(() => {
+    dispatch({ type: 'selection/clear' })
+    // Programmatically deselect all nodes/edges through React Flow's change system
+    const nodeDeselects: NodeChange<CaseEditorNodeType>[] = nodesRef.current
+      .filter((n) => n.selected)
+      .map((n) => ({ type: 'select' as const, id: n.id, selected: false }))
+    if (nodeDeselects.length > 0) {
+      dispatch({ type: 'nodes/applyChanges', changes: nodeDeselects })
+    }
+    const edgeDeselects: EdgeChange[] = edgesRef.current
+      .filter((e) => e.selected)
+      .map((e) => ({ type: 'select' as const, id: e.id, selected: false }))
+    if (edgeDeselects.length > 0) {
+      dispatch({ type: 'edges/applyChanges', changes: edgeDeselects })
+    }
+  }, [])
   const clearDirty = useCallback(() => dispatch({ type: 'dirty/clear' }), [])
 
   // ── Context value ────────────────────────────────────────────────────
@@ -523,8 +609,8 @@ export function EditorProvider({
       edges: state.edges,
       selectedNodeId: state.selectedNodeId,
       selectedEdgeId: state.selectedEdgeId,
-      selectedNodeIds: state.selectedNodeIds,
-      selectedEdgeIds: state.selectedEdgeIds,
+      selectedNodeIds,
+      selectedEdgeIds,
       selectedNode,
       selectedEdge,
       nodesWithCallbacks,
@@ -542,6 +628,11 @@ export function EditorProvider({
       cfConcepts,
       addCfConcept,
       ensureCfConcept,
+      cfAssociationGroupings,
+      addCfAssociationGrouping,
+      ensureCfAssociationGrouping,
+      activeGroupingFilter,
+      setActiveGroupingFilter,
       settings,
       updateSettings,
       onSelectionChange,
@@ -566,12 +657,15 @@ export function EditorProvider({
       applyStarLayout,
     }),
     [
-      state.nodes, state.edges, state.selectedNodeId, state.selectedEdgeId, state.selectedNodeIds, state.selectedEdgeIds,
+      state.nodes, state.edges, state.selectedNodeId, state.selectedEdgeId, selectedNodeIds, selectedEdgeIds,
       selectedNode, selectedEdge, nodesWithCallbacks, frameworkInfo,
       state.layoutVersion, state.dirty, clearDirty,
       caseVersion, cfItemTypes, addCfItemType, ensureCfItemType,
       cfSubjects, addCfSubject, ensureCfSubject,
-      cfConcepts, addCfConcept, ensureCfConcept, settings, updateSettings,
+      cfConcepts, addCfConcept, ensureCfConcept,
+      cfAssociationGroupings, addCfAssociationGrouping, ensureCfAssociationGrouping,
+      activeGroupingFilter, setActiveGroupingFilter,
+      settings, updateSettings,
       onSelectionChange, onEdgeSelectionChange, onNodesChange, onEdgesChange, onConnect,
       clearSelection, updateNodeData, updateEdgeData, flipEdge, reconnectEdge,
       addChild, addDetachedItem, addExternalFramework,

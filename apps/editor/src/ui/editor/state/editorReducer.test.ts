@@ -10,6 +10,8 @@ function makeState(overrides: Partial<EditorState> = {}): EditorState {
     edges: [makeEdge('fw-1', 'item-1'), makeEdge('fw-1', 'item-2')],
     selectedNodeId: null,
     selectedEdgeId: null,
+    selectedNodeIds: [],
+    selectedEdgeIds: [],
     layoutVersion: 0,
     dirty: false,
     ...overrides,

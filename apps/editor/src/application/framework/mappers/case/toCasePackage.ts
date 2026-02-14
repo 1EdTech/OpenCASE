@@ -1,4 +1,4 @@
-import type { CFAssociation, CFConcept, CFDefinition, CFDocument, CFItem, CFItemType, CFSubject, CFPackage, CaseExtensions, LinkURI } from '@/domain/case/types'
+import type { CFAssociation, CFAssociationGrouping, CFConcept, CFDefinition, CFDocument, CFItem, CFItemType, CFSubject, CFPackage, CaseExtensions, LinkURI } from '@/domain/case/types'
 import type { Framework } from '@/domain/framework/model/types'
 import type { CaseVersion } from './CasePackageSnapshot'
 import type { LayoutState, NodeLayout } from '@/ui/editor/reactflow/mapping/types'
@@ -316,7 +316,13 @@ function associationToCfAssociation(
       title: toTitle,
     },
     sequenceNumber: n('sequenceNumber'),
-    CFAssociationGroupingURI: undefined,
+    CFAssociationGroupingURI: s('CFAssociationGroupingIdentifier')
+      ? {
+          identifier: s('CFAssociationGroupingIdentifier')!,
+          title: s('CFAssociationGroupingTitle'),
+          uri: `urn:case:associationgrouping:${s('CFAssociationGroupingIdentifier')}`,
+        }
+      : undefined,
     lastChangeDateTime: s('lastChangeDateTime') ?? nowIso(),
     notes: s('notes'),
     CFDocumentURI: { 
@@ -354,8 +360,10 @@ export function frameworkToCfPackage(params: {
   cfSubjects?: CFSubject[]
   /** CFConcept definitions to include in CFDefinitions (from editor state) */
   cfConcepts?: CFConcept[]
+  /** CFAssociationGrouping definitions to include in CFDefinitions (from editor state) */
+  cfAssociationGroupings?: CFAssociationGrouping[]
 }): CFPackage {
-  const { framework, caseVersion, layout, incrementVersion, edgeType, cfItemTypes, cfSubjects, cfConcepts } = params
+  const { framework, caseVersion, layout, incrementVersion, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings } = params
   const fwId = String(framework.id)
 
   // Build CFDocument
@@ -420,7 +428,16 @@ export function frameworkToCfPackage(params: {
     (c) => refConceptIds.has(c.identifier),
   ) ?? []
 
-  if (filteredItemTypes.length > 0 || filteredSubjects.length > 0 || filteredConcepts.length > 0) {
+  // Collect referenced grouping identifiers from built CFAssociations
+  const refGroupingIds = new Set<string>()
+  for (const assoc of associations) {
+    if (assoc.CFAssociationGroupingURI?.identifier) refGroupingIds.add(assoc.CFAssociationGroupingURI.identifier)
+  }
+  const filteredGroupings = cfAssociationGroupings?.filter(
+    (g) => refGroupingIds.has(g.identifier),
+  ) ?? []
+
+  if (filteredItemTypes.length > 0 || filteredSubjects.length > 0 || filteredConcepts.length > 0 || filteredGroupings.length > 0) {
     cfDefinitions = {}
 
     if (filteredItemTypes.length > 0) {
@@ -447,6 +464,14 @@ export function frameworkToCfPackage(params: {
         description: c.description || c.title || '',
         hierarchyCode: c.hierarchyCode || '1',
         lastChangeDateTime: c.lastChangeDateTime || now,
+      }))
+    }
+
+    if (filteredGroupings.length > 0) {
+      cfDefinitions.CFAssociationGroupings = filteredGroupings.map((g) => ({
+        ...g,
+        description: g.description || g.title || '',
+        lastChangeDateTime: g.lastChangeDateTime || now,
       }))
     }
   }

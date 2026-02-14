@@ -59,6 +59,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     cfItemTypes,
     cfSubjects,
     cfConcepts,
+    cfAssociationGroupings,
+    activeGroupingFilter,
+    setActiveGroupingFilter,
     addItemDialog,
     setAddItemDraft,
     cancelAddItem,
@@ -101,6 +104,23 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     })
   }, [tenantId, getAccessToken])
   
+  // Track Shift key for selection cursor (DOM-only, no re-renders)
+  useEffect(() => {
+    const el = reactFlowWrapRef.current
+    if (!el) return
+    const onDown = (e: KeyboardEvent) => { if (e.key === 'Shift') el.classList.add('shift-select-mode') }
+    const onUp = (e: KeyboardEvent) => { if (e.key === 'Shift') el.classList.remove('shift-select-mode') }
+    const onBlur = () => el.classList.remove('shift-select-mode')
+    globalThis.addEventListener('keydown', onDown)
+    globalThis.addEventListener('keyup', onUp)
+    globalThis.addEventListener('blur', onBlur)
+    return () => {
+      globalThis.removeEventListener('keydown', onDown)
+      globalThis.removeEventListener('keyup', onUp)
+      globalThis.removeEventListener('blur', onBlur)
+    }
+  }, [])
+
   // Track the edge being reconnected
   const edgeReconnectSuccessful = useRef(true)
 
@@ -119,11 +139,12 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       cfItemTypes,
       cfSubjects,
       cfConcepts,
+      cfAssociationGroupings,
     })
     
     setGeneratedCfPackage(cfPackage)
     setCfPackageDialogOpen(true)
-  }, [nodes, editorEdges, caseVersion, settings.edgeType, cfItemTypes, cfSubjects, cfConcepts])
+  }, [nodes, editorEdges, caseVersion, settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings])
 
   // Save: Generate CFPackage with version increment and POST to server
   const handleSave = useCallback(async () => {
@@ -141,6 +162,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       cfItemTypes,
       cfSubjects,
       cfConcepts,
+      cfAssociationGroupings,
     })
     
     // Convert to OpenCASE REST API format
@@ -173,17 +195,59 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       // No server callback - just show the dialog for manual validation
       setCfPackageDialogOpen(true)
     }
-  }, [nodes, editorEdges, caseVersion, onSaveToServer, clearDirty, settings.edgeType, cfItemTypes, cfSubjects, cfConcepts])
+  }, [nodes, editorEdges, caseVersion, onSaveToServer, clearDirty, settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings])
+
+  // Compute in-use groupings from actual edges (for filter dropdown)
+  const inUseGroupings = useMemo(() => {
+    const seenIds = new Set<string>()
+    for (const e of editorEdges) {
+      const gId = e.data?.cfAssociation?.CFAssociationGroupingURI?.identifier
+      if (gId) seenIds.add(gId)
+    }
+    return cfAssociationGroupings.filter((g) => seenIds.has(g.identifier))
+  }, [editorEdges, cfAssociationGroupings])
+
+  // Auto-clear filter if the active filter is no longer in use
+  useEffect(() => {
+    if (activeGroupingFilter && !inUseGroupings.some((g) => g.identifier === activeGroupingFilter)) {
+      setActiveGroupingFilter(null)
+    }
+  }, [activeGroupingFilter, inUseGroupings, setActiveGroupingFilter])
+
+  // Effective filter: only apply if the grouping is still in use (avoids stale fade on the
+  // render before the useEffect auto-clear fires)
+  const effectiveGroupingFilter = activeGroupingFilter && inUseGroupings.some((g) => g.identifier === activeGroupingFilter)
+    ? activeGroupingFilter
+    : null
 
   // Apply the custom labeled edge type to all edges, passing the path style in data.
   // Per-edge edgeType (e.g. from hierarchy layout) takes priority over the framework-level setting.
   const edgesWithType = useMemo<CaseEditorEdge[]>(
-    () => editorEdges.map((edge) => ({ 
-      ...edge, 
-      type: 'labeled',
-      data: { ...edge.data, edgeType: edge.data?.edgeType ?? settings.edgeType }
-    })),
-    [editorEdges, settings.edgeType],
+    () => editorEdges.map((edge) => {
+      const baseData = { ...edge.data, edgeType: edge.data?.edgeType ?? settings.edgeType }
+      let style = edge.style
+
+      // Apply highlight/fade when grouping filter is active
+      if (effectiveGroupingFilter) {
+        const edgeGroupId = edge.data?.cfAssociation?.CFAssociationGroupingURI?.identifier
+        const isRootEdge = edge.data?.isFrameworkRootConnection
+        const matches = edgeGroupId === effectiveGroupingFilter
+
+        if (matches) {
+          // Highlighted: bold stroke in teal
+          style = { ...style, stroke: '#0d9488', strokeWidth: 3, opacity: 1, transition: 'all 0.2s ease' }
+        } else if (isRootEdge) {
+          // Root edges stay visible but neutral
+          style = { ...style, opacity: 0.35, transition: 'all 0.2s ease' }
+        } else {
+          // Non-matching: heavily faded
+          style = { ...style, opacity: 0.1, transition: 'all 0.2s ease' }
+        }
+      }
+
+      return { ...edge, type: 'labeled', data: baseData, style }
+    }),
+    [editorEdges, settings.edgeType, effectiveGroupingFilter],
   )
   
   // Validate connections - prevent framework-to-framework connections
@@ -604,6 +668,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onOpenSettings={() => setSettingsOpen(true)}
         onResetHierarchy={applyHierarchyLayout}
         onResetStar={applyStarLayout}
+        cfAssociationGroupings={inUseGroupings}
+        activeGroupingFilter={activeGroupingFilter}
+        onSetGroupingFilter={setActiveGroupingFilter}
       />
 
       <div ref={reactFlowWrapRef} className="h-full w-full">
@@ -616,9 +683,10 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
           isValidConnection={isValidConnection}
           onSelectionChange={onSelectionChangeWithPan}
           onBeforeDelete={onBeforeDelete}
-          selectionMode={SelectionMode.Partial}
+          selectionMode={SelectionMode.Full}
           multiSelectionKeyCode="Shift"
           selectionKeyCode="Shift"
+          selectNodesOnDrag={false}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           edgesFocusable
@@ -646,6 +714,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
           <MiniMap
             position="bottom-left"
             className="!bottom-1 !left-12"
+            pannable
+            zoomable
             nodeStrokeWidth={2}
             nodeColor={(node) => (node.selected ? '#8b5cf6' : '#e2e8f0')} // violet-500 if selected, slate-200 otherwise
             nodeStrokeColor={(node) => (node.selected ? '#7c3aed' : '#cbd5e1')} // violet-600 if selected, slate-300 otherwise

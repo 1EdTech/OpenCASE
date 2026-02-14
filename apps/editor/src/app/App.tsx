@@ -13,7 +13,7 @@ import { loadFrameworkFromCfPackage } from '@/application/framework/services/Fra
 import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage } from '@/ui/editor/reactflow/mapping'
 import type { LayoutState } from '@/ui/editor/reactflow/mapping'
 import type { CaseVersion } from '@/application/framework/mappers/case/CasePackageSnapshot'
-import type { CFItemType, CFSubject, CFConcept } from '@/domain/case/types'
+import type { CFAssociationGrouping, CFItemType, CFSubject, CFConcept } from '@/domain/case/types'
 import LoginScreen from '@/ui/auth/LoginScreen'
 import { detectTopology } from '@/ui/editor/layout/detectTopology'
 import { applyInitialLayout } from '@/ui/editor/layout/applyInitialLayout'
@@ -45,6 +45,7 @@ function AppInner() {
   const [tenantCfItemTypes, setTenantCfItemTypes] = useState<CFItemType[]>([])
   const [tenantCfSubjects, setTenantCfSubjects] = useState<CFSubject[]>([])
   const [tenantCfConcepts, setTenantCfConcepts] = useState<CFConcept[]>([])
+  const [tenantCfAssociationGroupings, setTenantCfAssociationGroupings] = useState<CFAssociationGrouping[]>([])
 
   // Track which framework IDs have been published to OpenCASE
   // (either loaded from the server or successfully saved)
@@ -112,6 +113,9 @@ function AppInner() {
       }
       if (defs.CFConcepts && defs.CFConcepts.length > 0) {
         setTenantCfConcepts(defs.CFConcepts)
+      }
+      if (defs.CFAssociationGroupings && defs.CFAssociationGroupings.length > 0) {
+        setTenantCfAssociationGroupings(defs.CFAssociationGroupings)
       }
     }).catch(() => {
       // Non-fatal: editor still works, combobox just won't have seed options
@@ -387,6 +391,7 @@ function AppInner() {
       initialCfItemTypes={tenantCfItemTypes}
       initialCfSubjects={tenantCfSubjects}
       initialCfConcepts={tenantCfConcepts}
+      initialCfAssociationGroupings={tenantCfAssociationGroupings}
     >
       <EditorCanvas
         onBack={() => {

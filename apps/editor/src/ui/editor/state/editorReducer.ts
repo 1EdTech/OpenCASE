@@ -87,14 +87,16 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         selectedEdgeIds: action.edgeIds,
       }
     case 'selection/clear':
+      // Only clear ID tracking — DON'T map over nodes/edges.
+      // React Flow manages `selected` flags via onNodesChange / onEdgesChange.
+      // For programmatic deselect, EditorContext dispatches nodes/applyChanges separately.
+      if (state.selectedNodeId === null && state.selectedEdgeId === null) return state
       return {
         ...state,
         selectedNodeId: null,
         selectedEdgeId: null,
         selectedNodeIds: [],
         selectedEdgeIds: [],
-        nodes: state.nodes.map((n) => ({ ...n, selected: false })),
-        edges: state.edges.map((e) => ({ ...e, selected: false })),
       }
     case 'nodes/applyChanges': {
       const hasDirtyChanges = action.changes.some(
