@@ -106,8 +106,6 @@ export default memo(function NodePropertiesPanel({
     onChangeNode?.(node.id, patch)
   }
 
-  const parseCsv = (raw: string) => raw.split(',').map((s) => s.trim()).filter(Boolean)
-  const joinCsv = (arr?: string[]) => (arr?.length ? arr.join(', ') : '')
 
   const copyToClipboard = async (text: string, kind: 'code' | 'uri' | 'opencase') => {
     try {
@@ -407,15 +405,16 @@ export default memo(function NodePropertiesPanel({
                   </div>
                   <div>
                     <label className={LABEL_CLS} htmlFor="node-keywords">Keywords</label>
-                    <input id="node-keywords" className={INPUT_CLS} value={joinCsv(cfItem?.conceptKeywords)} onChange={(e) => updateItem({ conceptKeywords: parseCsv(e.target.value) })} placeholder="e.g., rounding, place value" />
-                    <div className={HINT_CLS}>Separate with commas.</div>
-                    {(cfItem?.conceptKeywords?.length ?? 0) > 0 ? (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {cfItem!.conceptKeywords!.slice(0, 8).map((k) => (
-                          <span key={k} className="rounded-full border border-black/10 bg-slate-100 px-2.5 py-1 text-sm font-medium text-slate-700">{k}</span>
-                        ))}
-                      </div>
-                    ) : null}
+                    <TagComboboxInput
+                      id="node-keywords"
+                      values={cfItem?.conceptKeywords ?? []}
+                      onChange={(vals) => updateItem({ conceptKeywords: vals.length > 0 ? vals : undefined })}
+                      options={[]}
+                      placeholder="Type a keyword and press Enter…"
+                      className="w-full"
+                      tagClassName="inline-flex items-center gap-0.5 rounded-full border border-black/10 bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-700"
+                    />
+                    <div className={HINT_CLS}>Press Enter or Tab to add each keyword.</div>
                   </div>
                 </div>
               )}
