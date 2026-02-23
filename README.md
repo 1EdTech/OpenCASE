@@ -1,247 +1,52 @@
-# OpenCASE Monorepo
+# OpenCASE
 
-An open-source toolkit for working with [1EdTech CASE](https://www.imsglobal.org/activity/case) (Competencies & Academic Standards Exchange) frameworks:
+Every education system organises what students should learn into structured documents — curriculum standards, competency frameworks, learning outcomes. These documents define the building blocks of education: what gets taught, how progress is measured, and how qualifications relate to each other.
 
-- **OpenCASE** (`apps/opencase`) — A multi-tenant CASE Provider API (Node.js/Express)
-- **Editor** (`apps/editor`) — A visual canvas-based framework editor (React + React Flow)
+**[CASE](https://www.1edtech.org/activity/case)** (Competencies & Academic Standards Exchange) is the open standard that makes these frameworks machine-readable and interoperable. Instead of PDFs and spreadsheets that lock information in silos, CASE lets systems share, align, and build on each other's standards.
 
-## Quick Start
+**OpenCASE** is a complete, open-source platform for creating, managing, and publishing CASE frameworks.
 
-Start all services with a single command:
 
-```bash
-docker-compose up --build
-```
 
-Access the application at: **http://localhost:3000**
+---
 
-## Architecture
+## What OpenCASE provides
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Browser → :3000                          │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-┌─────────────────────────▼───────────────────────────────────┐
-│                      Traefik                                │
-│                   (Reverse Proxy)                           │
-├─────────────────────────────────────────────────────────────┤
-│  /                    → Editor (React SPA)                  │
-│  /ims/*, /management/* → OpenCASE (API)                     │
-│  /realms/*, /admin/*  → Keycloak (Auth)                     │
-└─────────────────────────────────────────────────────────────┘
-                          │
-          ┌───────────────┼───────────────┐
-          │               │               │
-    ┌─────▼─────┐   ┌─────▼─────┐   ┌─────▼─────┐
-    │  Editor   │   │ OpenCASE  │   │ Keycloak  │
-    │  (Vite)   │   │ (Express) │   │  (OIDC)   │
-    └───────────┘   └───────────┘   └─────┬─────┘
-                                          │ SMTP
-                                    ┌─────▼─────┐
-                                    │  Mailpit  │
-                                    │  (:8025)  │
-                                    └───────────┘
-```
+| | |
+|---|---|
+| **Visual Editor** | Build competency frameworks on an interactive canvas. Drag, connect, and organise items visually — no spreadsheets or hand-edited files required. |
+| **Publishing Server** | Publish frameworks through a standards-compliant API so that learning platforms, assessment tools, and credential systems can discover and consume them automatically. |
+| **Identity and Access** | Multi-tenant security so that different organisations can each manage their own frameworks independently, with role-based access controls for viewers, authors, and administrators. |
 
-## Services
+## Key capabilities
 
-| Service | Internal Port | Description |
-|---------|---------------|-------------|
-| Traefik | 3000 | Reverse proxy (main entry point) |
-| Traefik Dashboard | 8080 | Traefik admin UI |
-| Editor | 5173 | React frontend with hot-reload |
-| OpenCASE | 8080 | CASE API backend |
-| Keycloak | 8080 | OIDC identity provider |
-| Mailpit | 8025 / 1025 | Dev email capture (Web UI / SMTP) |
+- **Standards-compliant** — fully supports CASE 1.0 and CASE 1.1 specifications, ready for 1EdTech certification
+- **Multi-tenant** — each organisation operates in its own isolated workspace with separate users and data
+- **Version-controlled** — every change to a framework is preserved as an immutable version with full history
+- **Single-command deployment** — the entire stack launches from one command, with automatic HTTPS when deployed to a server
+- **Extensible** — designed so that storage, identity providers, and transport layers can be swapped without changing the core platform
+- **Open source** — transparent, forkable, and free to use under the Apache 2.0 licence
 
-## URLs
+## How it works
 
-| URL | What |
-|-----|------|
-| http://localhost:3000 | Editor UI |
-| http://localhost:3000/ims/case/v1p1/CFDocuments | CASE API |
-| http://localhost:3000/health | API health check |
-| http://localhost:3000/admin/ | Keycloak Admin Console |
-| http://localhost:8080 | Traefik Dashboard |
-| http://localhost:8025 | Mailpit UI (dev emails) |
+![Architecture Overview](docs/assets/architecture-overview.png)
 
-## Default Credentials
+The platform runs as a set of coordinated services behind a single entry point. The visual editor connects to the publishing server, which stores and serves frameworks. A dedicated identity service handles sign-in, access controls, and tenant isolation. All traffic is routed through a reverse proxy that provides a unified address and, in production, automatic TLS certificates.
 
-| Service | Username | Password |
-|---------|----------|----------|
-| Keycloak Admin | admin | admin |
-| System Admin | system-admin@local | admin |
+## Getting started
 
-## Email & Password Management
+To deploy OpenCASE on a server with automatic HTTPS, follow the [Deployment Guide](docs/GET_STARTED.md).
 
-### Mailpit (Dev Email)
+To set up a local development environment, see the [Development Guide](docs/DEVELOPMENT.md).
 
-All transactional emails (password resets, etc.) are captured by [Mailpit](https://github.com/axllent/mailpit) in development. No emails leave the local environment.
+## Further reading
 
-- **Web UI**: http://localhost:8025 — view all captured emails
-- **SMTP**: `mailpit:1025` (internal Docker network)
-
-Mailpit starts automatically with `docker-compose up`. The OpenCASE backend configures Keycloak's SMTP settings to point at Mailpit on startup.
-
-### Forgot Password
-
-Click **"Forgot password?"** on the login screen. This redirects to Keycloak's reset-credentials page, which sends a password reset email. In development, the email is captured by Mailpit — open http://localhost:8025 to find the reset link.
-
-### Change Password
-
-Authenticated users can change their password via the user menu (available on both the home screen and the editor). Clicking **"Change password"** opens the Keycloak account console in a new tab.
-
-## Development
-
-### Dev Mode (Hot Reload for All Apps)
-
-For active development with hot-reload on both Editor and OpenCASE:
-
-```bash
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
-```
-
-This enables:
-- **Editor**: Vite HMR - edit `apps/editor/src/*` → instant reload
-- **OpenCASE**: ts-node-dev - edit `apps/opencase/src/*` → auto-restart
-
-First time or after changing dependencies:
-```bash
-docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-```
-
-### Production Mode
-
-For production-like builds (no hot-reload):
-
-```bash
-docker-compose up --build
-```
-
-### Viewing Logs
-
-```bash
-# All services
-docker-compose logs -f
-
-# Specific service
-docker-compose logs -f editor
-docker-compose logs -f opencase
-docker-compose logs -f keycloak
-```
-
-### Rebuilding
-
-```bash
-# Rebuild all services
-docker-compose up --build
-
-# Rebuild specific service
-docker-compose up --build opencase
-```
-
-### Stopping
-
-```bash
-# Stop all services
-docker-compose down
-
-# Stop and remove volumes (clean slate)
-docker-compose down -v
-```
-
-## Routing
-
-Traefik routes requests based on path:
-
-| Path Pattern | Service | Description |
-|--------------|---------|-------------|
-| `/` | editor | React SPA (catch-all, lowest priority) |
-| `/ims/*` | opencase | CASE Provider API (read) |
-| `/management/*` | opencase | Management API (write) |
-| `/oauth/*` | opencase | OAuth endpoints |
-| `/public/*` | opencase | Public endpoints (tenant lookup) |
-| `/health` | opencase | Health check |
-| `/.well-known/*` | opencase | OAuth/OIDC discovery |
-| `/realms/*` | keycloak | OIDC authentication |
-| `/admin/*` | keycloak | Keycloak admin console |
-| `/resources/*` | keycloak | Keycloak static assets |
-
-## Configuration
-
-See `docs/env.example` for available environment variables. Copy it to `.env` to customize:
-
-```bash
-cp docs/env.example .env
-```
-
-The `.env` file is the single source of truth — `docker-compose.yml` reads all configurable values from it. For remote server deployment, see the [Get Started Guide](docs/GET_STARTED.md).
-
-## Testing
-
-### Editor (`apps/editor`)
-
-```bash
-cd apps/editor
-npm run test          # Single run
-npm run test:watch    # Watch mode
-```
-
-Tests cover the pure domain and layout logic — reducer, geometry helpers, layout algorithms, topology detection, and factories. See the [Editor README](apps/editor/README.md) for details.
-
-### OpenCASE (`apps/opencase`)
-
-```bash
-cd apps/opencase
-npm run test          # Single run
-npm run test:watch    # Watch mode
-```
-
-## Project Structure
-
-```
-monorepo/
-├── docker-compose.yml        # Production-like environment
-├── docker-compose.dev.yml    # Dev overrides (hot-reload)
-├── env.example               # Environment variable template
-├── AGENTS.md                 # AI assistant guidance
-├── README.md                 # This file
-└── apps/
-    ├── editor/               # React frontend
-    │   ├── Dockerfile
-    │   ├── src/
-    │   │   ├── app/          # App shell, providers, routing
-    │   │   ├── domain/       # CASE entities (Framework, Item, Association)
-    │   │   ├── application/  # Use-cases, mappers, ports
-    │   │   ├── infrastructure/ # API clients, persistence
-    │   │   └── ui/
-    │   │       ├── editor/
-    │   │       │   ├── state/          # EditorContext (React provider)
-    │   │       │   │   ├── helpers/    # Pure geometry & adjacency utils
-    │   │       │   │   ├── editorReducer.ts  # Pure state reducer
-    │   │       │   │   └── editorFactories.ts
-    │   │       │   ├── layout/         # Pure layout algorithms
-    │   │       │   │   ├── hierarchyLayout.ts
-    │   │       │   │   ├── starLayout.ts
-    │   │       │   │   ├── treeLayout.ts
-    │   │       │   │   ├── detectTopology.ts
-    │   │       │   │   └── applyInitialLayout.ts
-    │   │       │   ├── reactflow/      # React Flow types, mapping, components
-    │   │       │   └── components/     # Canvas, header, dialogs
-    │   │       └── home/               # Home screen, framework cards
-    │   └── ...
-    └── opencase/             # Node.js backend
-        ├── Dockerfile
-        ├── Dockerfile.dev
-        ├── data/             # Persisted framework data
-        └── ...
-```
-
-## Learn More
-
-- [Get Started Guide](docs/GET_STARTED.md) — Deploy on a Linux server (Docker)
-- [Auth0 SSO Guide](docs/AUTH0_SSO.md) — Configure Auth0 as an external Identity Provider
-- [Editor README](apps/editor/README.md) — How the frontend works
-- [Editor Architecture](apps/editor/docs/architecture.md) — Design decisions, folder structure, contributing guide
-- [OpenCASE README](apps/opencase/README.md) — Backend API documentation
+| Guide | Description |
+|-------|-------------|
+| [Deployment Guide](docs/GET_STARTED.md) | Deploy on a Linux server with Docker and automatic HTTPS |
+| [Development Guide](docs/DEVELOPMENT.md) | Local setup, commands, services, and project structure |
+| [Auth0 SSO Guide](docs/AUTH0_SSO.md) | Configure Auth0 as an external identity provider |
+| [Editor Overview](apps/editor/README.md) | The visual framework editor |
+| [Publishing Server Overview](apps/opencase/README.md) | The CASE-compliant publishing server |
+| [API Reference](apps/opencase/FRAMEWORK_MANAGEMENT_GUIDE.md) | Endpoint reference for integrators |
+| [Licensing](apps/opencase/docs/Licensing.md) | Framework licensing and access rights |

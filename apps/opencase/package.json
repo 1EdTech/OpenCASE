@@ -10,10 +10,11 @@
     "lint": "eslint .",
     "test": "jest",
     "test:watch": "jest --watch",
-    "import-framework": "ts-node src/application/cli/import-framework.ts"
+    "import-framework": "ts-node src/application/cli/import-framework.ts",
+    "export:case-assets": "node scripts/export-case-assets.mjs"
   },
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "dependencies": {
     "@types/cors": "^2.8.19",
     "ajv": "^8.17.1",

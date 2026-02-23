@@ -1,0 +1,20 @@
+graph TD
+    Browser["Browser → :3000"]
+
+    subgraph Traefik["Traefik (Reverse Proxy)"]
+        R1["/ → Editor (React SPA)"]
+        R2["/ims/*, /management/* → OpenCASE (API)"]
+        R3["/realms/*, /admin/* → Keycloak (Auth)"]
+    end
+
+    Browser --> Traefik
+
+    Editor["Editor<br/>(Vite)"]
+    OpenCASE["OpenCASE<br/>(Express)"]
+    Keycloak["Keycloak<br/>(OIDC)"]
+    Mailpit["Mailpit<br/>(:8025)"]
+
+    Traefik --> Editor
+    Traefik --> OpenCASE
+    Traefik --> Keycloak
+    Keycloak -- SMTP --> Mailpit

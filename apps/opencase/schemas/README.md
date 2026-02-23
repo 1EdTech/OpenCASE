@@ -101,10 +101,10 @@ Standard values include:
 ## Usage
 
 These schemas are automatically loaded by the OpenCASE application on startup and used to validate:
-- Framework creation (`POST /admin/tenants/{tenantId}/frameworks`)
-- Document updates (`PUT /management/tenants/{tenantId}/CFDocuments/{id}`)
-- Item updates (`PUT /management/tenants/{tenantId}/CFItems/{id}`)
-- Association updates (`PUT /management/tenants/{tenantId}/CFAssociations/{id}`)
+- Framework creation (`POST /management/tenants/{tenantId}/ims/case/v1p1/CFPackages`)
+- Document updates (`PUT /management/tenants/{tenantId}/ims/case/v1p1/CFDocuments/{id}`)
+- Item updates (`PUT /management/tenants/{tenantId}/ims/case/v1p1/CFItems/{id}`)
+- Association updates (`PUT /management/tenants/{tenantId}/ims/case/v1p1/CFAssociations/{id}`)
 
 ## Validation Errors
 

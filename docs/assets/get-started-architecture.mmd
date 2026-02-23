@@ -1,0 +1,16 @@
+graph TD
+    subgraph Traefik["Traefik (HTTPS :443 + :80 or HTTP :3000)"]
+        R1["/ → Editor (React + Vite)"]
+        R2["/ims/* → OpenCASE (Express API)"]
+        R3["/realms/* → Keycloak (OIDC Provider)"]
+    end
+
+    Editor["Editor<br/>:5173"]
+    OpenCASE["OpenCASE<br/>:8080"]
+    Keycloak["Keycloak<br/>:8080"]
+    Mailpit["Mailpit<br/>:8025"]
+
+    Traefik --> Editor
+    Traefik --> OpenCASE
+    Traefik --> Keycloak
+    Keycloak -- SMTP --> Mailpit

@@ -45,16 +45,6 @@ export class CFPackagesManagementController {
     try {
       if (!tenantId) return res.status(400).json({ error: 'Missing tenantId' })
       
-      // Check if payload uses old format and provide helpful error
-      if (req.body.document && !req.body.CFDocument) {
-        return res.status(400).json({ 
-          error: 'invalid_format',
-          message: 'Payload uses deprecated format. Please use CFPackage format with CFDocument, CFItems, CFAssociations, CFRubrics, CFDefinitions. See CASE_V1P1_API_MIGRATION_GUIDE.md for details.',
-          receivedFormat: 'old (document, items, associations)',
-          expectedFormat: 'CFPackage (CFDocument, CFItems, CFAssociations, CFRubrics, CFDefinitions)'
-        })
-      }
-      
       if (!req.body.CFDocument) {
         return res.status(400).json({ 
           error: 'missing_required_field',

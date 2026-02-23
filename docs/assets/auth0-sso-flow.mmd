@@ -1,0 +1,16 @@
+sequenceDiagram
+    participant B as Browser
+    participant E as OpenCASE Editor
+    participant K as Keycloak
+    participant A as Auth0
+
+    B->>E: Open Editor
+    E->>K: Redirect to login page
+    K->>K: Show "Login with Auth0"
+    K->>A: Redirect to Auth0 login
+    A->>A: User authenticates
+    A->>K: Return auth code
+    K->>K: Exchange code for tokens
+    K->>K: Create/update local user
+    K->>E: Return OIDC tokens
+    E->>B: User is logged in

@@ -1,85 +1,30 @@
-# CASE Editor
+# OpenCASE — Visual Framework Editor
 
-A visual, canvas-based editor for creating and managing [1EdTech CASE](https://www.imsglobal.org/activity/case) frameworks. Think of it as a graph editor for competency standards — you work with items and associations on a React Flow canvas, with a domain model underneath that keeps everything honest.
+The Editor is the authoring interface for OpenCASE. It provides an interactive canvas where users build [1EdTech CASE](https://www.1edtech.org/activity/case) competency frameworks visually — organising learning objectives, connecting related standards, and publishing the result directly to the OpenCASE publishing server.
 
-Built with DDD + Clean Architecture principles, so the domain logic stays completely separate from the UI.
+---
 
-## Getting Started
+## What it does
 
-```bash
-npm install --include=dev
-npm run dev          # http://localhost:5173
-```
+- **Visual canvas editing** — competencies appear as items on a canvas; users drag, reposition, and connect them to define relationships such as "is child of", "is related to", or "precedes"
+- **Automatic layout** — when a framework is opened for the first time, the editor analyses its structure and applies an appropriate layout automatically, so items are arranged clearly from the start
+- **Publish to the API** — frameworks edited on the canvas can be saved directly to the OpenCASE publishing server, making them immediately available to consuming systems
+- **Multi-tenant aware** — users sign in through the platform's identity service and work within their organisation's workspace
 
-Or run the full stack (Editor + API + Auth) via Docker from the monorepo root — see the [main README](../../README.md).
+## How it works
 
-## Commands
+A competency framework is a structured collection of items (individual learning objectives or standards) and associations (the relationships between them). On the canvas, items appear as nodes and associations appear as connections between them. Users can add, edit, reorder, and delete items; create associations between them; and rearrange the layout to suit the framework's structure.
 
-```bash
-npm run dev          # Vite dev server with HMR
-npm run build        # Production build
-npm run lint         # ESLint
-npm run test         # Unit tests (single run)
-npm run test:watch   # Unit tests (watch mode)
-```
+The editor detects whether a framework is best displayed as a hierarchy, a radial layout, or a tree, and applies the most suitable arrangement before anything appears on screen.
 
-## How It's Organised
+Changes are saved as new immutable versions on the server, preserving a full history of every revision.
 
-```
-src/
-├── domain/            # CASE entities — no external dependencies
-├── application/       # Use-cases, mappers, ports
-├── infrastructure/    # API clients, HTTP, persistence
-├── ui/                # React components, state, layout
-└── app/               # App shell, providers, routing
-```
+---
 
-Dependencies flow inward: `domain ← application ← infrastructure ← ui`
+## Further reading
 
-### State Management
-
-Editor state uses a **pure reducer** pattern. The reducer and all its helpers have zero React dependencies, which makes them straightforward to test and reason about.
-
-- `state/EditorContext.tsx` — Thin React provider that wires the reducer to hooks. Orchestration only, no business logic.
-- `state/editorReducer.ts` — Pure reducer handling all state transitions (selection, CRUD, layout, connect, delete, etc.)
-- `state/helpers/nodeGeometry.ts` — Geometry utilities, type guards, graph adjacency builders
-- `state/editorFactories.ts` — Factory functions for items, documents, edges, and graph structures
-
-### Layout Algorithms
-
-Three auto-layout modes, all pure functions with no side effects:
-
-| Layout | When to use | Edge style |
-|--------|------------|-----------|
-| **Hierarchy** | Flat lists — many items at one level | smoothstep |
-| **Star** | Radial — framework at centre, branches fan out | bezier |
-| **Tree** | General purpose — recursive horizontal spread | bezier |
-
-The editor auto-detects which layout suits a framework when no saved positions exist, and applies it *before* the first render (so there's no visible jump).
-
-- `layout/detectTopology.ts` — Classifies the graph shape
-- `layout/applyInitialLayout.ts` — Pre-render orchestrator
-
-### React Flow Mapping
-
-The CASE domain model (Framework, Item, Association) is the source of truth. React Flow is a derived projection:
-
-- `reactflow/mapping/toReactFlow.ts` — Domain → React Flow
-- `reactflow/mapping/fromEditorGraph.ts` — React Flow → Domain + layout
-
-## Testing
-
-```bash
-npm run test
-```
-
-The test suite covers all the pure modules — reducer, layout algorithms, geometry helpers, topology detection, and factories. Tests live alongside the code they cover (`*.test.ts`), with shared fixtures in `src/__tests__/fixtures.ts`.
-
-## Tech Stack
-
-- **React 19** + TypeScript
-- **Vite** (build + dev server)
-- **Tailwind CSS v4** + shadcn/ui
-- **@xyflow/react** (React Flow)
-- **Vitest** (testing)
-- **oidc-client-ts** (authentication)
+| Guide | Description |
+|-------|-------------|
+| [Developer Guide](docs/DEVELOPER.md) | Technical setup, commands, source layout, and internals |
+| [Architecture](docs/architecture.md) | Design decisions, folder structure, and contributing guide |
+| [Design Context](docs/design.md) | Project context, domain model, and architectural principles |

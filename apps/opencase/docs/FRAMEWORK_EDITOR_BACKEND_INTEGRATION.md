@@ -12,7 +12,7 @@ This document is intended as **integration context** for a separate “framework
 
 OpenCASE exposes two relevant HTTP surfaces:
 
-- **External OIDC provider (Keycloak)** for login + tokens (OpenCASE no longer issues tokens)
+- **External OIDC provider (Keycloak)** for login + token issuance
 - **CASE Provider API (read-only, spec-aligned)**: `/ims/case/v1p1/*` (and v1p0 in the project, but v1p1 is the primary path in `src/interfaces/http/server.ts`)
 - **Non-standard Management API (write operations + tenant admin)**: `/management/*` (create/import CFPackage bundles + update/delete CASE entities + tenant management)
 
@@ -25,8 +25,8 @@ All framework data is persisted **to disk** under `data/tenants/<tenantId>/v1p1/
 - **Default server base URL**: `http://localhost:8080`
 - **OpenAPI discovery (no auth)**:
   - `GET /ims/case/v1p1/discovery/imscasev1p1_openapi3_v1p0.json`
-- **OIDC discovery (Keycloak)**:
-  - `GET http://localhost:8081/realms/opencase/.well-known/openid-configuration`
+- **OIDC discovery (Keycloak)** (via Traefik):
+  - `GET http://localhost:3000/realms/opencase/.well-known/openid-configuration`
 
 ---
 
@@ -49,7 +49,7 @@ OpenCASE expects a **Keycloak-issued** access token. Your SPA should use Keycloa
 - `GET {issuer}/protocol/openid-connect/auth` (authorization)
 - `POST {issuer}/protocol/openid-connect/token` (token exchange)
 
-Where `{issuer}` is typically: `http://localhost:8081/realms/opencase`.
+Where `{issuer}` is typically: `http://localhost:3000/realms/opencase` (via Traefik).
 
 #### Client-per-tenant model (how tenant switching works)
 
@@ -234,27 +234,27 @@ This means you can implement editing in two main ways:
 - `POST /management/tenants/{tenantId}/ims/case/v1p1/CFPackages`
   - (or v1p0): `POST /management/tenants/{tenantId}/ims/case/v1p0/CFPackages`
 
-**Body shape expected by OpenCASE**
+**Body shape expected by OpenCASE** (official CASE v1p1 CFPackage format)
 
 ```json
 {
-  "document": { /* CASE CFDocument JSON */ },
-  "items": [ /* CASE CFItem JSON[] */ ],
-  "associations": [ /* CASE CFAssociation JSON[] */ ],
-  "rubrics": [ /* CFRubric[] (passed through) */ ],
-  "definitions": { /* CFDefinitions (optional, passed through) */ }
+  "CFDocument": { /* CASE CFDocument JSON */ },
+  "CFItems": [ /* CASE CFItem JSON[] */ ],
+  "CFAssociations": [ /* CASE CFAssociation JSON[] */ ],
+  "CFRubrics": [ /* CFRubric[] (passed through) */ ],
+  "CFDefinitions": { /* CFDefinitions (optional, passed through) */ }
 }
 ```
 
 **Important**
 
-- The CFDocument’s `sourcedId` (or `identifier`) determines the framework id (`docId`) used in:
+- The CFDocument’s `identifier` determines the framework id (`docId`) used in:
   - `/ims/case/v1p1/CFDocuments/{docId}`
   - `/ims/case/v1p1/CFPackages/{docId}`
-- Calling this endpoint again with the same `document.sourcedId` will create **another** version on disk (i.e., “publish new revision”).
+- Calling this endpoint again with the same `CFDocument.identifier` will create **another** version on disk (i.e., “publish new revision”).
 - **Schema note**: OpenCASE validates against the CASE CFPackage schema. Minimal requirements that often trip up test payloads:
-  - `document.creator` is required
-  - every `sourcedId` must be a **UUID**
+  - `CFDocument.creator` is required
+  - every `identifier` must be a **UUID**
   - each CFItem requires `uri`, `lastChangeDateTime`, and a `CFDocumentURI` link object
   - each CFAssociation requires `uri`, `lastChangeDateTime`, plus `originNodeURI` and `destinationNodeURI` link objects (not plain `originNode` / `destinationNode` strings)
 

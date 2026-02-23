@@ -1,0 +1,13 @@
+graph TD
+    subgraph HTTPS["HTTPS mode"]
+        direction LR
+        B1["Browser"] -- ":443 HTTPS" --> T1["Traefik<br/>(Let's Encrypt TLS)"]
+        B2["Browser"] -- ":80 HTTP" --> R1["301 redirect"] --> T1
+    end
+
+    subgraph HTTP["HTTP mode"]
+        direction LR
+        B3["Browser"] -- ":3000 HTTP" --> T2["Traefik"]
+    end
+
+    HTTPS ~~~ HTTP

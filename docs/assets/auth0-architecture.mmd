@@ -1,0 +1,5 @@
+graph LR
+    Browser["Browser<br/>(Editor)"] <--> Keycloak["Keycloak<br/>(Broker)"]
+    Keycloak <--> Auth0["Auth0<br/>(IdP)"]
+
+    Keycloak -- "Creates local user<br/>Assigns roles & scopes<br/>Issues OIDC tokens" --> OpenCASE["OpenCASE<br/>(API)"]

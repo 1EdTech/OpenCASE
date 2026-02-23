@@ -67,11 +67,10 @@ export class CaseApiClient {
     const res = (await this._http.get(`/ims/case/${v}/CFPackages/${encodeURIComponent(params.docId)}`)) as unknown
     if (!res || typeof res !== 'object') throw new Error('Unexpected CFPackage response shape')
 
-    // New format (CASE v1.1 spec-compliant): top-level { CFDocument, CFItems, ... }
     if ('CFDocument' in res) {
       return res as CFPackage
     }
-    // Legacy format: { CFPackage: { CFDocument, CFItems, ... } }
+    // Wrapped variant: { CFPackage: { CFDocument, CFItems, ... } }
     if ('CFPackage' in res) {
       return (res as OpenCaseCfPackageResponse).CFPackage
     }

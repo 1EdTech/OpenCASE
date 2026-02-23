@@ -4,23 +4,7 @@ Configure Auth0 as an external Identity Provider (IdP) so users can log in to Op
 
 ## How It Works
 
-```
-Browser --> OpenCASE Editor --> Keycloak login page
-                                  |
-                          "Login with Auth0"
-                                  |
-                          Auth0 login page
-                                  |
-                          User authenticates
-                                  |
-                          Auth0 returns auth code
-                                  |
-                          Keycloak exchanges code for tokens
-                                  |
-                          Keycloak creates/updates local user
-                                  |
-                          User is logged in to OpenCASE
-```
+![Auth0 SSO Flow](assets/auth0-sso-flow.png)
 
 ---
 
@@ -293,21 +277,7 @@ Now when users click "Sign in", they'll be sent directly to Auth0. To still allo
 
 ## Architecture with Auth0
 
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Browser    │────>│   Keycloak   │────>│    Auth0     │
-│  (Editor)    │<────│  (Broker)    │<────│   (IdP)      │
-└──────────────┘     └──────────────┘     └──────────────┘
-                            │
-                     Creates local user
-                     Assigns roles & scopes
-                     Issues OIDC tokens
-                            │
-                     ┌──────────────┐
-                     │   OpenCASE   │
-                     │   (API)      │
-                     └──────────────┘
-```
+![Auth0 Architecture](assets/auth0-architecture.png)
 
 Keycloak remains the OIDC provider for OpenCASE. Auth0 is an upstream identity source. This means:
 
