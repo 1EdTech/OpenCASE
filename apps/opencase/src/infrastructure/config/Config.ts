@@ -39,6 +39,9 @@ export interface AppConfig {
   smtpHost?: string;
   smtpPort?: string;
   smtpFrom?: string;
+
+  // Keycloak realm SSL enforcement ('none' for HTTP dev, 'external' for production HTTPS)
+  keycloakRealmSslRequired: 'none' | 'external' | 'all';
 }
 
 export function loadConfig(): AppConfig {
@@ -78,6 +81,8 @@ export function loadConfig(): AppConfig {
     smtpHost: process.env.SMTP_HOST ?? (isProduction ? undefined : 'mailpit'),
     smtpPort: process.env.SMTP_PORT ?? '1025',
     smtpFrom: process.env.SMTP_FROM ?? 'noreply@opencase.local',
+
+    keycloakRealmSslRequired: (process.env.KEYCLOAK_SSL_REQUIRED ?? (isProduction ? 'external' : 'none')) as 'none' | 'external' | 'all',
   };
 }
 

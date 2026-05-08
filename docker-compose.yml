@@ -37,7 +37,6 @@ services:
       # Hostname configuration - tell Keycloak its external URL
       - KC_HOSTNAME=${OPENCASE_HOSTNAME:-localhost}
       - KC_HOSTNAME_STRICT=false
-      - KC_HOSTNAME_STRICT_HTTPS=${KC_HOSTNAME_STRICT_HTTPS:-false}
       # Proxy settings for running behind Traefik
       - KC_PROXY_HEADERS=xforwarded
       - KC_HTTP_RELATIVE_PATH=/
@@ -124,6 +123,7 @@ services:
       - SMTP_HOST=${SMTP_HOST:-mailpit}
       - SMTP_PORT=${SMTP_PORT:-1025}
       - SMTP_FROM=noreply@${OPENCASE_HOSTNAME:-opencase.local}
+      - KEYCLOAK_SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-none}
     restart: on-failure
     volumes:
       - ./apps/opencase/data:/app/data
