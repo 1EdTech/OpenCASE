@@ -339,6 +339,8 @@ export async function buildContainer(): Promise<Container> {
     try {
       await keycloakAdmin.ensureRealmExists()
       await keycloakTenantProvisioner.bootstrapSystemAdmin()
+      await keycloakAdmin.setRealmSslRequired(config.keycloakRealm, config.keycloakRealmSslRequired)
+      await keycloakAdmin.setRealmSslRequired(config.keycloakAdminRealm, config.keycloakRealmSslRequired)
       keycloakReady = true
       logger.info('Keycloak bootstrap completed successfully')
     } catch (error: any) {

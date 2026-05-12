@@ -75,6 +75,11 @@ export class KeycloakAdminClient {
     logger.info({ realm }, 'Configured realm settings (resetPassword, loginWithEmail, SMTP, CASE scopes)')
   }
 
+  async setRealmSslRequired (realm: string, sslRequired: string): Promise<void> {
+    await this.requestJson('PUT', `/admin/realms/${encodeURIComponent(realm)}`, { sslRequired })
+    logger.info({ realm, sslRequired }, 'Set realm sslRequired')
+  }
+
   async ensureClient (client: {
     clientId: string
     publicClient: boolean
