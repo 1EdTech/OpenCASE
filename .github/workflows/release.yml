@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+env:
+  IMAGE_TAG: sha-${{ github.sha }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push opencase
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/opencase
+          push: true
+          tags: ${{ vars.IMAGE_REGISTRY }}/opencase:${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=opencase
+          cache-to: type=gha,scope=opencase,mode=max
+
+      - name: Build and push editor
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/editor
+          push: true
+          tags: ${{ vars.IMAGE_REGISTRY }}/editor:${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=editor
+          cache-to: type=gha,scope=editor,mode=max
+
+  trigger-deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          repository: ${{ vars.DEPLOY_REPO }}
+          event-type: deploy
+          client-payload: '{"image_tag": "${{ env.IMAGE_TAG }}"}'
