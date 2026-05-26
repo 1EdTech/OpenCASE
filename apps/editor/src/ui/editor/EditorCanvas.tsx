@@ -21,7 +21,7 @@ import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/t
 import type { CFDocument, CFItem, CFPackage } from '@/domain/case/types'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
-import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
+import { absolutizeCaseUris, frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
 
 type EditorCanvasProps = {
   onBack?: () => void
@@ -30,9 +30,11 @@ type EditorCanvasProps = {
   isPublishedToOpenCase?: boolean
   /** Archive the current framework on the server and navigate home */
   onArchiveFramework?: () => Promise<void>
+  /** Fetch the published CFPackage from the server (returns CASE JSON with absolute URIs) */
+  onFetchCfPackage?: () => Promise<CFPackage>
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onFetchCfPackage }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -89,6 +91,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const [externalFwViewportCenter, setExternalFwViewportCenter] = useState<{ x: number; y: number } | undefined>(undefined)
   const [cfPackageDialogOpen, setCfPackageDialogOpen] = useState(false)
   const [generatedCfPackage, setGeneratedCfPackage] = useState<CFPackage | null>(null)
+  const [viewCaseLoading, setViewCaseLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -139,20 +142,33 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const saveCtxRef = useRef({ caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings })
   saveCtxRef.current = { caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings }
 
-  // Generate CFPackage from current editor state and open the viewer
-  const handleViewCFPackage = useCallback(() => {
-    const { nodes: n, edges: e } = graphRef.current
-    const ctx = saveCtxRef.current
-    const { framework, layout } = fromEditorGraph({ graph: { nodes: n, edges: e } })
-    const cfPackage = frameworkToCfPackage({
-      framework, layout, incrementVersion: false,
-      caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
-      cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
-      cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
-    })
-    setGeneratedCfPackage(cfPackage)
-    setCfPackageDialogOpen(true)
-  }, [])
+  // Open the CFPackage viewer. Fetches from the server when published (absolute URIs);
+  // falls back to local generation for unsaved/draft frameworks.
+  const handleViewCFPackage = useCallback(async () => {
+    if (isPublishedToOpenCase && onFetchCfPackage) {
+      setCfPackageDialogOpen(true)
+      setViewCaseLoading(true)
+      try {
+        const pkg = await onFetchCfPackage()
+        setGeneratedCfPackage(pkg)
+      } finally {
+        setViewCaseLoading(false)
+      }
+    } else {
+      const { nodes: n, edges: e } = graphRef.current
+      const ctx = saveCtxRef.current
+      const { framework, layout } = fromEditorGraph({ graph: { nodes: n, edges: e } })
+      const cfPackage = frameworkToCfPackage({
+        framework, layout, incrementVersion: false,
+        caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
+        cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
+        cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
+      })
+      const caseJson = toOpenCaseFormat(cfPackage)
+      setGeneratedCfPackage(absolutizeCaseUris(caseJson, window.location.origin))
+      setCfPackageDialogOpen(true)
+    }
+  }, [isPublishedToOpenCase, onFetchCfPackage])
 
   // Save: Generate CFPackage with version increment and POST to server
   const handleSave = useCallback(async () => {
@@ -167,7 +183,6 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     })
     const openCasePackage = toOpenCaseFormat(cfPackage)
     console.log('[Save] Generated OpenCASE package:', openCasePackage)
-    setGeneratedCfPackage(cfPackage)
 
     if (onSaveToServer) {
       setSaveStatus('saving')
@@ -1344,6 +1359,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         }}
         cfPackage={generatedCfPackage}
         caseVersion={caseVersion}
+        loading={viewCaseLoading}
       />
 
     </div>

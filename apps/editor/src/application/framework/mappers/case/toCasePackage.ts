@@ -750,6 +750,33 @@ export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
 }
 
 /**
+ * Walk a CASE JSON object and prepend baseUrl to any relative /ims/case/ URI strings.
+ * Leaves already-absolute URIs and non-CASE strings untouched.
+ */
+export function absolutizeCaseUris<T>(payload: T, baseUrl: string): T {
+  const seen = new WeakSet<object>()
+
+  const normalize = (v: string): string =>
+    v.startsWith('/ims/case/') ? `${baseUrl}${v}` : v
+
+  const walk = (value: unknown): unknown => {
+    if (value === null || value === undefined) return value
+    if (typeof value === 'string') return normalize(value)
+    if (typeof value !== 'object') return value
+    if (seen.has(value as object)) return value
+    seen.add(value as object)
+    if (Array.isArray(value)) return value.map(walk)
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = k === 'uri' && typeof v === 'string' ? normalize(v) : walk(v)
+    }
+    return out
+  }
+
+  return walk(payload) as T
+}
+
+/**
  * Convenience type for the export parameters.
  */
 export type FrameworkExportParams = {

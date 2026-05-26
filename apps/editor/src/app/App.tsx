@@ -395,6 +395,12 @@ function AppInner() {
     removeFrameworkFromStorage(activeFrameworkId)
   }, [api, tenantId, activeFrameworkId, caseApiVersion, removeFrameworkFromStorage])
 
+  // Handler to fetch the published CFPackage from the server (returns CASE JSON with absolute URIs)
+  const handleFetchCfPackage = useCallback(async () => {
+    if (!activeFrameworkId) throw new Error('No active framework')
+    return api.getCfPackage({ docId: activeFrameworkId, caseVersion: caseApiVersion })
+  }, [api, activeFrameworkId, caseApiVersion])
+
   // Handler to save the CFPackage to the server
   // Must be defined before early returns (React hooks rules)
   const handleSaveToServer = useCallback(
@@ -493,6 +499,7 @@ function AppInner() {
         onSaveToServer={tenantId ? handleSaveToServer : undefined}
         isPublishedToOpenCase={activeFrameworkId ? publishedFrameworkIds.has(activeFrameworkId) : false}
         onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
+        onFetchCfPackage={activeFrameworkId ? handleFetchCfPackage : undefined}
       />
     </EditorProvider>
   )

@@ -3,27 +3,25 @@ import { Button } from '@/ui/shared/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/ui/shared/components/ui/dialog'
 import type { CFPackage } from '@/domain/case/types'
 import type { CaseVersion } from '@/application/framework/mappers/case/CasePackageSnapshot'
-import { toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
 
 type Props = {
   open: boolean
   onClose: () => void
   cfPackage: CFPackage | null
   caseVersion: CaseVersion
+  loading?: boolean
 }
 
-export default function ViewCFPackageDialog({ open, onClose, cfPackage, caseVersion }: Readonly<Props>) {
+export default function ViewCFPackageDialog({ open, onClose, cfPackage, caseVersion, loading }: Readonly<Props>) {
   const [copied, setCopied] = useState(false)
 
-  // Convert to OpenCASE REST API format (lowercase property names)
   const jsonString = useMemo(() => {
     if (!cfPackage) return ''
-    const openCasePackage = toOpenCaseFormat(cfPackage)
-    return JSON.stringify(openCasePackage, null, 2)
+    return JSON.stringify(cfPackage, null, 2)
   }, [cfPackage])
 
   const copyToClipboard = useCallback(async () => {
-    if (!jsonString) return
+    if (!jsonString || loading) return
     try {
       await globalThis.navigator?.clipboard?.writeText(jsonString)
       setCopied(true)
@@ -39,10 +37,10 @@ export default function ViewCFPackageDialog({ open, onClose, cfPackage, caseVers
       setCopied(true)
       globalThis.setTimeout(() => setCopied(false), 2000)
     }
-  }, [jsonString])
+  }, [jsonString, loading])
 
   const downloadJson = useCallback(() => {
-    if (!cfPackage) return
+    if (!cfPackage || loading) return
     const blob = new Blob([jsonString], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -53,7 +51,7 @@ export default function ViewCFPackageDialog({ open, onClose, cfPackage, caseVers
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  }, [cfPackage, jsonString])
+  }, [cfPackage, loading, jsonString])
 
   const stats = useMemo(() => {
     if (!cfPackage) return null
@@ -91,7 +89,7 @@ export default function ViewCFPackageDialog({ open, onClose, cfPackage, caseVers
 
         <div className="relative max-h-[50vh] overflow-auto rounded-lg border border-black/10 bg-slate-900">
           <pre className="p-4 text-xs leading-relaxed text-slate-100">
-            <code>{jsonString || 'No CFPackage data'}</code>
+            <code>{loading ? 'Loading…' : jsonString || 'No CFPackage data'}</code>
           </pre>
         </div>
 
@@ -99,10 +97,10 @@ export default function ViewCFPackageDialog({ open, onClose, cfPackage, caseVers
           <Button variant="secondary" onClick={onClose}>
             Close
           </Button>
-          <Button variant="secondary" onClick={downloadJson} disabled={!cfPackage}>
+          <Button variant="secondary" onClick={downloadJson} disabled={!cfPackage || loading}>
             Download JSON
           </Button>
-          <Button onClick={copyToClipboard} disabled={!cfPackage}>
+          <Button onClick={copyToClipboard} disabled={!cfPackage || loading}>
             {copied ? 'Copied!' : 'Copy to Clipboard'}
           </Button>
         </DialogFooter>

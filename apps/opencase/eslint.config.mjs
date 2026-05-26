@@ -12,7 +12,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['**/*.cjs'],
+    files: ['**/*.cjs', '**/*.mjs'],
     languageOptions: {
       globals: {
         ...globals.node,
