@@ -156,7 +156,36 @@ Click **Save** after each mapper.
 
 ---
 
-## Step 4 -- Configure First Login Flow (Optional)
+## Step 4 -- Expose Identity Provider in the Token
+
+By default Keycloak does not include which identity provider a user authenticated through in the tokens it issues. OpenCASE uses this information to hide the **Change Password** option for federated users — users whose password is managed by Auth0 rather than Keycloak cannot change it through Keycloak, so the menu item is suppressed when this claim is present.
+
+Add a **User Session Note** mapper to the OIDC client (or to a shared client scope so it applies to all tenants automatically):
+
+1. In the Keycloak Admin Console, go to **Clients** → `tenant-{id}` → **Client scopes** tab
+2. Click the client's dedicated scope (e.g. `tenant-{id}-dedicated`)
+3. Go to the **Mappers** tab → **Add mapper** → **By configuration** → **User Session Note**
+4. Fill in the following fields:
+
+| Field | Value |
+|---|---|
+| **Name** | `identity-provider` |
+| **Session note** | `identity_provider` |
+| **Token claim name** | `identity_provider` |
+| **Claim JSON type** | `String` |
+| **Add to ID token** | On |
+| **Add to access token** | Off |
+| **Add to userinfo** | Off |
+
+5. Click **Save**
+
+> **Shared scope alternative:** If you add this mapper to the built-in `profile` client scope instead, it applies to every tenant client without repeating the step for each one. Navigate to **Client scopes** (realm-level, not client-level) → `profile` → **Mappers** → **Add mapper**.
+
+After this change, federated users will have `"identity_provider": "auth0"` (or the alias of whatever IdP they used) in their ID token. OpenCASE reads this claim to determine whether to offer the Change Password menu item — native Keycloak users have no such claim and will continue to see the option as before.
+
+---
+
+## Step 5 -- Configure First Login Flow (Optional)
 
 When a user logs in via Auth0 for the first time, Keycloak's **First Broker Login** flow determines what happens. The default flow:
 
@@ -172,7 +201,7 @@ This works well for most setups. If you want to **skip the review page** and cre
 
 ---
 
-## Step 5 -- Test the Integration
+## Step 6 -- Test the Integration
 
 1. Open your OpenCASE Editor: `https://YOUR_DOMAIN`
 2. Click **Sign in**
@@ -185,7 +214,7 @@ This works well for most setups. If you want to **skip the review page** and cre
 
 ---
 
-## Step 6 -- Assign Roles to SSO Users
+## Step 7 -- Assign Roles to SSO Users
 
 Users who log in via Auth0 are created in Keycloak with no roles by default. To give them access to OpenCASE features, you need to assign roles:
 
