@@ -160,28 +160,49 @@ Click **Save** after each mapper.
 
 By default Keycloak does not include which identity provider a user authenticated through in the tokens it issues. OpenCASE uses this information to hide the **Change Password** option for federated users — users whose password is managed by Auth0 rather than Keycloak cannot change it through Keycloak, so the menu item is suppressed when this claim is present.
 
-Add a **User Session Note** mapper to the OIDC client (or to a shared client scope so it applies to all tenants automatically):
+This requires two things: a mapper on the Auth0 IdP that writes the IdP alias as a permanent user attribute, and a protocol mapper on the `profile` client scope that emits that attribute as a token claim.
 
-1. In the Keycloak Admin Console, go to **Clients** → `tenant-{id}` → **Client scopes** tab
-2. Click the client's dedicated scope (e.g. `tenant-{id}-dedicated`)
-3. Go to the **Mappers** tab → **Add mapper** → **By configuration** → **User Session Note**
-4. Fill in the following fields:
+### Part A — Hardcoded Attribute mapper on the Auth0 IdP
+
+This writes `identity_provider = auth0` onto the Keycloak user record the first time they log in via Auth0. Storing it as a user attribute (rather than a session note) means it survives session expiry and token refreshes.
+
+1. In the Keycloak Admin Console, go to **Identity Providers** → **auth0** → **Mappers** tab
+2. Click **Add mapper**
+3. Fill in the following fields:
 
 | Field | Value |
 |---|---|
 | **Name** | `identity-provider` |
-| **Session note** | `identity_provider` |
-| **Token claim name** | `identity_provider` |
-| **Claim JSON type** | `String` |
+| **Sync Mode Override** | `Inherit` |
+| **Mapper type** | `Hardcoded Attribute` |
+| **User Attribute** | `identity_provider` |
+| **Attribute Value** | `auth0` |
+
+4. Click **Save**
+
+> **Existing users:** Auth0 users who logged in before this mapper was added will not have the attribute on their record yet. They will need to log out and log back in once for it to be written.
+
+### Part B — User Attribute protocol mapper on the `profile` client scope
+
+This emits the `identity_provider` user attribute as a claim in the ID token. Adding it to the realm-level `profile` scope means it applies to every tenant client automatically.
+
+1. In the Keycloak Admin Console, go to **Client scopes** (realm-level, left sidebar) → `profile` → **Mappers** tab
+2. Click **Add mapper** → **By configuration** → **User Attribute**
+3. Fill in the following fields:
+
+| Field | Value |
+|---|---|
+| **Name** | `identity-provider` |
+| **User Attribute** | `identity_provider` |
+| **Token Claim Name** | `identity_provider` |
+| **Claim JSON Type** | `String` |
 | **Add to ID token** | On |
 | **Add to access token** | Off |
 | **Add to userinfo** | Off |
 
-5. Click **Save**
+4. Click **Save**
 
-> **Shared scope alternative:** If you add this mapper to the built-in `profile` client scope instead, it applies to every tenant client without repeating the step for each one. Navigate to **Client scopes** (realm-level, not client-level) → `profile` → **Mappers** → **Add mapper**.
-
-After this change, federated users will have `"identity_provider": "auth0"` (or the alias of whatever IdP they used) in their ID token. OpenCASE reads this claim to determine whether to offer the Change Password menu item — native Keycloak users have no such claim and will continue to see the option as before.
+After these changes, federated users will have `"identity_provider": "auth0"` in their ID token. OpenCASE reads this claim to determine whether to offer the Change Password menu item — native Keycloak users have no such attribute and will continue to see the option as before.
 
 ---
 
