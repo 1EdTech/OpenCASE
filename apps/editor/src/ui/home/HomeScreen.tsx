@@ -472,7 +472,7 @@ export default function HomeScreen({
         </svg>
 
         {/* User button — top right */}
-        <UserAvatarMenu userName={userName ?? undefined} tenantId={tenantId ?? undefined} isAuthenticated={isAuthenticated} onSignOut={isAuthenticated ? () => void signOut() : undefined} onChangePassword={isAuthenticated ? () => void changePassword() : undefined} onApiKeys={isAuthenticated ? () => setApiKeysOpen(true) : undefined} />
+        <UserAvatarMenu userName={userName ?? undefined} tenantId={tenantId ?? undefined} isAuthenticated={isAuthenticated} onSignOut={isAuthenticated ? () => void signOut() : undefined} onChangePassword={isAuthenticated && changePassword ? () => void changePassword() : undefined} onApiKeys={isAuthenticated ? () => setApiKeysOpen(true) : undefined} />
 
         <div className="relative mx-auto max-w-6xl px-5 pb-12 pt-14">
           <div className="flex items-baseline gap-3">

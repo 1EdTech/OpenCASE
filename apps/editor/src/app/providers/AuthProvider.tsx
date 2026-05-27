@@ -16,8 +16,11 @@ type AuthContextValue = {
   completeSignIn: (_callbackUrl?: string) => Promise<void>
   signOut: () => Promise<void>
   getAccessToken: () => Promise<string | null>
-  /** Redirect to Keycloak's password change form via kc_action=UPDATE_PASSWORD */
-  changePassword: () => Promise<void>
+  /**
+   * Redirect to Keycloak's password change form via kc_action=UPDATE_PASSWORD.
+   * Null for federated users (external IdP) who do not have a Keycloak-managed password.
+   */
+  changePassword: (() => Promise<void>) | null
 }
 
 const STORAGE_KEY_TENANT = 'case-editor:auth:tenantId'
@@ -34,6 +37,12 @@ function writeTenantId(tenantId: string) {
   } catch {
     // ignore (storage may be unavailable)
   }
+}
+
+function isFederatedUser(user: User | null): boolean {
+  const profile = user?.profile as Record<string, unknown> | undefined
+  const idp = profile?.identity_provider
+  return typeof idp === 'string' && idp.trim().length > 0
 }
 
 function pickUserName(user: User | null): string | null {
@@ -207,11 +216,13 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     return u.access_token
   }, [userManager])
 
-  const changePassword = useCallback(async () => {
+  const changePasswordFn = useCallback(async () => {
     await userManager.signinRedirect({
       extraQueryParams: { kc_action: 'UPDATE_PASSWORD' },
     })
   }, [userManager])
+
+  const changePassword = isFederatedUser(user) ? null : changePasswordFn
 
   const value: AuthContextValue = useMemo(
     () => ({

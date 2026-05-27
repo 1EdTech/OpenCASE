@@ -1124,7 +1124,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         frameworkSubtitle={frameworkInfo.subtitle}
         userName={userName ?? undefined}
         tenantId={tenantId ?? undefined}
-        onChangePassword={authStatus === 'authenticated' ? () => void changePassword() : undefined}
+        onChangePassword={authStatus === 'authenticated' && changePassword ? () => void changePassword() : undefined}
         reserveRightForPanel={Boolean(selectedNode || selectedEdge || (selectedNodeIds.length + selectedEdgeIds.length > 1))}
         showSettings
         isDirty={isDirty}
