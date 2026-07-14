@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { FileFrameworkStore } from '../infrastructure/persistence/file/FileFrameworkStore'
 import { FileCFPackageRepository } from '../infrastructure/persistence/file/FileCFPackageRepository'
 import { CreateFramework } from '../application/case/endpoints/CreateFramework'
-import { ImportFrameworkFromEndpoint } from '../application/case/endpoints/ImportFrameworkFromEndpoint'
+import { ImportFramework } from '../application/case/endpoints/ImportFramework'
 import { GetCFPackage } from '../application/case/endpoints/GetCFPackage'
 import { GetCFDocument } from '../application/case/endpoints/GetCFDocument'
 import { GetAllCFDocuments } from '../application/case/endpoints/GetAllCFDocuments'
@@ -253,7 +253,7 @@ export async function buildContainer(): Promise<Container> {
   }
 
   const createFramework = new CreateFramework(pkgRepo, jsonSchemaValidator, store)
-  const importFramework = new ImportFrameworkFromEndpoint(pkgRepo, caseApiClient, jsonSchemaValidator)
+  const importFramework = new ImportFramework(pkgRepo, caseApiClient, jsonSchemaValidator)
   
   // Initialize CASE endpoints
   const getCFPackage = new GetCFPackage(pkgRepo, store)

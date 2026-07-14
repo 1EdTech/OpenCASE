@@ -10,7 +10,9 @@ import {
 } from '@/ui/shared/components/ui/dialog'
 import { Input } from '@/ui/shared/components/ui/input'
 import { Label } from '@/ui/shared/components/ui/label'
+import { Textarea } from '@/ui/shared/components/ui/textarea'
 import { ArrowPathIcon, ExclamationTriangleIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/solid'
+import { cn } from '@/lib/utils'
 
 export type ImportResult = {
   status: string
@@ -19,23 +21,39 @@ export type ImportResult = {
   validationWarnings?: string[]
 }
 
+type ImportMode = 'url' | 'json'
+
 export default function ImportFrameworkDialog({
   open,
   onCancel,
   onImport,
+  onImportJson,
 }: Readonly<{
   open: boolean
   onCancel: () => void
   onImport: (_endpointUrl: string, _accessToken?: string) => Promise<ImportResult>
+  onImportJson: (_cfPackage: object) => Promise<ImportResult>
 }>) {
+  const [mode, setMode] = useState<ImportMode>('url')
   const [endpointUrl, setEndpointUrl] = useState('')
   const [accessToken, setAccessToken] = useState('')
+  const [jsonText, setJsonText] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [warnings, setWarnings] = useState<string[]>([])
 
-  const canImport = endpointUrl.trim().length > 0 && !importing
+  const canImport = !importing && (
+    mode === 'url' ? endpointUrl.trim().length > 0 : jsonText.trim().length > 0
+  )
+
+  const resetForm = useCallback(() => {
+    setEndpointUrl('')
+    setAccessToken('')
+    setJsonText('')
+    setShowAdvanced(false)
+    setError(null)
+  }, [])
 
   const handleImport = useCallback(async () => {
     if (!canImport) return
@@ -43,34 +61,43 @@ export default function ImportFrameworkDialog({
     setError(null)
     setWarnings([])
     try {
-      const result = await onImport(
-        endpointUrl.trim(),
-        accessToken.trim() || undefined,
-      )
+      let result: ImportResult
+      if (mode === 'url') {
+        result = await onImport(endpointUrl.trim(), accessToken.trim() || undefined)
+      } else {
+        let cfPackage: object
+        try {
+          cfPackage = JSON.parse(jsonText)
+        } catch {
+          setError('That doesn’t look like valid JSON. Check for a missing brace or comma and try again.')
+          return
+        }
+        result = await onImportJson(cfPackage)
+      }
       if (result.validationWarnings?.length) {
         setWarnings(result.validationWarnings)
       }
       // Reset form state on success (dialog will be closed by parent)
-      setEndpointUrl('')
-      setAccessToken('')
-      setShowAdvanced(false)
-      setError(null)
+      resetForm()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setImporting(false)
     }
-  }, [canImport, endpointUrl, accessToken, onImport])
+  }, [canImport, mode, endpointUrl, accessToken, jsonText, onImport, onImportJson, resetForm])
 
   const handleCancel = useCallback(() => {
-    setEndpointUrl('')
-    setAccessToken('')
-    setShowAdvanced(false)
-    setError(null)
+    resetForm()
     setWarnings([])
     setImporting(false)
     onCancel()
-  }, [onCancel])
+  }, [resetForm, onCancel])
+
+  const handleModeChange = useCallback((next: ImportMode) => {
+    setMode(next)
+    setError(null)
+    setWarnings([])
+  }, [])
 
   return (
     <Dialog
@@ -83,57 +110,102 @@ export default function ImportFrameworkDialog({
         <DialogHeader>
           <DialogTitle className="text-2xl">Import an existing framework</DialogTitle>
           <DialogDescription className="text-base leading-relaxed">
-            Already have a framework published on a CASE server? Paste the link below to
-            bring it into the editor so you can view or build on it.
+            Already have a framework published on a CASE server? Import it from a link,
+            or paste its CFPackage JSON directly, to bring it into the editor.
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-5">
-          <div className="grid gap-2.5">
-            <Label htmlFor="import_url" className="text-base">Framework URL</Label>
-            <Input
-              id="import_url"
-              className="text-base py-2.5"
-              value={endpointUrl}
-              onChange={(e) => setEndpointUrl(e.target.value)}
-              placeholder="https://case.example.org/ims/case/v1p1/CFPackages/{id}"
-              autoFocus
+          <div className="inline-flex rounded-lg border border-gray-200 p-1 justify-self-start">
+            <button
+              type="button"
+              onClick={() => handleModeChange('url')}
               disabled={importing}
-            />
-            <p className="text-base text-gray-500 leading-relaxed">
-              Paste the full web address of the framework you want to import.
-              Your administrator or framework provider can give you this link.
-            </p>
+              className={cn(
+                'rounded-md px-3.5 py-1.5 text-base font-medium transition-colors',
+                mode === 'url' ? 'bg-[#662F90] text-white' : 'text-gray-600 hover:text-gray-900',
+              )}
+            >
+              From URL
+            </button>
+            <button
+              type="button"
+              onClick={() => handleModeChange('json')}
+              disabled={importing}
+              className={cn(
+                'rounded-md px-3.5 py-1.5 text-base font-medium transition-colors',
+                mode === 'json' ? 'bg-[#662F90] text-white' : 'text-gray-600 hover:text-gray-900',
+              )}
+            >
+              Paste JSON
+            </button>
           </div>
 
-          {/* Advanced options toggle */}
-          <button
-            type="button"
-            onClick={() => setShowAdvanced((v) => !v)}
-            className="flex items-center gap-1.5 text-base font-medium text-[#662F90] hover:text-[#552678]"
-          >
-            {showAdvanced ? (
-              <ChevronUpIcon className="h-4 w-4" />
-            ) : (
-              <ChevronDownIcon className="h-4 w-4" />
-            )}
-            Advanced options
-          </button>
+          {mode === 'url' ? (
+            <>
+              <div className="grid gap-2.5">
+                <Label htmlFor="import_url" className="text-base">Framework URL</Label>
+                <Input
+                  id="import_url"
+                  className="text-base py-2.5"
+                  value={endpointUrl}
+                  onChange={(e) => setEndpointUrl(e.target.value)}
+                  placeholder="https://case.example.org/ims/case/v1p1/CFPackages/{id}"
+                  autoFocus
+                  disabled={importing}
+                />
+                <p className="text-base text-gray-500 leading-relaxed">
+                  Paste the full web address of the framework you want to import.
+                  Your administrator or framework provider can give you this link.
+                </p>
+              </div>
 
-          {showAdvanced && (
+              {/* Advanced options toggle */}
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="flex items-center gap-1.5 text-base font-medium text-[#662F90] hover:text-[#552678]"
+              >
+                {showAdvanced ? (
+                  <ChevronUpIcon className="h-4 w-4" />
+                ) : (
+                  <ChevronDownIcon className="h-4 w-4" />
+                )}
+                Advanced options
+              </button>
+
+              {showAdvanced && (
+                <div className="grid gap-2.5">
+                  <Label htmlFor="import_token" className="text-base">Access token (optional)</Label>
+                  <Input
+                    id="import_token"
+                    className="text-base py-2.5"
+                    type="password"
+                    value={accessToken}
+                    onChange={(e) => setAccessToken(e.target.value)}
+                    placeholder="Paste your access token here"
+                    disabled={importing}
+                  />
+                  <p className="text-base text-gray-500 leading-relaxed">
+                    If the framework server requires a login, paste the access token you were given.
+                  </p>
+                </div>
+              )}
+            </>
+          ) : (
             <div className="grid gap-2.5">
-              <Label htmlFor="import_token" className="text-base">Access token (optional)</Label>
-              <Input
-                id="import_token"
-                className="text-base py-2.5"
-                type="password"
-                value={accessToken}
-                onChange={(e) => setAccessToken(e.target.value)}
-                placeholder="Paste your access token here"
+              <Label htmlFor="import_json" className="text-base">Framework JSON</Label>
+              <Textarea
+                id="import_json"
+                className="text-base font-mono min-h-[220px]"
+                value={jsonText}
+                onChange={(e) => setJsonText(e.target.value)}
+                placeholder='{ "CFDocument": { ... }, "CFItems": [ ... ] }'
+                autoFocus
                 disabled={importing}
               />
               <p className="text-base text-gray-500 leading-relaxed">
-                If the framework server requires a login, paste the access token you were given.
+                Paste the CFPackage JSON for a CASE 1.0 or 1.1 framework.
               </p>
             </div>
           )}

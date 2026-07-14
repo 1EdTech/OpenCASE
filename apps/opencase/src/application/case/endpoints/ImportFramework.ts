@@ -1,5 +1,6 @@
 import type { CFPackageRepository } from '../ports/CFPackageRepository'
 import { CaseApiClient } from '../../../infrastructure/http/CaseApiClient'
+import { normalizeCfPackageData, type CFPackageResponse } from '../cfPackageShape'
 import { JsonSchemaValidator } from '../../../infrastructure/validation/JsonSchemaValidator'
 import { CaseVersion, TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { CFDocument } from '../../../domain/case/entities/CFDocument'
@@ -9,11 +10,12 @@ import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { logger } from '../../../infrastructure/logging/Logger'
 
-export interface ImportFrameworkFromEndpointCommand {
+export interface ImportFrameworkCommand {
   tenantId: TenantId
   caseVersion: CaseVersion
-  endpointUrl: string
+  endpointUrl?: string
   accessToken?: string
+  cfPackage?: any
   validateSchema?: boolean
   schemaName?: string
 }
@@ -48,32 +50,41 @@ function injectSourceProvenance (docPayload: any, endpointUrl: string): any {
   }
 }
 
-export class ImportFrameworkFromEndpoint {
+export class ImportFramework {
   constructor(
     private readonly pkgRepo: CFPackageRepository,
     private readonly apiClient: CaseApiClient,
     private readonly validator?: JsonSchemaValidator
   ) {}
 
-  async execute (cmd: ImportFrameworkFromEndpointCommand): Promise<ImportFrameworkResult> {
-    const { tenantId, caseVersion, endpointUrl, accessToken, validateSchema, schemaName } = cmd
+  async execute (cmd: ImportFrameworkCommand): Promise<ImportFrameworkResult> {
+    const { tenantId, caseVersion, endpointUrl, accessToken, cfPackage, validateSchema, schemaName } = cmd
 
-    logger.info({ tenantId, caseVersion, endpointUrl }, 'Importing framework from endpoint')
+    if (!endpointUrl && !cfPackage) {
+      throw new Error('Either endpointUrl or cfPackage must be provided')
+    }
 
-    // Fetch the CFPackage from the endpoint
-    const response = await this.apiClient.fetchCFPackage(endpointUrl, accessToken)
-
-    // Inject source provenance into the CFDocument extensions
-    const enrichedCFDocument = injectSourceProvenance(response.CFPackage.CFDocument, endpointUrl)
+    let sourceCFPackage: CFPackageResponse['CFPackage']
+    if (endpointUrl) {
+      logger.info({ tenantId, caseVersion, endpointUrl }, 'Importing framework from endpoint')
+      const response = await this.apiClient.fetchCFPackage(endpointUrl, accessToken)
+      sourceCFPackage = {
+        ...response.CFPackage,
+        CFDocument: injectSourceProvenance(response.CFPackage.CFDocument, endpointUrl)
+      }
+    } else {
+      logger.info({ tenantId, caseVersion }, 'Importing framework from provided JSON')
+      sourceCFPackage = normalizeCfPackageData(cfPackage)
+    }
 
     // Use CFPackage format directly (matches API response format)
     const payload = {
-      CFDocument: enrichedCFDocument,
-      CFItems: response.CFPackage.CFItems ?? [],
-      CFAssociations: response.CFPackage.CFAssociations ?? [],
-      CFRubrics: response.CFPackage.CFRubrics ?? [],
-      CFDefinitions: response.CFPackage.CFDefinitions ?? null,
-      extensions: response.CFPackage.extensions
+      CFDocument: sourceCFPackage.CFDocument,
+      CFItems: sourceCFPackage.CFItems ?? [],
+      CFAssociations: sourceCFPackage.CFAssociations ?? [],
+      CFRubrics: sourceCFPackage.CFRubrics ?? [],
+      CFDefinitions: sourceCFPackage.CFDefinitions ?? null,
+      extensions: sourceCFPackage.extensions
     }
 
     // Collect validation warnings (non-fatal) instead of hard failing
@@ -112,7 +123,7 @@ export class ImportFrameworkFromEndpoint {
 
     logger.info(
       { tenantId, caseVersion, docId: document.sourcedId, warnings: validationWarnings.length },
-      'Successfully imported framework from endpoint'
+      'Successfully imported framework'
     )
 
     return {

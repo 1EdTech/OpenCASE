@@ -1,19 +1,9 @@
 import { logger } from '../logging/Logger'
+import { normalizeCfPackageData, type CFPackageResponse } from '../../application/case/cfPackageShape'
 
 export interface CaseApiClientConfig {
   timeout?: number
   headers?: Record<string, string>
-}
-
-export interface CFPackageResponse {
-  CFPackage: {
-    CFDocument: any
-    CFItems?: any[]
-    CFAssociations?: any[]
-    CFRubrics?: any[]
-    CFDefinitions?: any
-    extensions?: any
-  }
 }
 
 export class CaseApiClient {
@@ -62,28 +52,7 @@ export class CaseApiClient {
       const data = await response.json()
 
       // Handle both CASE v1.0 (flat structure) and v1.1 (nested under CFPackage)
-      let cfPackage: CFPackageResponse['CFPackage']
-      
-      if (data.CFPackage) {
-        // CASE v1.1 format: data wrapped in CFPackage
-        cfPackage = data.CFPackage
-      } else if (data.CFDocument) {
-        // CASE v1.0 format: flat structure
-        cfPackage = {
-          CFDocument: data.CFDocument,
-          CFItems: data.CFItems,
-          CFAssociations: data.CFAssociations,
-          CFRubrics: data.CFRubrics,
-          CFDefinitions: data.CFDefinitions,
-          extensions: data.extensions
-        }
-      } else {
-        throw new Error('Invalid CFPackage response: missing CFDocument')
-      }
-
-      if (!cfPackage.CFDocument) {
-        throw new Error('Invalid CFPackage response: missing CFDocument')
-      }
+      const cfPackage = normalizeCfPackageData(data)
 
       logger.info({ url, docId: cfPackage.CFDocument.sourcedId || cfPackage.CFDocument.identifier }, 'Successfully fetched CFPackage')
 
