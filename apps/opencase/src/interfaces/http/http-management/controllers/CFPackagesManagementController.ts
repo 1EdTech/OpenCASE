@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import { type Request, type Response, type RequestHandler } from 'express'
 import { type CreateFramework } from '../../../../application/case/endpoints/CreateFramework'
-import { type ImportFrameworkFromEndpoint } from '../../../../application/case/endpoints/ImportFrameworkFromEndpoint'
+import { type ImportFramework } from '../../../../application/case/endpoints/ImportFramework'
 import { type DeleteCFDocument } from '../../../../application/case/endpoints/DeleteCFDocument'
 import { type RestoreFramework } from '../../../../application/case/endpoints/RestoreFramework'
 import { type ListFrameworks } from '../../../../application/case/endpoints/ListFrameworks'
@@ -11,7 +11,7 @@ import { getCaseVersion } from '../../utils/caseVersion'
 export class CFPackagesManagementController {
   constructor (
     private readonly createFramework: CreateFramework,
-    private readonly importFramework: ImportFrameworkFromEndpoint,
+    private readonly importFramework: ImportFramework,
     private readonly listFrameworks: ListFrameworks,
     private readonly deleteCFDocument: DeleteCFDocument,
     private readonly restoreFrameworkUseCase: RestoreFramework
@@ -77,13 +77,13 @@ export class CFPackagesManagementController {
     }
   }
 
-  importFromEndpoint: RequestHandler<{ tenantId: string }> = async (req: Request, res: Response) => {
+  import: RequestHandler<{ tenantId: string }> = async (req: Request, res: Response) => {
     const tenantId = getParam(req, 'tenantId')
     const caseVersion = getCaseVersion(req, { default: '1.1' })!
-    const { endpointUrl, accessToken, validateSchema, schemaName } = req.body
+    const { endpointUrl, accessToken, cfPackage, validateSchema, schemaName } = req.body
 
-    if (!endpointUrl) {
-      return res.status(400).json({ error: 'endpointUrl is required' })
+    if (!endpointUrl && !cfPackage) {
+      return res.status(400).json({ error: 'Either endpointUrl or cfPackage is required' })
     }
 
     try {
@@ -93,6 +93,7 @@ export class CFPackagesManagementController {
         caseVersion,
         endpointUrl,
         accessToken,
+        cfPackage,
         validateSchema: validateSchema ?? false,
         schemaName
       })

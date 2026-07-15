@@ -4,12 +4,12 @@ import { DeleteCFDocument } from '../../../../../application/case/endpoints/Dele
 import { RestoreFramework } from '../../../../../application/case/endpoints/RestoreFramework'
 import { ListFrameworks } from '../../../../../application/case/endpoints/ListFrameworks'
 import { CreateFramework } from '../../../../../application/case/endpoints/CreateFramework'
-import { ImportFrameworkFromEndpoint } from '../../../../../application/case/endpoints/ImportFrameworkFromEndpoint'
+import { ImportFramework } from '../../../../../application/case/endpoints/ImportFramework'
 
 describe('CFPackagesManagementController', () => {
   let controller: CFPackagesManagementController
   let mockCreateFramework: jest.Mocked<CreateFramework>
-  let mockImportFramework: jest.Mocked<ImportFrameworkFromEndpoint>
+  let mockImportFramework: jest.Mocked<ImportFramework>
   let mockListFrameworks: jest.Mocked<ListFrameworks>
   let mockDeleteCFDocument: jest.Mocked<DeleteCFDocument>
   let mockRestoreFramework: jest.Mocked<RestoreFramework>
@@ -117,6 +117,55 @@ describe('CFPackagesManagementController', () => {
     })
     expect(responseStatus).toHaveBeenCalledWith(200)
     expect(responseJson).toHaveBeenCalledWith({ status: 'restored', id: 'doc-1' })
+  })
+
+  it('imports a framework from an endpointUrl', async () => {
+    mockRequest.body = { endpointUrl: 'https://example.org/CFPackages/doc-1' }
+    mockImportFramework.execute.mockResolvedValueOnce({ docId: 'doc-1', version: 1 })
+
+    await (controller.import as any)(mockRequest as Request, mockResponse as Response, next)
+
+    expect(mockImportFramework.execute).toHaveBeenCalledWith({
+      tenantId: 'test-tenant',
+      caseVersion: '1.1',
+      endpointUrl: 'https://example.org/CFPackages/doc-1',
+      accessToken: undefined,
+      cfPackage: undefined,
+      validateSchema: false,
+      schemaName: undefined
+    })
+    expect(responseStatus).toHaveBeenCalledWith(201)
+    expect(responseJson).toHaveBeenCalledWith({ status: 'imported', id: 'doc-1', version: 1 })
+  })
+
+  it('imports a framework from a pasted cfPackage payload', async () => {
+    const cfPackage = { CFDocument: { identifier: 'doc-2' } }
+    mockRequest.body = { cfPackage }
+    mockImportFramework.execute.mockResolvedValueOnce({ docId: 'doc-2', version: 1 })
+
+    await (controller.import as any)(mockRequest as Request, mockResponse as Response, next)
+
+    expect(mockImportFramework.execute).toHaveBeenCalledWith({
+      tenantId: 'test-tenant',
+      caseVersion: '1.1',
+      endpointUrl: undefined,
+      accessToken: undefined,
+      cfPackage,
+      validateSchema: false,
+      schemaName: undefined
+    })
+    expect(responseStatus).toHaveBeenCalledWith(201)
+    expect(responseJson).toHaveBeenCalledWith({ status: 'imported', id: 'doc-2', version: 1 })
+  })
+
+  it('rejects import when neither endpointUrl nor cfPackage is provided', async () => {
+    mockRequest.body = {}
+
+    await (controller.import as any)(mockRequest as Request, mockResponse as Response, next)
+
+    expect(mockImportFramework.execute).not.toHaveBeenCalled()
+    expect(responseStatus).toHaveBeenCalledWith(400)
+    expect(responseJson).toHaveBeenCalledWith({ error: 'Either endpointUrl or cfPackage is required' })
   })
 })
 

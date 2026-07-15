@@ -2,7 +2,7 @@ import { FileFrameworkStore } from '../../infrastructure/persistence/file/FileFr
 import { FileCFPackageRepository } from '../../infrastructure/persistence/file/FileCFPackageRepository'
 import { CaseApiClient } from '../../infrastructure/http/CaseApiClient'
 import { JsonSchemaValidator } from '../../infrastructure/validation/JsonSchemaValidator'
-import { ImportFrameworkFromEndpoint } from '../case/endpoints/ImportFrameworkFromEndpoint'
+import { ImportFramework } from '../case/endpoints/ImportFramework'
 import { loadConfig } from '../../infrastructure/config/Config'
 
 async function main () {
@@ -125,7 +125,7 @@ Examples:
     const caseApiClient = new CaseApiClient({ timeout: 30000 })
     const jsonSchemaValidator = new JsonSchemaValidator()
 
-    const importCommand = new ImportFrameworkFromEndpoint(
+    const importCommand = new ImportFramework(
       pkgRepo,
       caseApiClient,
       jsonSchemaValidator

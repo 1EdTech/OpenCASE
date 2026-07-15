@@ -338,6 +338,23 @@ export default function HomeScreen({
     return result
   }, [api, tenantId, loadFrameworks, onOpenRemoteFramework])
 
+  // Handle import from pasted CFPackage JSON
+  const handleImportJson = useCallback(async (cfPackage: object) => {
+    if (!tenantId) throw new Error('Not authenticated')
+    const result = await api.importCfPackage({
+      tenantId,
+      cfPackage,
+    })
+    // Refresh the framework list
+    void loadFrameworks()
+    // Open the imported framework in the editor
+    if (result.id && onOpenRemoteFramework) {
+      void onOpenRemoteFramework(result.id)
+    }
+    setImportOpen(false)
+    return result
+  }, [api, tenantId, loadFrameworks, onOpenRemoteFramework])
+
   const isAuthenticated = status === 'authenticated'
 
   // IDs of server frameworks, used to exclude drafts that have since been saved
@@ -895,6 +912,7 @@ export default function HomeScreen({
         open={importOpen}
         onCancel={() => setImportOpen(false)}
         onImport={handleImport}
+        onImportJson={handleImportJson}
       />
 
       <UploadFrameworkDialog

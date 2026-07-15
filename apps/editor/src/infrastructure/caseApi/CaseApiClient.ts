@@ -154,21 +154,27 @@ export class CaseApiClient {
   }
 
   /**
-   * Import a CFPackage from an external CASE endpoint via the OpenCASE backend.
+   * Import a CFPackage into the tenant's framework store via the OpenCASE backend,
+   * either by fetching it from an external CASE endpoint (avoiding CORS) or from a
+   * CFPackage JSON payload provided directly (e.g. pasted by the user). Exactly one
+   * of `endpointUrl` or `cfPackage` should be provided.
    *
-   * The backend fetches the package (avoiding CORS), validates it, injects
-   * source provenance metadata, and stores it in the tenant's framework store.
+   * The backend validates the package, injects source provenance metadata
+   * (when imported from a URL), and stores it in the tenant's framework store.
    */
   async importCfPackage(params: {
     tenantId: string
-    endpointUrl: string
+    endpointUrl?: string
+    cfPackage?: object
     caseVersion?: 'v1p0' | 'v1p1'
     accessToken?: string
   }): Promise<{ status: string; id: string; version: number; validationWarnings?: string[] }> {
     const v = params.caseVersion ?? 'v1p1'
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages/import`
 
-    const body: Record<string, unknown> = { endpointUrl: params.endpointUrl }
+    const body: Record<string, unknown> = {}
+    if (params.endpointUrl) body.endpointUrl = params.endpointUrl
+    if (params.cfPackage) body.cfPackage = params.cfPackage
     if (params.accessToken) body.accessToken = params.accessToken
 
     const res = (await this._http.post(url, body)) as unknown
