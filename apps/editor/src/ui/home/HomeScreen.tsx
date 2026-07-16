@@ -1,4 +1,4 @@
-import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon, KeyIcon, ArrowUpTrayIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon, KeyIcon, ArrowUpTrayIcon, UsersIcon } from '@heroicons/react/24/solid'
 import { CodeBracketSquareIcon } from '@heroicons/react/24/outline'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
@@ -8,11 +8,13 @@ import CreateFrameworkDialog, { type CreateFrameworkDraft } from '@/ui/home/Crea
 import ImportFrameworkDialog from '@/ui/home/ImportFrameworkDialog'
 import UploadFrameworkDialog from '@/ui/home/UploadFrameworkDialog'
 import ApiKeysDialog from '@/ui/home/ApiKeysDialog'
+import MembersDialog from '@/ui/home/MembersDialog'
 import type { Framework } from '@/domain/framework/model/types'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
 import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
+import { tokenHasCaseOwner, decodeJwtPayload } from '@/infrastructure/auth/tokenScopes'
 import { ADOPTION_STATUS_OPTIONS } from '@/domain/framework/model/adoptionStatus'
 
 /** Compute initials from a display name */
@@ -33,7 +35,23 @@ import {
 } from '@/ui/shared/components/ui/dialog'
 
 /** Minimal user avatar dropdown for the hero */
-function UserAvatarMenu({ userName, tenantId: _tenantId, isAuthenticated, onSignOut, onChangePassword, onApiKeys }: Readonly<{ userName?: string; tenantId?: string; isAuthenticated: boolean; onSignOut?: () => void; onChangePassword?: () => void; onApiKeys?: () => void }>) {
+function UserAvatarMenu({
+  userName,
+  tenantId: _tenantId,
+  isAuthenticated,
+  onSignOut,
+  onChangePassword,
+  onApiKeys,
+  onMembers,
+}: Readonly<{
+  userName?: string
+  tenantId?: string
+  isAuthenticated: boolean
+  onSignOut?: () => void
+  onChangePassword?: () => void
+  onApiKeys?: () => void
+  onMembers?: () => void
+}>) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const avatarText = useMemo(() => initials(userName), [userName])
@@ -48,7 +66,7 @@ function UserAvatarMenu({ userName, tenantId: _tenantId, isAuthenticated, onSign
   }, [open])
 
   return (
-    <div className="absolute right-5 top-4 z-10" ref={rootRef}>
+    <div className="absolute right-5 top-4 z-50" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -61,7 +79,7 @@ function UserAvatarMenu({ userName, tenantId: _tenantId, isAuthenticated, onSign
       </button>
 
       {open ? (
-        <div role="menu" className="absolute right-0 z-40 mt-2 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+        <div role="menu" className="absolute right-0 z-50 mt-2 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
           <div className="p-1">
             {userName ? (
               <div className="px-2 py-2 text-sm text-gray-400">Signed in as {userName}</div>
@@ -78,6 +96,17 @@ function UserAvatarMenu({ userName, tenantId: _tenantId, isAuthenticated, onSign
               >
                 <KeyIcon className="h-4 w-4 text-gray-500" aria-hidden />
                 Change password
+              </button>
+            ) : null}
+            {isAuthenticated && onMembers ? (
+              <button
+                role="menuitem"
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-[#2E2F2F] hover:bg-gray-50"
+                onClick={() => { onMembers(); setOpen(false) }}
+              >
+                <UsersIcon className="h-4 w-4 text-gray-500" aria-hidden />
+                Members
               </button>
             ) : null}
             {isAuthenticated && onApiKeys ? (
@@ -134,6 +163,7 @@ export default function HomeScreen({
   const [importOpen, setImportOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [apiKeysOpen, setApiKeysOpen] = useState(false)
+  const [membersOpen, setMembersOpen] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
 
@@ -146,8 +176,13 @@ export default function HomeScreen({
     globalThis.addEventListener('pointerdown', onPointerDown)
     return () => globalThis.removeEventListener('pointerdown', onPointerDown)
   }, [actionsMenuOpen])
-  const { status, tenantId, userName, signOut, getAccessToken, changePassword } = useAuth()
+  const { status, tenantId, userName, signOut, getAccessToken, changePassword, accessToken } = useAuth()
   const cfg = getAppConfig()
+  const isTenantAdmin = useMemo(() => tokenHasCaseOwner(accessToken), [accessToken])
+  const currentUserId = useMemo(() => {
+    const payload = decodeJwtPayload(accessToken)
+    return typeof payload?.sub === 'string' ? payload.sub : null
+  }, [accessToken])
 
   const api = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })), [cfg.opencaseBaseUrl, getAccessToken])
 
@@ -427,21 +462,20 @@ export default function HomeScreen({
 
       {/* ── Hero Section ─────────────────────────────────────────── */}
       <div
-        className="relative overflow-hidden"
+        className="relative z-30"
         style={{ background: 'linear-gradient(135deg, #000072 0%, #1a0f80 25%, #3d1a9b 50%, #662F90 80%)' }}
       >
-        {/* Subtle radial glow accents */}
-        <div className="pointer-events-none absolute inset-0" aria-hidden>
+        {/* Subtle radial glow accents (clipped so they don't spill) */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
           <div className="absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-[#662F90]/15 blur-3xl" />
           <div className="absolute -bottom-20 -left-20 h-80 w-80 rounded-full bg-[#3d1a9b]/10 blur-3xl" />
-        </div>
-        {/* Network graph pattern — right side */}
-        <svg
-          className="pointer-events-none absolute right-0 top-0 hidden h-full w-[55%] sm:block"
-          viewBox="0 0 600 200"
-          preserveAspectRatio="xMaxYMid slice"
-          aria-hidden
-        >
+          {/* Network graph pattern — right side */}
+          <svg
+            className="absolute right-0 top-0 hidden h-full w-[55%] sm:block"
+            viewBox="0 0 600 200"
+            preserveAspectRatio="xMaxYMid slice"
+            aria-hidden
+          >
           <defs>
             <linearGradient id="hero-fade" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="white" stopOpacity="0" />
@@ -487,9 +521,18 @@ export default function HomeScreen({
             <circle cx="480" cy="170" r="3" />
           </g>
         </svg>
+        </div>
 
         {/* User button — top right */}
-        <UserAvatarMenu userName={userName ?? undefined} tenantId={tenantId ?? undefined} isAuthenticated={isAuthenticated} onSignOut={isAuthenticated ? () => void signOut() : undefined} onChangePassword={isAuthenticated && changePassword ? () => void changePassword() : undefined} onApiKeys={isAuthenticated ? () => setApiKeysOpen(true) : undefined} />
+        <UserAvatarMenu
+          userName={userName ?? undefined}
+          tenantId={tenantId ?? undefined}
+          isAuthenticated={isAuthenticated}
+          onSignOut={isAuthenticated ? () => void signOut() : undefined}
+          onChangePassword={isAuthenticated && changePassword ? () => void changePassword() : undefined}
+          onMembers={isAuthenticated && isTenantAdmin ? () => setMembersOpen(true) : undefined}
+          onApiKeys={isAuthenticated && isTenantAdmin ? () => setApiKeysOpen(true) : undefined}
+        />
 
         <div className="relative mx-auto max-w-6xl px-5 pb-12 pt-14">
           <div className="flex items-baseline gap-3">
@@ -924,13 +967,23 @@ export default function HomeScreen({
         }}
       />
 
-      {tenantId && (
+      {tenantId && isTenantAdmin && (
         <ApiKeysDialog
           open={apiKeysOpen}
           onClose={() => setApiKeysOpen(false)}
           api={api}
           tenantId={tenantId}
           tokenEndpoint={`${cfg.oidcAuthority}/protocol/openid-connect/token`}
+        />
+      )}
+
+      {tenantId && isTenantAdmin && (
+        <MembersDialog
+          open={membersOpen}
+          onClose={() => setMembersOpen(false)}
+          api={api}
+          tenantId={tenantId}
+          currentUserId={currentUserId}
         />
       )}
 

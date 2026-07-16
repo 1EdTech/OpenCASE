@@ -49,6 +49,9 @@ describe('Config', () => {
       expect(config.keycloakBootstrapSystemAdmin).toBe(true);
       expect(config.keycloakSystemAdminEmail).toBe('system-admin@local');
       expect(config.keycloakSystemAdminPassword).toBe('admin');
+      expect(config.ssoOrgClaim).toBe('org_id');
+      expect(config.cgeTokenUrl).toBe('');
+      expect(config.cgeApiBaseUrl).toBe('');
     });
 
     it('should default KEYCLOAK_BOOTSTRAP_SYSTEM_ADMIN to false in production when not set', () => {

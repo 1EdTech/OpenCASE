@@ -84,6 +84,17 @@ describe('CFPackagesManagementController', () => {
     expect(responseJson).toHaveBeenCalledWith({ status: 'archived', id: 'doc-1' })
   })
 
+  it('rejects create when JWT tenant does not match URL', async () => {
+    ;(mockRequest as any).tenantId = 'other-tenant'
+    mockRequest.params = { tenantId: 'test-tenant' } as any
+    mockRequest.body = { CFDocument: { identifier: 'x' } }
+
+    await (controller.create as any)(mockRequest as Request, mockResponse as Response, next)
+
+    expect(responseStatus).toHaveBeenCalledWith(403)
+    expect(mockCreateFramework.execute).not.toHaveBeenCalled()
+  })
+
   it('performs hard delete when hardDelete=true', async () => {
     ;(mockRequest as any).tenantId = 'test-tenant'
     mockRequest.params = { tenantId: 'test-tenant', id: 'doc-1' } as any
@@ -120,6 +131,7 @@ describe('CFPackagesManagementController', () => {
   })
 
   it('imports a framework from an endpointUrl', async () => {
+    ;(mockRequest as any).tenantId = 'test-tenant'
     mockRequest.body = { endpointUrl: 'https://example.org/CFPackages/doc-1' }
     mockImportFramework.execute.mockResolvedValueOnce({ docId: 'doc-1', version: 1 })
 
@@ -139,6 +151,7 @@ describe('CFPackagesManagementController', () => {
   })
 
   it('imports a framework from a pasted cfPackage payload', async () => {
+    ;(mockRequest as any).tenantId = 'test-tenant'
     const cfPackage = { CFDocument: { identifier: 'doc-2' } }
     mockRequest.body = { cfPackage }
     mockImportFramework.execute.mockResolvedValueOnce({ docId: 'doc-2', version: 1 })
@@ -159,6 +172,7 @@ describe('CFPackagesManagementController', () => {
   })
 
   it('rejects import when neither endpointUrl nor cfPackage is provided', async () => {
+    ;(mockRequest as any).tenantId = 'test-tenant'
     mockRequest.body = {}
 
     await (controller.import as any)(mockRequest as Request, mockResponse as Response, next)

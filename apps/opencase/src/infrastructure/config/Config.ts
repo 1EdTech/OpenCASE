@@ -42,6 +42,22 @@ export interface AppConfig {
 
   // Keycloak realm SSL enforcement ('none' for HTTP dev, 'external' for production HTTPS)
   keycloakRealmSslRequired: 'none' | 'external' | 'all';
+
+  /**
+   * Access-token claim from federated IdP (Auth0) carrying the organization id.
+   * Convention: claim value equals OpenCASE tenantId (1:1).
+   */
+  ssoOrgClaim: string;
+
+  /** CGE OAuth token endpoint (client_credentials). */
+  cgeTokenUrl: string;
+  /** CGE coalition API base URL (e.g. https://cge.example.com). */
+  cgeApiBaseUrl: string;
+  /**
+   * Encryption key for per-tenant CGE client secrets at rest.
+   * Required to store credentials (PUT).
+   */
+  cgeCredentialsEncryptionKey?: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -83,6 +99,12 @@ export function loadConfig(): AppConfig {
     smtpFrom: process.env.SMTP_FROM ?? 'noreply@opencase.local',
 
     keycloakRealmSslRequired: (process.env.KEYCLOAK_SSL_REQUIRED ?? (isProduction ? 'external' : 'none')) as 'none' | 'external' | 'all',
+
+    ssoOrgClaim: process.env.SSO_ORG_CLAIM ?? 'org_id',
+
+    cgeTokenUrl: process.env.CGE_TOKEN_URL ?? '',
+    cgeApiBaseUrl: process.env.CGE_API_BASE_URL ?? '',
+    cgeCredentialsEncryptionKey: process.env.CGE_CREDENTIALS_ENCRYPTION_KEY,
   };
 }
 

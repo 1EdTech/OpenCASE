@@ -47,5 +47,34 @@ describe('TenantLookupController', () => {
     expect(res.status).toHaveBeenCalledWith(202)
     expect((res.json as any).mock.calls[0][0]).toEqual({ status: 'accepted', tenantId: 'demo' })
   })
+
+  it('returns 202 with tenantId when orgId matches an existing tenant client', async () => {
+    const keycloakAdmin: any = {
+      findClientByClientIdPublic: jest.fn().mockResolvedValue({ id: 'c1', clientId: 'tenant-acme-org' })
+    }
+    const c = new TenantLookupController(keycloakAdmin, { clientIdPrefix: 'tenant-' })
+    const req = { query: { orgId: 'acme-org' } } as unknown as Request
+    const res = makeRes()
+
+    await c.lookup(req, res, jest.fn() as any)
+
+    expect(res.status).toHaveBeenCalledWith(202)
+    expect((res.json as any).mock.calls[0][0]).toEqual({ status: 'accepted', tenantId: 'acme-org' })
+    expect(keycloakAdmin.findClientByClientIdPublic).toHaveBeenCalledWith('tenant-acme-org')
+  })
+
+  it('returns 202 without tenantId when orgId client does not exist', async () => {
+    const keycloakAdmin: any = {
+      findClientByClientIdPublic: jest.fn().mockResolvedValue(null)
+    }
+    const c = new TenantLookupController(keycloakAdmin, { clientIdPrefix: 'tenant-' })
+    const req = { query: { orgId: 'missing' } } as unknown as Request
+    const res = makeRes()
+
+    await c.lookup(req, res, jest.fn() as any)
+
+    expect(res.status).toHaveBeenCalledWith(202)
+    expect((res.json as any).mock.calls[0][0]).toEqual({ status: 'accepted' })
+  })
 })
 

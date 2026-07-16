@@ -147,16 +147,23 @@ OpenCASE uses Keycloak client roles to control access:
 
 | Scope | Description | Use Cases |
 |-------|-------------|-----------|
-| `case.read` | Read-only access to CASE entities | Public API access, viewing frameworks |
-| `case.write` | Read and write access to CASE entities | Creating/updating frameworks, items, associations |
-| `case.owner` | Per-tenant administrator | Manage accounts, OAuth clients, and tenant data within a specific tenant |
-| `case.admin` | System-wide administrator | Create tenants, manage OAuth clients across all tenants |
+| `case.read` | Read-only access to CASE entities | Management list/get frameworks, licenses, definitions |
+| `case.write` | Read and write access to CASE entities | Creating/updating/deleting frameworks; CGE search/import proxies |
+| `case.owner` | Per-tenant administrator | Manage members, OpenCASE API keys, CGE credentials |
+| `case.admin` | System-wide administrator | Create/list tenants (`tenant-system` client) |
 
-**Scope Hierarchy:**
-- `case.admin` - Highest privilege (system-wide)
-- `case.owner` - Tenant-specific administration
-- `case.write` - Includes `case.read` permissions
-- `case.read` - Basic read access
+**Scope Hierarchy** (enforced in middleware):
+- `case.owner` implies `case.write` and `case.read`
+- `case.write` implies `case.read`
+- `case.admin` is orthogonal (system tenant only; does not imply tenant scopes)
+
+**Member roles** (mapped to client roles via `/management/tenants/{tenantId}/members`):
+
+| Role | Scopes |
+|------|--------|
+| `viewer` | `case.read` |
+| `author` | `case.read`, `case.write` |
+| `admin` | `case.read`, `case.write`, `case.owner` |
 
 ### JWT Token Claims
 
@@ -165,8 +172,13 @@ Keycloak-issued access tokens are JWTs containing:
 - `iss` - Issuer (must match the Keycloak realm URL)
 - `aud` / `azp` - Audience / authorized party (must match the tenant client id)
 - `tenantId` - Tenant identifier (injected by Keycloak mapper, required for tenant-scoped operations)
-- `scope` - Space-separated list of granted scopes
+- `scope` - Space-separated list of granted scopes (from client roles)
+- `org_id` - Optional SSO org claim (must equal `tenantId` for ensure-self); claim name configurable via `SSO_ORG_CLAIM`
 - `sub` - Subject (user ID for authorization_code flow, client ID for client_credentials)
+
+### Tenancy model
+
+OpenCASE uses a **single Keycloak realm** with **one OAuth client per tenant** (`tenant-{tenantId}`). JWT `tenantId` must match the URL `:tenantId` on all management routes.
 
 ---
 
@@ -298,102 +310,87 @@ When a tenant is created, an admin account is automatically created with:
 - Role: `admin`
 - Scopes: `case.read`, `case.write`, `case.owner`
 
-#### Account Management
+#### Member Management (Keycloak)
 
 **Required Scope:** `case.owner`
 
-**Create Account:**
+Members are Keycloak users with client roles on `tenant-{tenantId}`.
+
+**List members:**
 ```bash
-POST /management/tenants/{tenantId}/accounts
+GET /management/tenants/{tenantId}/members
+Authorization: Bearer {access_token}
+```
+
+**Add member:**
+```bash
+POST /management/tenants/{tenantId}/members
 Authorization: Bearer {access_token}
 Content-Type: application/json
 
 {
   "email": "user@example.com",
-  "password": "secure-password",
-  "role": "user",
-  "autoGeneratePassword": false
+  "role": "author"
 }
 ```
 
-**Roles and Default Scopes:**
-- `admin` → `case.read`, `case.write`, `case.owner`
-- `user` → `case.read`, `case.write`
-- `viewer` → `case.read`
+Roles: `viewer` | `author` | `admin` (maps to scopes as above).
 
-**List Accounts:**
+**Update member role:**
 ```bash
-GET /management/tenants/{tenantId}/accounts
-Authorization: Bearer {access_token}
-```
-
-**Update Account:**
-```bash
-PUT /management/tenants/{tenantId}/accounts/{accountId}
+PATCH /management/tenants/{tenantId}/members/{userId}
 Authorization: Bearer {access_token}
 Content-Type: application/json
 
-{
-  "email": "newemail@example.com",
-  "password": "new-password"
-}
+{ "role": "admin" }
 ```
 
-**Delete Account:**
+**Remove member** (removes this tenant’s client roles only):
 ```bash
-DELETE /management/tenants/{tenantId}/accounts/{accountId}
+DELETE /management/tenants/{tenantId}/members/{userId}
 Authorization: Bearer {access_token}
 ```
 
-**Add Tenant Membership:**
+**SSO ensure-self** (no `case.*` scope; requires access-token `org_id` === `tenantId`):
 ```bash
-POST /management/tenants/{tenantId}/accounts/{accountId}/memberships
-Authorization: Bearer {access_token}
-Content-Type: application/json
-
-{
-  "tenantId": "other-tenant-id",
-  "role": "user"
-}
-```
-
-**Remove Tenant Membership:**
-```bash
-DELETE /management/tenants/{tenantId}/accounts/{accountId}/memberships/{targetTenantId}
+POST /management/tenants/{tenantId}/members/ensure-self
 Authorization: Bearer {access_token}
 ```
 
-#### OAuth Client Management
+Assigns default `author` roles on first login when the org claim matches. Re-authenticate afterward so the JWT includes the new scopes.
 
-**Required Scope:** `case.owner` or `case.admin`
+#### OpenCASE API Keys
 
-**Create OAuth Client:**
+**Required Scope:** `case.owner`
+
 ```bash
-POST /management/tenants/{tenantId}/clients
-Authorization: Bearer {access_token}
-Content-Type: application/json
-
-{
-  "clientId": "optional-client-id",
-  "clientSecret": "optional-secret",
-  "grantTypes": ["client_credentials", "authorization_code"],
-  "scopes": ["case.read", "case.write"],
-  "active": true,
-  "autoGenerateSecret": false
-}
+GET/POST /management/tenants/{tenantId}/api-keys
+DELETE /management/tenants/{tenantId}/api-keys/{keyId}
 ```
 
-**List OAuth Clients:**
+Each key is a Keycloak confidential client with `client_credentials` and `case.read`.
+
+#### CASE Global (CGE) credentials and proxies
+
+**Configure credentials** (`case.owner`):
 ```bash
-GET /management/tenants/{tenantId}/clients
-Authorization: Bearer {access_token}
+GET/PUT/DELETE /management/tenants/{tenantId}/cge/credentials
+POST /management/tenants/{tenantId}/cge/credentials/test
 ```
 
-**Delete OAuth Client:**
+PUT body: `{ "clientId": "...", "clientSecret": "..." }`. Secrets are encrypted at rest (`CGE_CREDENTIALS_ENCRYPTION_KEY`). GET never returns the secret.
+
+**Use CGE** (`case.write`) — OpenCASE backend mints org tokens server-side:
 ```bash
-DELETE /management/tenants/{tenantId}/clients/{clientId}
-Authorization: Bearer {access_token}
+GET  /management/tenants/{tenantId}/cge/frameworks
+GET  /management/tenants/{tenantId}/cge/frameworks/{frameworkId}
+POST /management/tenants/{tenantId}/cge/subscriptions
+POST /management/tenants/{tenantId}/cge/import
 ```
+
+Import body example: `{ "frameworkId": "...", "sourceUri": "https://publisher/.../CFPackages/...", "subscribe": true }`.
+
+Env: `CGE_TOKEN_URL`, `CGE_API_BASE_URL`, `CGE_CREDENTIALS_ENCRYPTION_KEY`, `SSO_ORG_CLAIM` (default `org_id`).
 
 ---
 

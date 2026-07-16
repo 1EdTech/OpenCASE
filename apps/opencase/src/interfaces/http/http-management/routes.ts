@@ -5,6 +5,8 @@ import type { CFAssociationsManagementController } from './controllers/CFAssocia
 import type { CFPackagesManagementController } from './controllers/CFPackagesManagementController'
 import type { TenantsManagementController } from './controllers/TenantsManagementController'
 import type { ApiKeysManagementController } from './controllers/ApiKeysManagementController'
+import type { MembersManagementController } from './controllers/MembersManagementController'
+import type { CgeManagementController } from './controllers/CgeManagementController'
 import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 import { requireScope, requireAnyScope } from '../middleware/scope'
 
@@ -33,6 +35,8 @@ export interface ManagementDeps {
   cfPackagesController: CFPackagesManagementController
   tenantsController: TenantsManagementController
   apiKeysController?: ApiKeysManagementController
+  membersController?: MembersManagementController
+  cgeController?: CgeManagementController
   store?: FileFrameworkStore
 }
 
@@ -257,92 +261,113 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
   // CFPackage list/create/import/delete endpoints (non-CASE extension)
   app.get(
     '/management/tenants/:tenantId/CFPackages',
+    requireScope('case.read'),
     deps.cfPackagesController.list
   )
   app.post(
     '/management/tenants/:tenantId/ims/case/v1p0/CFPackages',
+    requireScope('case.write'),
     withCaseVersion('1.0', deps.cfPackagesController.create as unknown as RequestHandler)
   )
   app.post(
     '/management/tenants/:tenantId/ims/case/v1p1/CFPackages',
+    requireScope('case.write'),
     withCaseVersion('1.1', deps.cfPackagesController.create as unknown as RequestHandler)
   )
   app.post(
     '/management/tenants/:tenantId/ims/case/v1p0/CFPackages/import',
+    requireScope('case.write'),
     withCaseVersion('1.0', deps.cfPackagesController.import as unknown as RequestHandler)
   )
   app.post(
     '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/import',
+    requireScope('case.write'),
     withCaseVersion('1.1', deps.cfPackagesController.import as unknown as RequestHandler)
   )
   // CASE entity management endpoints (explicit version in the path)
   app.put(
     '/management/tenants/:tenantId/ims/case/v1p0/CFDocuments/:id',
+    requireScope('case.write'),
     withCaseVersion('1.0', deps.cfDocumentsController.update as unknown as RequestHandler)
   )
   app.delete(
     '/management/tenants/:tenantId/ims/case/v1p0/CFDocuments/:id',
+    requireScope('case.write'),
     withCaseVersion('1.0', deps.cfDocumentsController.delete as unknown as RequestHandler)
   )
   app.put(
     '/management/tenants/:tenantId/ims/case/v1p1/CFDocuments/:id',
+    requireScope('case.write'),
     withCaseVersion('1.1', deps.cfDocumentsController.update as unknown as RequestHandler)
   )
   app.delete(
     '/management/tenants/:tenantId/ims/case/v1p1/CFDocuments/:id',
+    requireScope('case.write'),
     withCaseVersion('1.1', deps.cfDocumentsController.delete as unknown as RequestHandler)
   )
 
   app.put(
     '/management/tenants/:tenantId/ims/case/v1p0/CFItems/:id',
+    requireScope('case.write'),
     withCaseVersion('1.0', deps.cfItemsController.update as unknown as RequestHandler)
   )
   app.delete(
     '/management/tenants/:tenantId/ims/case/v1p0/CFItems/:id',
+    requireScope('case.write'),
     withCaseVersion('1.0', deps.cfItemsController.delete as unknown as RequestHandler)
   )
   app.put(
     '/management/tenants/:tenantId/ims/case/v1p1/CFItems/:id',
+    requireScope('case.write'),
     withCaseVersion('1.1', deps.cfItemsController.update as unknown as RequestHandler)
   )
   app.delete(
     '/management/tenants/:tenantId/ims/case/v1p1/CFItems/:id',
+    requireScope('case.write'),
     withCaseVersion('1.1', deps.cfItemsController.delete as unknown as RequestHandler)
   )
 
   app.put(
     '/management/tenants/:tenantId/ims/case/v1p0/CFAssociations/:id',
+    requireScope('case.write'),
     withCaseVersion('1.0', deps.cfAssociationsController.update as unknown as RequestHandler)
   )
   app.delete(
     '/management/tenants/:tenantId/ims/case/v1p0/CFAssociations/:id',
+    requireScope('case.write'),
     withCaseVersion('1.0', deps.cfAssociationsController.delete as unknown as RequestHandler)
   )
   app.put(
     '/management/tenants/:tenantId/ims/case/v1p1/CFAssociations/:id',
+    requireScope('case.write'),
     withCaseVersion('1.1', deps.cfAssociationsController.update as unknown as RequestHandler)
   )
   app.delete(
     '/management/tenants/:tenantId/ims/case/v1p1/CFAssociations/:id',
+    requireScope('case.write'),
     withCaseVersion('1.1', deps.cfAssociationsController.delete as unknown as RequestHandler)
   )
 
   app.delete(
     '/management/tenants/:tenantId/ims/case/v1p0/CFPackages/:id',
+    requireScope('case.write'),
     withCaseVersion('1.0', deps.cfPackagesController.delete as unknown as RequestHandler)
   )
   app.delete(
     '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/:id',
+    requireScope('case.write'),
     withCaseVersion('1.1', deps.cfPackagesController.delete as unknown as RequestHandler)
   )
 
   // Restore (unarchive) a previously archived framework
   app.post(
     '/management/tenants/:tenantId/ims/case/v1p0/CFPackages/:id/restore',
+    requireScope('case.write'),
     withCaseVersion('1.0', deps.cfPackagesController.restore as unknown as RequestHandler)
   )
   app.post(
     '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/:id/restore',
+    requireScope('case.write'),
     withCaseVersion('1.1', deps.cfPackagesController.restore as unknown as RequestHandler)
   )
 
@@ -362,6 +387,7 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
   if (deps.store) {
     app.get(
       '/management/tenants/:tenantId/licenses',
+      requireScope('case.read'),
       (req: Request, res: Response) => {
         try {
           const tenantId = (req as any).tenantId ?? req.params.tenantId
@@ -383,6 +409,7 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
     // for use by the editor's combobox / picker UI.
     app.get(
       '/management/tenants/:tenantId/definitions',
+      requireScope('case.read'),
       (req: Request, res: Response) => {
         try {
           const tenantId = (req as any).tenantId ?? req.params.tenantId
@@ -407,7 +434,7 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
     )
   }
 
-  // API key management endpoints (require case.owner or case.admin scope)
+  // API key management endpoints (tenant owner or system case.admin)
   if (deps.apiKeysController) {
     app.get(
       '/management/tenants/:tenantId/api-keys',
@@ -423,6 +450,80 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
       '/management/tenants/:tenantId/api-keys/:keyId',
       requireAnyScope('case.owner', 'case.admin'),
       deps.apiKeysController.delete
+    )
+  }
+
+  // Member management (Keycloak client roles)
+  if (deps.membersController) {
+    // SSO first-login ensure — authenticated, no case.* scope required (register before :userId)
+    app.post(
+      '/management/tenants/:tenantId/members/ensure-self',
+      deps.membersController.ensureSelf
+    )
+    app.get(
+      '/management/tenants/:tenantId/members',
+      requireAnyScope('case.owner', 'case.admin'),
+      deps.membersController.list
+    )
+    app.post(
+      '/management/tenants/:tenantId/members',
+      requireAnyScope('case.owner', 'case.admin'),
+      deps.membersController.create
+    )
+    app.patch(
+      '/management/tenants/:tenantId/members/:userId',
+      requireAnyScope('case.owner', 'case.admin'),
+      deps.membersController.update
+    )
+    app.delete(
+      '/management/tenants/:tenantId/members/:userId',
+      requireAnyScope('case.owner', 'case.admin'),
+      deps.membersController.remove
+    )
+  }
+
+  // CASE Global credentials + proxy APIs
+  if (deps.cgeController) {
+    app.get(
+      '/management/tenants/:tenantId/cge/credentials',
+      requireAnyScope('case.owner', 'case.admin'),
+      deps.cgeController.getCredentials
+    )
+    app.put(
+      '/management/tenants/:tenantId/cge/credentials',
+      requireAnyScope('case.owner', 'case.admin'),
+      deps.cgeController.putCredentials
+    )
+    app.delete(
+      '/management/tenants/:tenantId/cge/credentials',
+      requireAnyScope('case.owner', 'case.admin'),
+      deps.cgeController.deleteCredentials
+    )
+    app.post(
+      '/management/tenants/:tenantId/cge/credentials/test',
+      requireAnyScope('case.owner', 'case.admin'),
+      deps.cgeController.testCredentials
+    )
+
+    app.get(
+      '/management/tenants/:tenantId/cge/frameworks',
+      requireScope('case.write'),
+      deps.cgeController.listFrameworks
+    )
+    app.get(
+      '/management/tenants/:tenantId/cge/frameworks/:frameworkId',
+      requireScope('case.write'),
+      deps.cgeController.getFramework
+    )
+    app.post(
+      '/management/tenants/:tenantId/cge/subscriptions',
+      requireScope('case.write'),
+      deps.cgeController.createSubscription
+    )
+    app.post(
+      '/management/tenants/:tenantId/cge/import',
+      requireScope('case.write'),
+      deps.cgeController.importFromCge
     )
   }
 

@@ -2,6 +2,7 @@ export type HttpClient = {
   get: (_url: string) => Promise<unknown>
   post: (_url: string, _body: unknown) => Promise<unknown>
   put: (_url: string, _body: unknown) => Promise<unknown>
+  patch: (_url: string, _body: unknown) => Promise<unknown>
   delete: (_url: string) => Promise<unknown>
 }
 
@@ -70,6 +71,7 @@ export function createFetchHttpClient(baseUrl: string, options: FetchHttpClientO
     get: (url) => doRequest('GET', url),
     post: (url, body) => doRequest('POST', url, body),
     put: (url, body) => doRequest('PUT', url, body),
+    patch: (url, body) => doRequest('PATCH', url, body),
     delete: (url) => doRequest('DELETE', url),
   }
 }

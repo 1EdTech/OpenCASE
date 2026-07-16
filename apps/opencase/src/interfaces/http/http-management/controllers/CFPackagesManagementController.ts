@@ -7,6 +7,7 @@ import { type RestoreFramework } from '../../../../application/case/endpoints/Re
 import { type ListFrameworks } from '../../../../application/case/endpoints/ListFrameworks'
 import { getParam } from '../../utils/expressParams'
 import { getCaseVersion } from '../../utils/caseVersion'
+import { requireMatchingTenant } from '../../middleware/tenantAccess'
 
 export class CFPackagesManagementController {
   constructor (
@@ -19,14 +20,11 @@ export class CFPackagesManagementController {
 
   list: RequestHandler<{ tenantId: string }> = async (req: Request, res: Response) => {
     try {
-      const tenantId = (req as any).tenantId ?? req.params.tenantId
-      const urlTenantId = getParam(req, 'tenantId')
+      const tenantId = requireMatchingTenant(req, res)
+      if (!tenantId) return
+
       // For GET endpoints, `caseVersion` remains a filter param (no override needed).
       const caseVersion = getCaseVersion(req)
-
-      if (urlTenantId && urlTenantId !== tenantId) {
-        return res.status(403).json({ error: 'Tenant mismatch - authenticated tenant does not match URL parameter' })
-      }
 
       // Extract includeArchived query parameter (default: false)
       const includeArchived = req.query.includeArchived === 'true'
@@ -39,12 +37,11 @@ export class CFPackagesManagementController {
   }
 
   create: RequestHandler<{ tenantId: string }> = async (req: Request, res: Response) => {
-    const tenantId = getParam(req, 'tenantId')
+    const tenantId = requireMatchingTenant(req, res)
+    if (!tenantId) return
     const caseVersion = getCaseVersion(req, { default: '1.1' })!
 
     try {
-      if (!tenantId) return res.status(400).json({ error: 'Missing tenantId' })
-      
       if (!req.body.CFDocument) {
         return res.status(400).json({ 
           error: 'missing_required_field',
@@ -78,7 +75,8 @@ export class CFPackagesManagementController {
   }
 
   import: RequestHandler<{ tenantId: string }> = async (req: Request, res: Response) => {
-    const tenantId = getParam(req, 'tenantId')
+    const tenantId = requireMatchingTenant(req, res)
+    if (!tenantId) return
     const caseVersion = getCaseVersion(req, { default: '1.1' })!
     const { endpointUrl, accessToken, cfPackage, validateSchema, schemaName } = req.body
 
@@ -87,7 +85,6 @@ export class CFPackagesManagementController {
     }
 
     try {
-      if (!tenantId) return res.status(400).json({ error: 'Missing tenantId' })
       const result = await this.importFramework.execute({
         tenantId,
         caseVersion,
@@ -114,14 +111,11 @@ export class CFPackagesManagementController {
 
   delete: RequestHandler<{ tenantId: string, id: string }> = async (req: Request, res: Response) => {
     try {
-      const tenantId = (req as any).tenantId ?? req.params.tenantId
-      const urlTenantId = getParam(req, 'tenantId')
+      const tenantId = requireMatchingTenant(req, res)
+      if (!tenantId) return
       const id = getParam(req, 'id')
       const caseVersion = getCaseVersion(req, { default: '1.1' })!
 
-      if (urlTenantId && urlTenantId !== tenantId) {
-        return res.status(403).json({ error: 'Tenant mismatch - authenticated tenant does not match URL parameter' })
-      }
       if (!id) return res.status(400).json({ error: 'Missing id' })
 
       // Extract hardDelete query parameter (default: false = soft delete/archive)
@@ -145,14 +139,11 @@ export class CFPackagesManagementController {
 
   restore: RequestHandler<{ tenantId: string, id: string }> = async (req: Request, res: Response) => {
     try {
-      const tenantId = (req as any).tenantId ?? req.params.tenantId
-      const urlTenantId = getParam(req, 'tenantId')
+      const tenantId = requireMatchingTenant(req, res)
+      if (!tenantId) return
       const id = getParam(req, 'id')
       const caseVersion = getCaseVersion(req, { default: '1.1' })!
 
-      if (urlTenantId && urlTenantId !== tenantId) {
-        return res.status(403).json({ error: 'Tenant mismatch - authenticated tenant does not match URL parameter' })
-      }
       if (!id) return res.status(400).json({ error: 'Missing id' })
 
       await this.restoreFrameworkUseCase.execute({

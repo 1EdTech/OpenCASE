@@ -107,15 +107,117 @@ export class KeycloakAdminClient {
     return { id: created.id }
   }
 
-  async ensureClientRole (clientUuid: string, roleName: string): Promise<void> {
+  async ensureClientRole (clientUuid: string, roleName: string, description?: string): Promise<void> {
     const realm = this.cfg.realm
     const existing = await this.requestRaw('GET', `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/roles/${encodeURIComponent(roleName)}`)
-    if (existing.status === 200) return
+    if (existing.status === 200) {
+      if (description) {
+        const role = await existing.json().catch(() => null) as any
+        if (role && role.description !== description) {
+          await this.requestJson('PUT', `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/roles/${encodeURIComponent(roleName)}`, {
+            ...role,
+            description
+          })
+        }
+      }
+      return
+    }
     if (existing.status !== 404) throw new Error(`Failed to check role '${roleName}': ${existing.status} ${existing.statusText}`)
 
     await this.requestJson('POST', `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/roles`, {
-      name: roleName
+      name: roleName,
+      description: description ?? ''
     })
+  }
+
+  async getClientRole (clientUuid: string, roleName: string): Promise<any | null> {
+    const realm = this.cfg.realm
+    const res = await this.requestRaw(
+      'GET',
+      `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/roles/${encodeURIComponent(roleName)}`
+    )
+    if (res.status === 404) return null
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`Failed to get role '${roleName}': ${res.status}. ${text}`)
+    }
+    return await res.json()
+  }
+
+  /**
+   * Ensure case.* scope roles and viewer/author/admin membership roles exist on a tenant client.
+   * Membership roles are composites of the corresponding case.* roles so they appear clearly in Keycloak.
+   */
+  async ensureTenantMemberRoles (clientUuid: string): Promise<void> {
+    await this.ensureClientRole(clientUuid, 'case.read', 'Read frameworks (case.read)')
+    await this.ensureClientRole(clientUuid, 'case.write', 'Author frameworks (case.write)')
+    await this.ensureClientRole(clientUuid, 'case.owner', 'Tenant administrator (case.owner)')
+
+    await this.ensureClientRole(clientUuid, 'viewer', 'Viewer — read frameworks')
+    await this.ensureClientRole(clientUuid, 'author', 'Author — create and edit frameworks')
+    await this.ensureClientRole(clientUuid, 'admin', 'Admin — manage members, API keys, and credentials')
+
+    await this.ensureClientRoleComposites(clientUuid, 'viewer', ['case.read'])
+    await this.ensureClientRoleComposites(clientUuid, 'author', ['case.read', 'case.write'])
+    await this.ensureClientRoleComposites(clientUuid, 'admin', ['case.read', 'case.write', 'case.owner'])
+  }
+
+  private async ensureClientRoleComposites (
+    clientUuid: string,
+    compositeRoleName: string,
+    childRoleNames: string[]
+  ): Promise<void> {
+    const realm = this.cfg.realm
+    const existing = await this.requestJson(
+      'GET',
+      `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/roles/${encodeURIComponent(compositeRoleName)}/composites`
+    )
+    const existingNames = new Set(
+      (Array.isArray(existing) ? existing : []).map((r: any) => r?.name as string).filter(Boolean)
+    )
+    const missing = childRoleNames.filter(n => !existingNames.has(n))
+    if (missing.length === 0) return
+
+    const children: any[] = []
+    for (const name of missing) {
+      const role = await this.getClientRole(clientUuid, name)
+      if (role) children.push(role)
+    }
+    if (children.length === 0) return
+
+    await this.requestJson(
+      'POST',
+      `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/roles/${encodeURIComponent(compositeRoleName)}/composites`,
+      children
+    )
+  }
+
+  /**
+   * Set membership for a user on a tenant client to exactly one MemberRole.
+   * Assigns the human-readable role (viewer/author/admin) plus case.* scopes for JWT mappers.
+   * Only touches OpenCASE-managed roles; leaves other client roles alone.
+   */
+  async setMemberRole (
+    userId: string,
+    clientUuid: string,
+    desiredRoleNames: string[]
+  ): Promise<void> {
+    await this.ensureTenantMemberRoles(clientUuid)
+
+    const managed = new Set([
+      'case.read', 'case.write', 'case.owner',
+      'viewer', 'author', 'admin'
+    ])
+    const desired = new Set(desiredRoleNames)
+    const current = await this.getUserClientRoleMappings(userId, clientUuid)
+    const currentNames = current.map((r: any) => r?.name as string).filter(Boolean)
+    const currentManaged = currentNames.filter(n => managed.has(n))
+
+    const toRemove = currentManaged.filter(n => !desired.has(n))
+    const toAdd = [...desired].filter(n => !currentManaged.includes(n))
+
+    if (toRemove.length > 0) await this.removeClientRoles(userId, clientUuid, toRemove)
+    if (toAdd.length > 0) await this.assignClientRoles(userId, clientUuid, toAdd)
   }
 
   async ensureProtocolMapper (clientUuid: string, mapper: any): Promise<void> {
@@ -127,11 +229,11 @@ export class KeycloakAdminClient {
     await this.requestJson('POST', `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/protocol-mappers/models`, mapper)
   }
 
-  async ensureUser (user: { username: string, email?: string, enabled?: boolean }): Promise<{ id: string }> {
+  async ensureUser (user: { username: string, email?: string, enabled?: boolean }): Promise<{ id: string, created: boolean }> {
     const realm = this.cfg.realm
     const users = await this.requestJson('GET', `/admin/realms/${encodeURIComponent(realm)}/users?username=${encodeURIComponent(user.username)}&exact=true`)
     const existing = Array.isArray(users) ? users[0] : undefined
-    if (existing?.id) return { id: existing.id }
+    if (existing?.id) return { id: existing.id, created: false }
 
     await this.requestJson('POST', `/admin/realms/${encodeURIComponent(realm)}/users`, {
       username: user.username,
@@ -143,7 +245,7 @@ export class KeycloakAdminClient {
     const users2 = await this.requestJson('GET', `/admin/realms/${encodeURIComponent(realm)}/users?username=${encodeURIComponent(user.username)}&exact=true`)
     const created = Array.isArray(users2) ? users2[0] : undefined
     if (!created?.id) throw new Error(`Failed to create Keycloak user '${user.username}'`)
-    return { id: created.id }
+    return { id: created.id, created: true }
   }
 
   async findUserByEmailExact (email: string): Promise<{ id: string, username?: string, email?: string } | null> {
@@ -193,6 +295,96 @@ export class KeycloakAdminClient {
     }
 
     await this.requestJson('POST', `/admin/realms/${encodeURIComponent(realm)}/users/${encodeURIComponent(userId)}/role-mappings/clients/${encodeURIComponent(clientUuid)}`, roles)
+  }
+
+  async removeClientRoles (userId: string, clientUuid: string, roleNames: string[]): Promise<void> {
+    if (roleNames.length === 0) return
+    const realm = this.cfg.realm
+    const roles: any[] = []
+    for (const roleName of roleNames) {
+      const role = await this.requestJson('GET', `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/roles/${encodeURIComponent(roleName)}`)
+      roles.push(role)
+    }
+
+    const res = await this.requestRaw(
+      'DELETE',
+      `/admin/realms/${encodeURIComponent(realm)}/users/${encodeURIComponent(userId)}/role-mappings/clients/${encodeURIComponent(clientUuid)}`,
+      roles
+    )
+    if (!res.ok && res.status !== 204) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`Failed to remove client roles: ${res.status} ${res.statusText}. ${text}`)
+    }
+  }
+
+  /**
+   * Replace a user's client roles for a given client with exactly `roleNames`.
+   */
+  async setClientRoles (userId: string, clientUuid: string, roleNames: string[]): Promise<void> {
+    const current = await this.getUserClientRoleMappings(userId, clientUuid)
+    const currentNames = current.map((r: any) => r?.name as string).filter(Boolean)
+    const toRemove = currentNames.filter(n => !roleNames.includes(n))
+    const toAdd = roleNames.filter(n => !currentNames.includes(n))
+    if (toRemove.length > 0) await this.removeClientRoles(userId, clientUuid, toRemove)
+    if (toAdd.length > 0) await this.assignClientRoles(userId, clientUuid, toAdd)
+  }
+
+  async getUserById (userId: string): Promise<{ id: string, username?: string, email?: string, enabled?: boolean } | null> {
+    const realm = this.cfg.realm
+    const res = await this.requestRaw('GET', `/admin/realms/${encodeURIComponent(realm)}/users/${encodeURIComponent(userId)}`)
+    if (res.status === 404) return null
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw new Error(`Keycloak Admin API error: GET user ${userId} -> ${res.status}. ${text}`)
+    }
+    const u = await res.json().catch(() => null) as any
+    if (!u?.id) return null
+    return { id: u.id, username: u.username, email: u.email, enabled: u.enabled }
+  }
+
+  /**
+   * List users that have any of the given client roles on a tenant client.
+   * Uses Keycloak role-user listing per role and de-duplicates.
+   */
+  async listUsersWithClientRoles (
+    clientUuid: string,
+    roleNames: string[]
+  ): Promise<Array<{ id: string, username?: string, email?: string, roles: string[] }>> {
+    const realm = this.cfg.realm
+    const byId = new Map<string, { id: string, username?: string, email?: string, roles: Set<string> }>()
+
+    for (const roleName of roleNames) {
+      const users = await this.requestJson(
+        'GET',
+        `/admin/realms/${encodeURIComponent(realm)}/clients/${encodeURIComponent(clientUuid)}/roles/${encodeURIComponent(roleName)}/users?max=5000`
+      )
+      if (!Array.isArray(users)) continue
+      for (const u of users) {
+        if (!u?.id) continue
+        const existing = byId.get(u.id)
+        if (existing) {
+          existing.roles.add(roleName)
+        } else {
+          byId.set(u.id, {
+            id: u.id,
+            username: u.username,
+            email: u.email,
+            roles: new Set([roleName])
+          })
+        }
+      }
+    }
+
+    return [...byId.values()].map(u => ({
+      id: u.id,
+      username: u.username,
+      email: u.email,
+      roles: [...u.roles].sort()
+    }))
+  }
+
+  async findClientByClientIdPublic (clientId: string): Promise<{ id: string, clientId: string } | null> {
+    return await this.findClientByClientId(clientId)
   }
 
   // ── OAuth2 client scope helpers ──────────────────────────────────

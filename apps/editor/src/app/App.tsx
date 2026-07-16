@@ -175,6 +175,19 @@ function AppInner() {
     setRoute('login')
   }, [authStatus, route])
 
+  // SSO: ensure default tenant membership when org_id claim matches (idempotent).
+  const ensureSelfAttempted = useRef<string | null>(null)
+  useEffect(() => {
+    if (authStatus !== 'authenticated' || !tenantId) return
+    const key = tenantId
+    if (ensureSelfAttempted.current === key) return
+    ensureSelfAttempted.current = key
+    void api.ensureSelfMembership({ tenantId }).catch((err: unknown) => {
+      // Expected when org_id claim is absent (non-SSO / local users).
+      console.debug('[App] ensure-self skipped or failed:', err)
+    })
+  }, [authStatus, tenantId, api])
+
   // Fetch the full definitions catalogue from the management endpoint once authenticated.
   useEffect(() => {
     if (authStatus !== 'authenticated' || !tenantId) return

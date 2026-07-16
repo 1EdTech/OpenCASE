@@ -124,6 +124,11 @@ services:
       - SMTP_PORT=${SMTP_PORT:-1025}
       - SMTP_FROM=noreply@${OPENCASE_HOSTNAME:-opencase.local}
       - KEYCLOAK_SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-none}
+      # SSO org claim + CASE Global
+      - SSO_ORG_CLAIM=${SSO_ORG_CLAIM:-org_id}
+      - CGE_TOKEN_URL=${CGE_TOKEN_URL:-}
+      - CGE_API_BASE_URL=${CGE_API_BASE_URL:-}
+      - CGE_CREDENTIALS_ENCRYPTION_KEY=${CGE_CREDENTIALS_ENCRYPTION_KEY:-}
     restart: on-failure
     volumes:
       - ./apps/opencase/data:/app/data

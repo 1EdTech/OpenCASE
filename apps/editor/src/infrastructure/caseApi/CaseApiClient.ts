@@ -49,6 +49,32 @@ export class CaseApiClient {
     return {}
   }
 
+  async lookupTenantByOrgId(params: { orgId: string }): Promise<{ tenantId?: string } | null> {
+    const orgId = params.orgId.trim()
+    if (!orgId) return null
+    const res = (await this._http.get(`/public/tenant-lookup?orgId=${encodeURIComponent(orgId)}`)) as unknown
+    if (!res || typeof res !== 'object') return null
+    const any = res as { tenantId?: unknown }
+    if (typeof any.tenantId === 'string' && any.tenantId.trim()) return { tenantId: any.tenantId.trim() }
+    return {}
+  }
+
+  /**
+   * SSO first-login: assign default author roles when org_id claim matches tenant.
+   * Idempotent. Caller should re-authenticate if status is `assigned`.
+   */
+  async ensureSelfMembership(params: { tenantId: string }): Promise<{
+    status: string
+    role?: string
+    scopes?: string[]
+    note?: string
+  }> {
+    return (await this._http.post(
+      `/management/tenants/${encodeURIComponent(params.tenantId)}/members/ensure-self`,
+      {},
+    )) as { status: string; role?: string; scopes?: string[]; note?: string }
+  }
+
   async listManagementCfPackages(params: { tenantId: string; caseVersion?: '1.0' | '1.1' }): Promise<OpenCaseManagementCfPackageSummary[]> {
     const caseVersion = params.caseVersion ?? '1.1'
     const res = (await this._http.get(`/management/tenants/${encodeURIComponent(params.tenantId)}/CFPackages?caseVersion=${encodeURIComponent(caseVersion)}`)) as unknown
@@ -337,6 +363,102 @@ export class CaseApiClient {
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/api-keys/${encodeURIComponent(params.keyId)}`
     await this._http.delete(url)
   }
+
+  // ── Member Management ───────────────────────────────────────────
+
+  /**
+   * List tenant members (Keycloak users with client roles).
+   * Requires `case.owner` scope.
+   */
+  async listMembers(params: { tenantId: string }): Promise<TenantMember[]> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/members`
+    const res = (await this._http.get(url)) as unknown
+    if (res && typeof res === 'object' && 'members' in res) {
+      const obj = res as { members?: unknown }
+      if (Array.isArray(obj.members)) return obj.members as TenantMember[]
+    }
+    return []
+  }
+
+  /**
+   * Add or ensure a member by email and assign a role.
+   * New users get a temporary password (returned once) and must change it on first login.
+   * Requires `case.owner` scope.
+   */
+  async createMember(params: {
+    tenantId: string
+    email: string
+    role: TenantMemberRole
+  }): Promise<TenantMember & {
+    temporaryPassword: string | null
+    mustChangePassword: boolean
+    created: boolean
+  }> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/members`
+    const res = (await this._http.post(url, {
+      email: params.email,
+      role: params.role,
+    })) as unknown
+    if (res && typeof res === 'object') {
+      const obj = res as {
+        userId?: string
+        email?: string
+        role?: TenantMemberRole
+        scopes?: string[]
+        temporaryPassword?: string | null
+        mustChangePassword?: boolean
+        created?: boolean
+      }
+      if (obj.userId && obj.role) {
+        return {
+          userId: obj.userId,
+          email: obj.email ?? params.email,
+          username: null,
+          role: obj.role,
+          scopes: obj.scopes ?? [],
+          temporaryPassword: obj.temporaryPassword ?? null,
+          mustChangePassword: obj.mustChangePassword === true,
+          created: obj.created === true,
+        }
+      }
+    }
+    throw new Error('Unexpected create member response')
+  }
+
+  /**
+   * Update a member's role.
+   * Requires `case.owner` scope.
+   */
+  async updateMember(params: {
+    tenantId: string
+    userId: string
+    role: TenantMemberRole
+  }): Promise<TenantMember> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/members/${encodeURIComponent(params.userId)}`
+    const res = (await this._http.patch(url, { role: params.role })) as unknown
+    if (res && typeof res === 'object') {
+      const obj = res as { userId?: string; email?: string | null; role?: TenantMemberRole; scopes?: string[] }
+      if (obj.userId && obj.role) {
+        return {
+          userId: obj.userId,
+          email: obj.email ?? null,
+          username: null,
+          role: obj.role,
+          scopes: obj.scopes ?? [],
+        }
+      }
+    }
+    throw new Error('Unexpected update member response')
+  }
+
+  /**
+   * Remove a member's roles for this tenant.
+   * Requires `case.owner` scope.
+   */
+  async deleteMember(params: { tenantId: string; userId: string }): Promise<void> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/members/${encodeURIComponent(params.userId)}`
+    await this._http.delete(url)
+  }
 }
 
 /** Summary of an API key returned by the list endpoint. */
@@ -344,5 +466,15 @@ export type ApiKeySummary = {
   id: string
   clientId: string
   description: string
+}
+
+export type TenantMemberRole = 'viewer' | 'author' | 'admin'
+
+export type TenantMember = {
+  userId: string
+  email: string | null
+  username?: string | null
+  role: TenantMemberRole | null
+  scopes: string[]
 }
 

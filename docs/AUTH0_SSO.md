@@ -237,7 +237,31 @@ This works well for most setups. If you want to **skip the review page** and cre
 
 ## Step 7 -- Assign Roles to SSO Users
 
-Users who log in via Auth0 are created in Keycloak with no roles by default. To give them access to OpenCASE features, you need to assign roles:
+Users who log in via Auth0 are created in Keycloak with no roles by default.
+
+### Preferred: org → tenant + ensure-self
+
+OpenCASE uses **one Keycloak realm** and **one OAuth client per tenant** (`tenant-{tenantId}`). For multi-org Auth0:
+
+1. Create an OpenCASE tenant whose `tenantId` equals the Auth0 organization id (v1 convention: 1:1).
+2. Users sign in with **Organization ID** on the Editor login screen (not a shared `DEFAULT_TENANT_ID`).
+3. After login, the Editor calls `POST /management/tenants/{tenantId}/members/ensure-self`.
+
+**Claim contract** (configure Auth0 → Keycloak mappers separately):
+
+| Source | Target | Notes |
+|--------|--------|-------|
+| Auth0 organization id | Keycloak user attribute + access token claim `org_id` | Claim name override: env `SSO_ORG_CLAIM` |
+| OpenCASE tenant client mapper | JWT `tenantId` | Hardcoded to the client’s tenant |
+
+`ensure-self` requires `org_id === tenantId`. If the user has no client roles yet, OpenCASE assigns default **author** roles (`case.read` + `case.write`). The user should re-authenticate so the access token includes the new scopes.
+
+Tenant owners can promote members via:
+
+```
+POST /management/tenants/{tenantId}/members
+{ "email": "...", "role": "admin" | "author" | "viewer" }
+```
 
 ### Manual Role Assignment
 
@@ -248,7 +272,7 @@ Users who log in via Auth0 are created in Keycloak with no roles by default. To 
 
 ### Automatic Role Assignment (Optional)
 
-To assign a default role to all Auth0 users automatically:
+To assign a default role to all Auth0 users automatically (single-tenant only; prefer ensure-self for multi-org):
 
 1. Go to **Identity providers** > **auth0** > **Mappers** tab
 2. Click **Add mapper**
