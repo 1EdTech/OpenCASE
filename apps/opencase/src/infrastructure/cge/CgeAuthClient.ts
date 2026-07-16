@@ -7,33 +7,35 @@ type TokenCache = {
 
 /**
  * OAuth2 client_credentials token client for CASE Global (org API key).
+ * Token URL is supplied per call so each tenant can use its own CGE endpoint.
  */
 export class CgeAuthClient {
   private cache = new Map<string, TokenCache>()
 
-  constructor (
-    private readonly tokenUrl: string
-  ) {}
+  private cacheKey (tokenUrl: string, clientId: string): string {
+    return `${tokenUrl}::${clientId}`
+  }
 
-  async getAccessToken (clientId: string, clientSecret: string): Promise<string> {
-    const cacheKey = clientId
-    const cached = this.cache.get(cacheKey)
+  async getAccessToken (tokenUrl: string, clientId: string, clientSecret: string): Promise<string> {
+    const key = this.cacheKey(tokenUrl, clientId)
+    const cached = this.cache.get(key)
     if (cached && Date.now() < cached.expiresAtMs) {
       return cached.accessToken
     }
 
-    return await this.fetchToken(clientId, clientSecret)
+    return await this.fetchToken(tokenUrl, clientId, clientSecret)
   }
 
   /** Force mint a new token (e.g. after HTTP 401). */
-  async refreshAccessToken (clientId: string, clientSecret: string): Promise<string> {
-    this.cache.delete(clientId)
-    return await this.fetchToken(clientId, clientSecret)
+  async refreshAccessToken (tokenUrl: string, clientId: string, clientSecret: string): Promise<string> {
+    this.cache.delete(this.cacheKey(tokenUrl, clientId))
+    return await this.fetchToken(tokenUrl, clientId, clientSecret)
   }
 
-  private async fetchToken (clientId: string, clientSecret: string): Promise<string> {
-    if (!this.tokenUrl) {
-      throw new Error('CGE_TOKEN_URL is not configured')
+  private async fetchToken (tokenUrl: string, clientId: string, clientSecret: string): Promise<string> {
+    const url = tokenUrl.trim()
+    if (!url) {
+      throw new Error('CGE token URL is not configured for this tenant')
     }
 
     const params = new URLSearchParams()
@@ -41,7 +43,7 @@ export class CgeAuthClient {
     params.set('client_id', clientId)
     params.set('client_secret', clientSecret)
 
-    const res = await fetch(this.tokenUrl, {
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -62,7 +64,7 @@ export class CgeAuthClient {
     }
 
     const expiresIn = typeof json.expires_in === 'number' ? json.expires_in : 300
-    this.cache.set(clientId, {
+    this.cache.set(this.cacheKey(url, clientId), {
       accessToken: json.access_token,
       expiresAtMs: Date.now() + (expiresIn * 1000) - 30_000
     })

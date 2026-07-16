@@ -372,15 +372,50 @@ Each key is a Keycloak confidential client with `client_credentials` and `case.r
 
 #### CASE Global (CGE) credentials and proxies
 
-**Configure credentials** (`case.owner`):
+**Configure a tenant connection** (`case.owner`):
 ```bash
 GET/PUT/DELETE /management/tenants/{tenantId}/cge/credentials
 POST /management/tenants/{tenantId}/cge/credentials/test
 ```
 
-PUT body: `{ "clientId": "...", "clientSecret": "..." }`. Secrets are encrypted at rest (`CGE_CREDENTIALS_ENCRYPTION_KEY`). GET never returns the secret.
+The CASE Global dialog on the Editor home screen manages the same settings. Each
+tenant can connect to a different CASE Global deployment.
 
-**Use CGE** (`case.write`) — OpenCASE backend mints org tokens server-side:
+Create or update a connection:
+
+```http
+PUT /management/tenants/acme/cge/credentials
+Content-Type: application/json
+
+{
+  "apiBaseUrl": "https://cge.example.com",
+  "tokenUrl": "https://cge.example.com/realms/caseglobal/protocol/openid-connect/token",
+  "clientId": "acme-opencase",
+  "clientSecret": "..."
+}
+```
+
+- `apiBaseUrl`, `tokenUrl`, and `clientId` are required.
+- On update, omit `clientSecret` or send an empty value to retain the stored secret.
+- `apiBaseUrl` and `tokenUrl` are not secrets and are returned by GET.
+- `clientSecret` is encrypted at rest using `CGE_CREDENTIALS_ENCRYPTION_KEY` and is never returned.
+
+Example GET response:
+
+```json
+{
+  "configured": true,
+  "clientIdMasked": "acme…case",
+  "apiBaseUrl": "https://cge.example.com",
+  "tokenUrl": "https://cge.example.com/realms/caseglobal/protocol/openid-connect/token",
+  "updatedAt": "2026-07-16T18:00:00.000Z"
+}
+```
+
+`POST .../credentials/test` uses the stored token URL and credentials to mint a
+token. It does not call the coalition API.
+
+**Use CGE** (`case.write`) — OpenCASE backend mints org tokens server-side using the tenant’s stored endpoint + credentials:
 ```bash
 GET  /management/tenants/{tenantId}/cge/frameworks
 GET  /management/tenants/{tenantId}/cge/frameworks/{frameworkId}
@@ -390,7 +425,10 @@ POST /management/tenants/{tenantId}/cge/import
 
 Import body example: `{ "frameworkId": "...", "sourceUri": "https://publisher/.../CFPackages/...", "subscribe": true }`.
 
-Env: `CGE_TOKEN_URL`, `CGE_API_BASE_URL`, `CGE_CREDENTIALS_ENCRYPTION_KEY`, `SSO_ORG_CLAIM` (default `org_id`).
+`CGE_TOKEN_URL` and `CGE_API_BASE_URL` are optional deployment-wide fallbacks
+for legacy tenant records that do not contain endpoint fields. New or updated
+connections must provide both URLs. Always set
+`CGE_CREDENTIALS_ENCRYPTION_KEY` before storing credentials.
 
 ---
 

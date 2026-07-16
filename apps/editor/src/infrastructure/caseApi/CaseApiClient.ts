@@ -459,6 +459,89 @@ export class CaseApiClient {
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/members/${encodeURIComponent(params.userId)}`
     await this._http.delete(url)
   }
+
+  // ── CASE Global (CGE) credentials ───────────────────────────────
+
+  /**
+   * Get public CGE credential status for a tenant (never returns the secret).
+   * Requires `case.owner` (or `case.admin`).
+   */
+  async getCgeCredentials(params: { tenantId: string }): Promise<CgeCredentialsPublic> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/credentials`
+    const res = (await this._http.get(url)) as unknown
+    if (res && typeof res === 'object') {
+      const obj = res as CgeCredentialsPublic
+      return {
+        configured: obj.configured === true,
+        clientIdMasked: obj.clientIdMasked ?? null,
+        apiBaseUrl: obj.apiBaseUrl ?? null,
+        tokenUrl: obj.tokenUrl ?? null,
+        updatedAt: obj.updatedAt ?? null,
+      }
+    }
+    return {
+      configured: false,
+      clientIdMasked: null,
+      apiBaseUrl: null,
+      tokenUrl: null,
+      updatedAt: null,
+    }
+  }
+
+  /**
+   * Store / replace CGE org API key and endpoint URLs.
+   * Requires `case.owner` (or `case.admin`).
+   * Omit `clientSecret` (or pass empty) when updating endpoints/clientId and keeping the existing secret.
+   */
+  async putCgeCredentials(params: {
+    tenantId: string
+    clientId: string
+    clientSecret?: string
+    apiBaseUrl: string
+    tokenUrl: string
+  }): Promise<CgeCredentialsPublic> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/credentials`
+    const res = (await this._http.put(url, {
+      clientId: params.clientId,
+      clientSecret: params.clientSecret ?? '',
+      apiBaseUrl: params.apiBaseUrl,
+      tokenUrl: params.tokenUrl,
+    })) as unknown
+    if (res && typeof res === 'object') {
+      const obj = res as CgeCredentialsPublic
+      return {
+        configured: obj.configured === true,
+        clientIdMasked: obj.clientIdMasked ?? null,
+        apiBaseUrl: obj.apiBaseUrl ?? null,
+        tokenUrl: obj.tokenUrl ?? null,
+        updatedAt: obj.updatedAt ?? null,
+      }
+    }
+    throw new Error('Unexpected CGE credentials response')
+  }
+
+  /**
+   * Delete stored CGE credentials for a tenant.
+   * Requires `case.owner` (or `case.admin`).
+   */
+  async deleteCgeCredentials(params: { tenantId: string }): Promise<void> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/credentials`
+    await this._http.delete(url)
+  }
+
+  /**
+   * Test CGE credentials by minting a client_credentials token.
+   * Requires `case.owner` (or `case.admin`).
+   */
+  async testCgeCredentials(params: { tenantId: string }): Promise<{ ok: boolean; message: string }> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/credentials/test`
+    const res = (await this._http.post(url, {})) as unknown
+    if (res && typeof res === 'object') {
+      const obj = res as { ok?: boolean; message?: string }
+      return { ok: obj.ok === true, message: obj.message ?? '' }
+    }
+    return { ok: false, message: 'Unexpected test response' }
+  }
 }
 
 /** Summary of an API key returned by the list endpoint. */
@@ -476,5 +559,13 @@ export type TenantMember = {
   username?: string | null
   role: TenantMemberRole | null
   scopes: string[]
+}
+
+export type CgeCredentialsPublic = {
+  configured: boolean
+  clientIdMasked: string | null
+  apiBaseUrl: string | null
+  tokenUrl: string | null
+  updatedAt: string | null
 }
 

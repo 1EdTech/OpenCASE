@@ -32,11 +32,20 @@ export class CgeManagementController {
 
       const clientId = typeof req.body?.clientId === 'string' ? req.body.clientId.trim() : ''
       const clientSecret = typeof req.body?.clientSecret === 'string' ? req.body.clientSecret : ''
-      if (!clientId || !clientSecret) {
-        return res.status(400).json({ error: 'clientId and clientSecret are required' })
+      const apiBaseUrl = typeof req.body?.apiBaseUrl === 'string' ? req.body.apiBaseUrl.trim() : ''
+      const tokenUrl = typeof req.body?.tokenUrl === 'string' ? req.body.tokenUrl.trim() : ''
+      if (!clientId || !apiBaseUrl || !tokenUrl) {
+        return res.status(400).json({
+          error: 'clientId, apiBaseUrl, and tokenUrl are required'
+        })
       }
 
-      const pub = await this.credentialsStore.put(tenantId, clientId, clientSecret)
+      const pub = await this.credentialsStore.put(tenantId, {
+        clientId,
+        clientSecret,
+        apiBaseUrl,
+        tokenUrl
+      })
       logger.info({ tenantId, sub: (req as any).user?.sub }, 'CGE credentials updated')
       return res.status(200).json(pub)
     } catch (error: any) {

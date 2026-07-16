@@ -1,4 +1,4 @@
-import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon, KeyIcon, ArrowUpTrayIcon, UsersIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon, KeyIcon, ArrowUpTrayIcon, UsersIcon, GlobeAltIcon } from '@heroicons/react/24/solid'
 import { CodeBracketSquareIcon } from '@heroicons/react/24/outline'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
@@ -9,6 +9,7 @@ import ImportFrameworkDialog from '@/ui/home/ImportFrameworkDialog'
 import UploadFrameworkDialog from '@/ui/home/UploadFrameworkDialog'
 import ApiKeysDialog from '@/ui/home/ApiKeysDialog'
 import MembersDialog from '@/ui/home/MembersDialog'
+import CgeCredentialsDialog from '@/ui/home/CgeCredentialsDialog'
 import type { Framework } from '@/domain/framework/model/types'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
@@ -43,6 +44,7 @@ function UserAvatarMenu({
   onChangePassword,
   onApiKeys,
   onMembers,
+  onCgeCredentials,
 }: Readonly<{
   userName?: string
   tenantId?: string
@@ -51,6 +53,7 @@ function UserAvatarMenu({
   onChangePassword?: () => void
   onApiKeys?: () => void
   onMembers?: () => void
+  onCgeCredentials?: () => void
 }>) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -79,7 +82,7 @@ function UserAvatarMenu({
       </button>
 
       {open ? (
-        <div role="menu" className="absolute right-0 z-50 mt-2 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+        <div role="menu" className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
           <div className="p-1">
             {userName ? (
               <div className="px-2 py-2 text-sm text-gray-400">Signed in as {userName}</div>
@@ -118,6 +121,17 @@ function UserAvatarMenu({
               >
                 <CodeBracketSquareIcon className="h-4 w-4 text-gray-500" aria-hidden />
                 API Keys
+              </button>
+            ) : null}
+            {isAuthenticated && onCgeCredentials ? (
+              <button
+                role="menuitem"
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-[#2E2F2F] hover:bg-gray-50"
+                onClick={() => { onCgeCredentials(); setOpen(false) }}
+              >
+                <GlobeAltIcon className="h-4 w-4 text-gray-500" aria-hidden />
+                CASE Global
               </button>
             ) : null}
             {isAuthenticated && onSignOut ? (
@@ -164,6 +178,7 @@ export default function HomeScreen({
   const [uploadOpen, setUploadOpen] = useState(false)
   const [apiKeysOpen, setApiKeysOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
+  const [cgeCredentialsOpen, setCgeCredentialsOpen] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
 
@@ -532,6 +547,7 @@ export default function HomeScreen({
           onChangePassword={isAuthenticated && changePassword ? () => void changePassword() : undefined}
           onMembers={isAuthenticated && isTenantAdmin ? () => setMembersOpen(true) : undefined}
           onApiKeys={isAuthenticated && isTenantAdmin ? () => setApiKeysOpen(true) : undefined}
+          onCgeCredentials={isAuthenticated && isTenantAdmin ? () => setCgeCredentialsOpen(true) : undefined}
         />
 
         <div className="relative mx-auto max-w-6xl px-5 pb-12 pt-14">
@@ -984,6 +1000,15 @@ export default function HomeScreen({
           api={api}
           tenantId={tenantId}
           currentUserId={currentUserId}
+        />
+      )}
+
+      {tenantId && isTenantAdmin && (
+        <CgeCredentialsDialog
+          open={cgeCredentialsOpen}
+          onClose={() => setCgeCredentialsOpen(false)}
+          api={api}
+          tenantId={tenantId}
         />
       )}
 

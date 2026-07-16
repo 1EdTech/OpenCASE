@@ -6,17 +6,31 @@ import { existsSync } from 'node:fs'
 export interface CgeCredentials {
   clientId: string
   clientSecret: string
+  /** CASE Global coalition API base URL (e.g. https://cge.example.com). */
+  apiBaseUrl: string
+  /** OAuth2 token endpoint for client_credentials. */
+  tokenUrl: string
   updatedAt: string
 }
 
 export interface CgeCredentialsPublic {
   configured: boolean
   clientIdMasked: string | null
+  apiBaseUrl: string | null
+  tokenUrl: string | null
   updatedAt: string | null
 }
 
+export interface CgeCredentialsInput {
+  clientId: string
+  /** When empty and credentials already exist, the previous secret is retained. */
+  clientSecret?: string
+  apiBaseUrl: string
+  tokenUrl: string
+}
+
 /**
- * File-based per-tenant CGE credential store.
+ * File-based per-tenant CGE credential + endpoint store.
  * Secrets are encrypted at rest when an encryption key is configured.
  */
 export class FileCgeCredentialsStore {
@@ -63,17 +77,25 @@ export class FileCgeCredentialsStore {
     ]).toString('utf8')
   }
 
+  private maskClientId (id: string): string {
+    return id.length <= 8 ? '********' : `${id.slice(0, 4)}…${id.slice(-4)}`
+  }
+
   async get (tenantId: string): Promise<CgeCredentials | null> {
     const path = this.credentialsPath(tenantId)
     if (!existsSync(path)) return null
     const raw = JSON.parse(await readFile(path, 'utf8')) as {
       clientId: string
       clientSecret: string
+      apiBaseUrl?: string
+      tokenUrl?: string
       updatedAt: string
     }
     return {
       clientId: raw.clientId,
       clientSecret: this.decrypt(raw.clientSecret),
+      apiBaseUrl: (raw.apiBaseUrl ?? '').trim(),
+      tokenUrl: (raw.tokenUrl ?? '').trim(),
       updatedAt: raw.updatedAt
     }
   }
@@ -81,27 +103,50 @@ export class FileCgeCredentialsStore {
   async getPublic (tenantId: string): Promise<CgeCredentialsPublic> {
     const creds = await this.get(tenantId)
     if (!creds) {
-      return { configured: false, clientIdMasked: null, updatedAt: null }
+      return {
+        configured: false,
+        clientIdMasked: null,
+        apiBaseUrl: null,
+        tokenUrl: null,
+        updatedAt: null
+      }
     }
-    const id = creds.clientId
-    const masked = id.length <= 8 ? '********' : `${id.slice(0, 4)}…${id.slice(-4)}`
     return {
       configured: true,
-      clientIdMasked: masked,
+      clientIdMasked: this.maskClientId(creds.clientId),
+      apiBaseUrl: creds.apiBaseUrl || null,
+      tokenUrl: creds.tokenUrl || null,
       updatedAt: creds.updatedAt
     }
   }
 
-  async put (tenantId: string, clientId: string, clientSecret: string): Promise<CgeCredentialsPublic> {
+  async put (tenantId: string, input: CgeCredentialsInput): Promise<CgeCredentialsPublic> {
     if (!this.encryptionKey) {
       throw new Error('CGE_CREDENTIALS_ENCRYPTION_KEY is required to store CGE credentials')
     }
+
+    const apiBaseUrl = input.apiBaseUrl.trim().replace(/\/$/, '')
+    const tokenUrl = input.tokenUrl.trim()
+    const clientId = input.clientId.trim()
+    if (!apiBaseUrl) throw new Error('apiBaseUrl is required')
+    if (!tokenUrl) throw new Error('tokenUrl is required')
+    if (!clientId) throw new Error('clientId is required')
+
+    const existing = await this.get(tenantId)
+    const secretInput = (input.clientSecret ?? '').trim()
+    const clientSecret = secretInput || existing?.clientSecret
+    if (!clientSecret) {
+      throw new Error('clientSecret is required')
+    }
+
     const path = this.credentialsPath(tenantId)
     await mkdir(dirname(path), { recursive: true })
     const updatedAt = new Date().toISOString()
     const payload = {
       clientId,
       clientSecret: this.encrypt(clientSecret),
+      apiBaseUrl,
+      tokenUrl,
       updatedAt
     }
     await writeFile(path, JSON.stringify(payload, null, 2), 'utf8')

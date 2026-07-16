@@ -7,7 +7,7 @@ describe('CgeAuthClient', () => {
     global.fetch = originalFetch
   })
 
-  it('mints and caches access tokens', async () => {
+  it('mints and caches access tokens per token URL', async () => {
     let calls = 0
     global.fetch = jest.fn(async () => {
       calls += 1
@@ -17,9 +17,9 @@ describe('CgeAuthClient', () => {
       } as any
     }) as any
 
-    const client = new CgeAuthClient('https://cge.example/token')
-    const t1 = await client.getAccessToken('cid', 'sec')
-    const t2 = await client.getAccessToken('cid', 'sec')
+    const client = new CgeAuthClient()
+    const t1 = await client.getAccessToken('https://cge.example/token', 'cid', 'sec')
+    const t2 = await client.getAccessToken('https://cge.example/token', 'cid', 'sec')
     expect(t1).toBe('tok-1')
     expect(t2).toBe('tok-1')
     expect(calls).toBe(1)
@@ -35,9 +35,9 @@ describe('CgeAuthClient', () => {
       } as any
     }) as any
 
-    const client = new CgeAuthClient('https://cge.example/token')
-    await client.getAccessToken('cid', 'sec')
-    const refreshed = await client.refreshAccessToken('cid', 'sec')
+    const client = new CgeAuthClient()
+    await client.getAccessToken('https://cge.example/token', 'cid', 'sec')
+    const refreshed = await client.refreshAccessToken('https://cge.example/token', 'cid', 'sec')
     expect(refreshed).toBe('tok-2')
     expect(calls).toBe(2)
   })

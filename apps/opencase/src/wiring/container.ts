@@ -401,8 +401,11 @@ export async function buildContainer(): Promise<Container> {
     config.caseDataDir,
     config.cgeCredentialsEncryptionKey
   )
-  const cgeAuthClient = new CgeAuthClient(config.cgeTokenUrl)
-  const cgeApiClient = new CgeApiClient(config.cgeApiBaseUrl, cgeAuthClient, cgeCredentialsStore)
+  const cgeAuthClient = new CgeAuthClient()
+  const cgeApiClient = new CgeApiClient(cgeAuthClient, cgeCredentialsStore, {
+    apiBaseUrl: config.cgeApiBaseUrl,
+    tokenUrl: config.cgeTokenUrl
+  })
   const cgeManagementController = new CgeManagementController(
     cgeCredentialsStore,
     cgeApiClient,
