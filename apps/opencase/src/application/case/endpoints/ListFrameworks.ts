@@ -24,6 +24,9 @@ export class ListFrameworks {
       subject?: string
       version?: string
       lastChangeDateTime: string
+      readOnly?: boolean
+      cgeFrameworkId?: string
+      sourcePackageURI?: string
     }> = []
 
     for (const version of versions) {
@@ -44,7 +47,10 @@ export class ListFrameworks {
           frameworkType: doc.frameworkType,
           subject: doc.subject,
           version: doc.version,
-          lastChangeDateTime: doc.lastChangeDateTime.toISOString()
+          lastChangeDateTime: doc.lastChangeDateTime.toISOString(),
+          readOnly: doc.readOnly === true,
+          cgeFrameworkId: doc.cgeFrameworkId,
+          sourcePackageURI: doc.sourcePackageURI,
         })
       }
     }

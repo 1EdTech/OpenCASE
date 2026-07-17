@@ -2,6 +2,7 @@ import type { CFPackageRepository } from '../ports/CFPackageRepository'
 import { CaseVersion, TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
+import { assertDocumentMutable } from '../services/assertDocumentMutable'
 
 export interface DeleteCFItemCommand {
   tenantId: TenantId
@@ -23,6 +24,8 @@ export class DeleteCFItem {
     if (!docId) {
       throw new Error(`CFItem with sourcedId ${sourcedId} not found`)
     }
+
+    assertDocumentMutable(this.store, tenantId, caseVersion, docId)
 
     // Load existing package
     const existingPkg = await this.pkgRepo.load(tenantId, caseVersion, docId)

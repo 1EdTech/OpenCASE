@@ -6,9 +6,11 @@ import { existsSync } from 'node:fs'
 export interface CgeCredentials {
   clientId: string
   clientSecret: string
-  /** CASE Global coalition API base URL (e.g. https://cge.example.com). */
+  /** OpenID Connect discovery document URL (stored as entered/normalized). */
+  discoveryUrl: string
+  /** CASE Global coalition API base URL (derived from discovery origin). */
   apiBaseUrl: string
-  /** OAuth2 token endpoint for client_credentials. */
+  /** OAuth2 token endpoint for client_credentials (from discovery). */
   tokenUrl: string
   updatedAt: string
 }
@@ -16,8 +18,7 @@ export interface CgeCredentials {
 export interface CgeCredentialsPublic {
   configured: boolean
   clientIdMasked: string | null
-  apiBaseUrl: string | null
-  tokenUrl: string | null
+  discoveryUrl: string | null
   updatedAt: string | null
 }
 
@@ -25,6 +26,7 @@ export interface CgeCredentialsInput {
   clientId: string
   /** When empty and credentials already exist, the previous secret is retained. */
   clientSecret?: string
+  discoveryUrl: string
   apiBaseUrl: string
   tokenUrl: string
 }
@@ -87,6 +89,7 @@ export class FileCgeCredentialsStore {
     const raw = JSON.parse(await readFile(path, 'utf8')) as {
       clientId: string
       clientSecret: string
+      discoveryUrl?: string
       apiBaseUrl?: string
       tokenUrl?: string
       updatedAt: string
@@ -94,6 +97,7 @@ export class FileCgeCredentialsStore {
     return {
       clientId: raw.clientId,
       clientSecret: this.decrypt(raw.clientSecret),
+      discoveryUrl: (raw.discoveryUrl ?? '').trim(),
       apiBaseUrl: (raw.apiBaseUrl ?? '').trim(),
       tokenUrl: (raw.tokenUrl ?? '').trim(),
       updatedAt: raw.updatedAt
@@ -106,16 +110,14 @@ export class FileCgeCredentialsStore {
       return {
         configured: false,
         clientIdMasked: null,
-        apiBaseUrl: null,
-        tokenUrl: null,
+        discoveryUrl: null,
         updatedAt: null
       }
     }
     return {
       configured: true,
       clientIdMasked: this.maskClientId(creds.clientId),
-      apiBaseUrl: creds.apiBaseUrl || null,
-      tokenUrl: creds.tokenUrl || null,
+      discoveryUrl: creds.discoveryUrl || null,
       updatedAt: creds.updatedAt
     }
   }
@@ -125,9 +127,11 @@ export class FileCgeCredentialsStore {
       throw new Error('CGE_CREDENTIALS_ENCRYPTION_KEY is required to store CGE credentials')
     }
 
+    const discoveryUrl = input.discoveryUrl.trim()
     const apiBaseUrl = input.apiBaseUrl.trim().replace(/\/$/, '')
     const tokenUrl = input.tokenUrl.trim()
     const clientId = input.clientId.trim()
+    if (!discoveryUrl) throw new Error('discoveryUrl is required')
     if (!apiBaseUrl) throw new Error('apiBaseUrl is required')
     if (!tokenUrl) throw new Error('tokenUrl is required')
     if (!clientId) throw new Error('clientId is required')
@@ -145,6 +149,7 @@ export class FileCgeCredentialsStore {
     const payload = {
       clientId,
       clientSecret: this.encrypt(clientSecret),
+      discoveryUrl,
       apiBaseUrl,
       tokenUrl,
       updatedAt

@@ -7,6 +7,8 @@ import { FileFrameworkStore } from '../infrastructure/persistence/file/FileFrame
 import { FileCFPackageRepository } from '../infrastructure/persistence/file/FileCFPackageRepository'
 import { CreateFramework } from '../application/case/endpoints/CreateFramework'
 import { ImportFramework } from '../application/case/endpoints/ImportFramework'
+import { ImportCgeCachedFramework } from '../application/cge/endpoints/ImportCgeCachedFramework'
+import { SearchCachedFrameworkItems } from '../application/cge/endpoints/SearchCachedFrameworkItems'
 import { GetCFPackage } from '../application/case/endpoints/GetCFPackage'
 import { GetCFDocument } from '../application/case/endpoints/GetCFDocument'
 import { GetAllCFDocuments } from '../application/case/endpoints/GetAllCFDocuments'
@@ -277,7 +279,7 @@ export async function buildContainer(): Promise<Container> {
   const getCFLicense = new GetCFLicense(pkgRepo, store)
 
   // Initialize management commands
-  const updateCFDocument = new UpdateCFDocument(pkgRepo, jsonSchemaValidator)
+  const updateCFDocument = new UpdateCFDocument(pkgRepo, store, jsonSchemaValidator)
   const updateCFItem = new UpdateCFItem(pkgRepo, store, jsonSchemaValidator)
   const updateCFAssociation = new UpdateCFAssociation(pkgRepo, store, jsonSchemaValidator)
   const deleteCFDocument = new DeleteCFDocument(pkgRepo, store)
@@ -406,10 +408,14 @@ export async function buildContainer(): Promise<Container> {
     apiBaseUrl: config.cgeApiBaseUrl,
     tokenUrl: config.cgeTokenUrl
   })
+  const importCgeCachedFramework = new ImportCgeCachedFramework(cgeApiClient, importFramework, store)
+  const searchCachedFrameworkItems = new SearchCachedFrameworkItems(store)
   const cgeManagementController = new CgeManagementController(
     cgeCredentialsStore,
     cgeApiClient,
-    importFramework
+    importFramework,
+    importCgeCachedFramework,
+    searchCachedFrameworkItems
   )
 
   const tenantLookupController = new TenantLookupController(keycloakAdmin, {

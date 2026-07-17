@@ -520,10 +520,25 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
       requireScope('case.write'),
       deps.cgeController.createSubscription
     )
+    app.get(
+      '/management/tenants/:tenantId/cge/subscriptions',
+      requireScope('case.write'),
+      deps.cgeController.listSubscriptions
+    )
     app.post(
       '/management/tenants/:tenantId/cge/import',
       requireScope('case.write'),
       deps.cgeController.importFromCge
+    )
+    app.post(
+      '/management/tenants/:tenantId/cge/frameworks/:frameworkId/refresh',
+      requireScope('case.write'),
+      deps.cgeController.refreshCachedFramework
+    )
+    app.get(
+      '/management/tenants/:tenantId/cge/cache/:docId/items',
+      requireScope('case.write'),
+      deps.cgeController.searchCachedItems
     )
   }
 

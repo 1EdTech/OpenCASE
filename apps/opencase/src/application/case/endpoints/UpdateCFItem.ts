@@ -6,6 +6,7 @@ import { CFAssociation } from '../../../domain/case/entities/CFAssociation'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 import { JsonSchemaValidator } from '../../../infrastructure/validation/JsonSchemaValidator'
+import { assertDocumentMutable } from '../services/assertDocumentMutable'
 
 export interface UpdateCFItemCommand {
   tenantId: TenantId
@@ -39,6 +40,8 @@ export class UpdateCFItem {
     if (!docId) {
       throw new Error(`CFItem with sourcedId ${sourcedId} not found`)
     }
+
+    assertDocumentMutable(this.store, tenantId, caseVersion, docId)
 
     // Load existing package
     const existingPkg = await this.pkgRepo.load(tenantId, caseVersion, docId)

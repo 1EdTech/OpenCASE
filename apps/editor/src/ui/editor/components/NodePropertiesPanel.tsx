@@ -1,5 +1,8 @@
 import { memo, useEffect, useMemo, useState } from 'react'
+import type { CheckedState } from '@radix-ui/react-checkbox'
 import { Button } from '@/ui/shared/components/ui/button'
+import { Checkbox } from '@/ui/shared/components/ui/checkbox'
+import { Label } from '@/ui/shared/components/ui/label'
 import { ComboboxInput } from '@/ui/shared/components/ui/combobox-input'
 import { TagComboboxInput } from '@/ui/shared/components/ui/tag-combobox-input'
 import type { TagComboboxOption } from '@/ui/shared/components/ui/tag-combobox-input'
@@ -19,6 +22,9 @@ import type { EducationLevelOption } from '@/ui/editor/terminology/educationLeve
 import { getAppConfig } from '@/app/config'
 import ColorBandPicker from '@/ui/editor/components/ColorBandPicker'
 import SidebarSection from './SidebarSection'
+import type { RemoteItemLink } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
+import { CASE_ASSOCIATION_TYPES } from '../reactflow/types'
+import { ArrowPathIcon } from '@heroicons/react/24/solid'
 
 /* ── Shared styling constants ── */
 const INPUT_CLS = 'w-full rounded-xl border border-black/15 bg-white px-3 py-2.5 text-base text-slate-900 focus-visible:outline-2 focus-visible:outline-violet-700/40 focus-visible:outline-offset-2'
@@ -38,11 +44,20 @@ type Props = {
   ensureCfSubject?: (_title: string) => CFSubject | null
   cfConcepts?: CFConcept[]
   ensureCfConcept?: (_title: string) => CFConcept | null
+  remoteLinks?: RemoteItemLink[]
+  onRemoveRemoteLink?: (_linkId: string) => void
+  onUpdateRemoteLinkType?: (_linkId: string, _associationType: string) => void
+  onRemoveRemoteFramework?: (_nodeId: string) => void
+  onBrowseRemoteItems?: (_nodeId: string) => void
+  onRefreshRemoteFramework?: () => Promise<void>
+  remoteFrameworkRefreshing?: boolean
 }
 
 export default memo(function NodePropertiesPanel({
   node, onClose, onChangeNode, onViewCFPackage, isPublishedToOpenCase, availableLicenses,
   cfItemTypes = [], ensureCfItemType, cfSubjects = [], ensureCfSubject, cfConcepts = [], ensureCfConcept,
+  remoteLinks = [], onRemoveRemoteLink, onUpdateRemoteLinkType,
+  onRemoveRemoteFramework, onBrowseRemoteItems, onRefreshRemoteFramework, remoteFrameworkRefreshing,
 }: Readonly<Props>) {
   const [copied, setCopied] = useState<null | 'code' | 'uri' | 'opencase'>(null)
   const [conceptInput, setConceptInput] = useState('')
@@ -144,10 +159,20 @@ export default memo(function NodePropertiesPanel({
       : (cfItem?.humanCodingScheme ?? cfItem?.alternativeLabel ?? cfItem?.CFItemType ?? 'Untitled item')
 
   const headerSubtitle = isExternalFramework
-    ? 'External reference'
+    ? (externalData?.cacheError
+        ? 'Cache unavailable'
+        : externalData?.cacheDocId
+          ? 'Cached remote framework'
+          : externalData?.cacheLoading
+            ? 'Downloading cache…'
+            : 'Remote framework (not cached)')
     : isFramework
       ? 'Framework'
       : (cfItem?.CFItemType ?? 'Item')
+
+  const itemRemoteLinks = node && isItemNode(node)
+    ? remoteLinks.filter((l) => l.localItemId === node.id)
+    : []
 
   return (
     <aside
@@ -203,6 +228,94 @@ export default memo(function NodePropertiesPanel({
 
             <SidebarSection title="Description" subtitle="Notes about this external reference." accentColor="#d97706">
               <textarea id="ext-description" rows={4} className={`${INPUT_CLS} resize-y`} value={externalData?.description ?? ''} onChange={(e) => updateExternalFramework({ description: e.target.value })} placeholder="Add notes about this external framework..." />
+            </SidebarSection>
+
+            <SidebarSection title="Appearance" subtitle="Color used on the canvas and link bars." accentColor={externalData?.color ?? '#d97706'}>
+              <ColorBandPicker
+                value={externalData?.color}
+                onChange={(color) => updateExternalFramework({ color: color ?? externalData?.color ?? '#64748b' })}
+                label="Theme color"
+                labelClassName={LABEL_CLS}
+              />
+            </SidebarSection>
+
+            {externalData?.cgeFrameworkId ? (
+              <SidebarSection title="Cache" subtitle="Read-only copy stored in OpenCASE for browsing and linking." accentColor={externalData?.color ?? '#d97706'}>
+                <div className="space-y-3 text-sm text-slate-600">
+                  {externalData.cacheError ? (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800">
+                      <div className="font-medium">Could not download framework</div>
+                      <div className="mt-1 text-xs leading-relaxed text-rose-700">{externalData.cacheError}</div>
+                      <div className="mt-2 text-xs text-rose-600">
+                        Try enabling &quot;Open publisher (no auth)&quot; below, then download again.
+                      </div>
+                    </div>
+                  ) : null}
+                  {externalData.cacheLoading ? (
+                    <div className="text-sm text-slate-500">Downloading from publisher…</div>
+                  ) : null}
+                  {!externalData.cacheDocId && !externalData.cacheError && !externalData.cacheLoading ? (
+                    <div className="text-sm text-slate-500">No cached copy yet. Download to browse items and create links.</div>
+                  ) : null}
+                  {externalData.itemCount != null ? (
+                    <div>{externalData.itemCount} items cached</div>
+                  ) : null}
+                  {externalData.cachedAt ? (
+                    <div>Last refreshed: {formatDateTime(externalData.cachedAt)}</div>
+                  ) : null}
+                  {externalData.cacheDocId ? (
+                    <div className="font-mono text-xs text-slate-500">Doc: {externalData.cacheDocId}</div>
+                  ) : null}
+                  <div className="rounded-xl border border-black/10 bg-white p-3">
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id="ext-skip-publisher-auth"
+                        checked={Boolean(externalData.skipPublisherAuth)}
+                        onCheckedChange={(v: CheckedState) => updateExternalFramework({ skipPublisherAuth: Boolean(v) })}
+                      />
+                      <div className="grid gap-1">
+                        <Label htmlFor="ext-skip-publisher-auth" className="text-sm font-medium text-slate-900">
+                          Open publisher (no auth)
+                        </Label>
+                        <div className={HINT_CLS}>
+                          Skip the CGE bearer token when refreshing from the publisher. Use when the framework is publicly accessible but rejects CASE Global credentials.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {onBrowseRemoteItems && node && externalData.cacheDocId ? (
+                      <Button type="button" variant="secondary" size="sm" onClick={() => onBrowseRemoteItems(node.id)}>
+                        Browse items
+                      </Button>
+                    ) : null}
+                    {onRefreshRemoteFramework ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={remoteFrameworkRefreshing || externalData.cacheLoading}
+                        onClick={() => void onRefreshRemoteFramework()}
+                      >
+                        <ArrowPathIcon className={`mr-1.5 h-4 w-4 ${remoteFrameworkRefreshing || externalData.cacheLoading ? 'animate-spin' : ''}`} aria-hidden="true" />
+                        {remoteFrameworkRefreshing || externalData.cacheLoading
+                          ? 'Downloading…'
+                          : externalData.cacheDocId
+                            ? 'Refresh cache'
+                            : 'Download cache'}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </SidebarSection>
+            ) : null}
+
+            <SidebarSection title="Actions" subtitle="Manage this remote framework on the canvas." accentColor={externalData?.color ?? '#d97706'} defaultOpen={false}>
+              {onRemoveRemoteFramework && node ? (
+                <Button type="button" variant="destructive" size="sm" onClick={() => onRemoveRemoteFramework(node.id)}>
+                  Remove from canvas
+                </Button>
+              ) : null}
             </SidebarSection>
 
             <div className="mx-4 my-2 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
@@ -433,6 +546,47 @@ export default memo(function NodePropertiesPanel({
                 </div>
               )}
             </SidebarSection>
+
+            {/* ── Remote links (items only) ── */}
+            {!isFramework && !isExternalFramework && itemRemoteLinks.length > 0 ? (
+              <SidebarSection title="Remote links" subtitle="Associations to items in cached frameworks." accentColor={accentColor} defaultOpen>
+                <div className="space-y-3">
+                  {itemRemoteLinks.map((link) => (
+                    <div key={link.id} className="rounded-xl border border-black/10 bg-white p-3">
+                      <div className="flex items-start gap-2">
+                        <div className="mt-1 h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: link.remoteFrameworkColor ?? '#64748b' }} />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-medium text-slate-500">{link.remoteFrameworkTitle ?? 'Remote framework'}</div>
+                          <div className="truncate text-sm font-medium text-slate-900">
+                            {link.remoteHumanCodingScheme ? (
+                              <span className="font-mono text-xs text-slate-600">{link.remoteHumanCodingScheme}</span>
+                            ) : null}
+                            {link.remoteHumanCodingScheme && link.remoteLabel ? ' — ' : null}
+                            {link.remoteLabel}
+                          </div>
+                          <div className="mt-2">
+                            <label className="sr-only" htmlFor={`remote-link-type-${link.id}`}>Association type</label>
+                            <select
+                              id={`remote-link-type-${link.id}`}
+                              className={INPUT_CLS}
+                              value={link.associationType}
+                              onChange={(e) => onUpdateRemoteLinkType?.(link.id, e.target.value)}
+                            >
+                              {CASE_ASSOCIATION_TYPES.map((t) => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                      <Button type="button" variant="ghost" size="sm" className="mt-2 w-full text-rose-700 hover:text-rose-800" onClick={() => onRemoveRemoteLink?.(link.id)}>
+                        Remove link
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </SidebarSection>
+            ) : null}
 
             {/* ── Item lifecycle (items only) ── */}
             {!isFramework && !isExternalFramework && cfItem ? (

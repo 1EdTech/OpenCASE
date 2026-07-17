@@ -19,23 +19,15 @@ import { FRAMEWORK_ROOT_ASSOCIATION_TYPE } from '@/ui/editor/reactflow/types'
 import type { CFItem } from '@/domain/case/types'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
 import { DEFAULT_EDGE_MARKER, getEdgeMarkers, getEdgeStyle, makeEdgeLabel } from '@/ui/editor/state/editorFactories'
-import {
-  DEFAULT_NODE_HEIGHT,
-  DEFAULT_NODE_WIDTH,
-  HEADER_SAFE_Y,
-  WRAPPER_NODE_CLASS,
-  findNonOverlappingPosition,
-  getClosestHandles,
-  getNodeSize,
-  isFrameworkNode,
-  isItemNode,
-} from '@/ui/editor/state/helpers/nodeGeometry'
+import type { RemoteItemLink } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
+import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, HEADER_SAFE_Y, WRAPPER_NODE_CLASS, findNonOverlappingPosition, getClosestHandles, getNodeSize, isFrameworkNode, isItemNode } from '@/ui/editor/state/helpers/nodeGeometry'
 
 // ── State ──────────────────────────────────────────────────────────────
 
 export type EditorState = {
   nodes: CaseEditorNodeType[]
   edges: CaseEditorEdge[]
+  remoteLinks: RemoteItemLink[]
   selectedNodeId: string | null
   selectedEdgeId: string | null
   /** IDs of all selected nodes (for multi-selection) */
@@ -63,6 +55,10 @@ export type Action =
   | { type: 'node/addChild'; parentId: string; childId: string; cfItem: CFItem }
   | { type: 'node/addDetachedItem'; nodeId: string; cfItem: CFItem; viewportCenter?: { x: number; y: number } }
   | { type: 'node/addExternalFramework'; nodeId: string; data: ExternalFrameworkNodeData; viewportCenter?: { x: number; y: number } }
+  | { type: 'node/removeRemoteFramework'; nodeId: string }
+  | { type: 'remoteLink/add'; link: RemoteItemLink }
+  | { type: 'remoteLink/remove'; linkId: string }
+  | { type: 'remoteLink/updateType'; linkId: string; associationType: string }
   | { type: 'graph/delete'; nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }
   | { type: 'layout/apply'; positions: Record<string, { x: number; y: number }> }
   | { type: 'layout/applyHierarchy'; positions: Record<string, { x: number; y: number }>; edgeHandles: Record<string, { sourceHandle: string; targetHandle: string; edgeType?: string; labelPosition?: 'center' | 'target' }> }
@@ -178,6 +174,7 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
     }
     case 'node/updateData': {
       const { nodeId, patch } = action
+      const targetNode = state.nodes.find((n) => n.id === nodeId)
       const nodes = state.nodes.map((n) => {
         if (n.id !== nodeId) return n
         if (isItemNode(n) && 'cfItem' in patch && patch.cfItem) {
@@ -191,7 +188,21 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         }
         return n
       })
-      return { ...state, nodes, dirty: true }
+
+      let remoteLinks = state.remoteLinks
+      if (targetNode?.type === 'externalFrameworkNode' && (patch.color !== undefined || patch.title !== undefined)) {
+        const refId = (targetNode.data as ExternalFrameworkNodeData).refId
+        remoteLinks = state.remoteLinks.map((l) => {
+          if (l.remoteFrameworkRefId !== refId) return l
+          return {
+            ...l,
+            ...(patch.color !== undefined ? { remoteFrameworkColor: patch.color } : {}),
+            ...(patch.title !== undefined ? { remoteFrameworkTitle: patch.title } : {}),
+          }
+        })
+      }
+
+      return { ...state, nodes, remoteLinks, dirty: true }
     }
     case 'edge/updateData': {
       const { edgeId, patch } = action
@@ -480,6 +491,50 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
       const nextNodes = [...state.nodes.map((n) => ({ ...n, selected: false })), { ...newNode, selected: true }]
       return { ...state, nodes: nextNodes, selectedNodeId: action.nodeId, selectedEdgeId: null, selectedNodeIds: [action.nodeId], selectedEdgeIds: [], dirty: true }
     }
+    case 'node/removeRemoteFramework': {
+      const refId = state.nodes.find((n) => n.id === action.nodeId && n.type === 'externalFrameworkNode')
+        ? (state.nodes.find((n) => n.id === action.nodeId)?.data as ExternalFrameworkNodeData | undefined)?.refId
+        : undefined
+      const nextNodes = state.nodes.filter((n) => n.id !== action.nodeId)
+      const nextLinks = refId
+        ? state.remoteLinks.filter((l) => l.remoteFrameworkRefId !== refId)
+        : state.remoteLinks
+      const nextEdges = state.edges.filter((e) => e.source !== action.nodeId && e.target !== action.nodeId)
+      return {
+        ...state,
+        nodes: nextNodes,
+        edges: nextEdges,
+        remoteLinks: nextLinks,
+        selectedNodeId: state.selectedNodeId === action.nodeId ? null : state.selectedNodeId,
+        selectedNodeIds: state.selectedNodeIds.filter((id) => id !== action.nodeId),
+        dirty: true,
+      }
+    }
+    case 'remoteLink/add': {
+      const exists = state.remoteLinks.some(
+        (l) => l.localItemId === action.link.localItemId &&
+          l.remoteItemIdentifier === action.link.remoteItemIdentifier &&
+          l.remoteFrameworkRefId === action.link.remoteFrameworkRefId
+      )
+      if (exists) return state
+      return { ...state, remoteLinks: [...state.remoteLinks, action.link], dirty: true }
+    }
+    case 'remoteLink/remove': {
+      return {
+        ...state,
+        remoteLinks: state.remoteLinks.filter((l) => l.id !== action.linkId),
+        dirty: true,
+      }
+    }
+    case 'remoteLink/updateType': {
+      return {
+        ...state,
+        remoteLinks: state.remoteLinks.map((l) =>
+          l.id === action.linkId ? { ...l, associationType: action.associationType } : l
+        ),
+        dirty: true,
+      }
+    }
     case 'node/addExternalFramework': {
       const existingNodes = state.nodes
       const nodeSize = { w: 280, h: 120 }
@@ -571,6 +626,7 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
       const selectedEdgeId = state.selectedEdgeId && deleteEdgeIds.has(state.selectedEdgeId) ? null : state.selectedEdgeId
       const selectedNodeIds = state.selectedNodeIds.filter((id) => !deleteNodeIds.has(id))
       const selectedEdgeIds = state.selectedEdgeIds.filter((id) => !deleteEdgeIds.has(id))
+      const remainingRemoteLinks = state.remoteLinks.filter((l) => !deleteNodeIds.has(l.localItemId))
       return {
         ...state,
         selectedNodeId,
@@ -579,6 +635,7 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         selectedEdgeIds,
         nodes: remainingNodes.map((n) => ({ ...n, selected: selectedNodeId ? n.id === selectedNodeId : false })),
         edges: remainingEdges.map((e) => ({ ...e, selected: selectedEdgeId ? e.id === selectedEdgeId : false })) as CaseEditorEdge[],
+        remoteLinks: remainingRemoteLinks,
         dirty: true,
       }
     }
@@ -610,6 +667,7 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
       return {
         nodes: action.graph.nodes,
         edges: action.graph.edges,
+        remoteLinks: action.graph.remoteLinks ?? [],
         selectedNodeId: null,
         selectedEdgeId: null,
         selectedNodeIds: [],

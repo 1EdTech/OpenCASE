@@ -12,6 +12,9 @@ import { Input } from '@/ui/shared/components/ui/input'
 import { Label } from '@/ui/shared/components/ui/label'
 import type { CaseApiClient, CgeCredentialsPublic } from '@/infrastructure/caseApi/CaseApiClient'
 
+const DISCOVERY_PLACEHOLDER =
+  'https://caseglobal-preview.1edtech.org/auth/realms/caseglobal/.well-known/openid-configuration'
+
 export default function CgeCredentialsDialog({
   open,
   onClose,
@@ -28,8 +31,7 @@ export default function CgeCredentialsDialog({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  const [apiBaseUrl, setApiBaseUrl] = useState('')
-  const [tokenUrl, setTokenUrl] = useState('')
+  const [discoveryUrl, setDiscoveryUrl] = useState('')
   const [clientId, setClientId] = useState('')
   const [clientSecret, setClientSecret] = useState('')
   const [saving, setSaving] = useState(false)
@@ -44,8 +46,7 @@ export default function CgeCredentialsDialog({
       const result = await api.getCgeCredentials({ tenantId })
       setStatus(result)
       if (result.configured) {
-        setApiBaseUrl(result.apiBaseUrl ?? '')
-        setTokenUrl(result.tokenUrl ?? '')
+        setDiscoveryUrl(result.discoveryUrl ?? '')
       }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
@@ -58,8 +59,7 @@ export default function CgeCredentialsDialog({
     if (open) {
       setClientId('')
       setClientSecret('')
-      setApiBaseUrl('')
-      setTokenUrl('')
+      setDiscoveryUrl('')
       setSuccess(null)
       setError(null)
       setConfirmDelete(false)
@@ -69,11 +69,10 @@ export default function CgeCredentialsDialog({
 
   const handleSave = useCallback(async () => {
     const id = clientId.trim()
-    const base = apiBaseUrl.trim()
-    const token = tokenUrl.trim()
+    const discovery = discoveryUrl.trim()
     const secret = clientSecret
-    if (!base || !token) {
-      setError('API base URL and token URL are required')
+    if (!discovery) {
+      setError('OpenID discovery URL is required')
       return
     }
     if (!id) {
@@ -92,20 +91,18 @@ export default function CgeCredentialsDialog({
         tenantId,
         clientId: id,
         clientSecret: secret,
-        apiBaseUrl: base,
-        tokenUrl: token,
+        discoveryUrl: discovery,
       })
       setStatus(result)
       setClientSecret('')
-      setApiBaseUrl(result.apiBaseUrl ?? base)
-      setTokenUrl(result.tokenUrl ?? token)
+      setDiscoveryUrl(result.discoveryUrl ?? discovery)
       setSuccess('CASE Global connection saved.')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setSaving(false)
     }
-  }, [api, tenantId, clientId, clientSecret, apiBaseUrl, tokenUrl, status?.configured])
+  }, [api, tenantId, clientId, clientSecret, discoveryUrl, status?.configured])
 
   const handleTest = useCallback(async () => {
     setTesting(true)
@@ -134,12 +131,10 @@ export default function CgeCredentialsDialog({
       setStatus({
         configured: false,
         clientIdMasked: null,
-        apiBaseUrl: null,
-        tokenUrl: null,
+        discoveryUrl: null,
         updatedAt: null,
       })
-      setApiBaseUrl('')
-      setTokenUrl('')
+      setDiscoveryUrl('')
       setClientId('')
       setClientSecret('')
       setConfirmDelete(false)
@@ -157,13 +152,12 @@ export default function CgeCredentialsDialog({
     setSuccess(null)
     setClientId('')
     setClientSecret('')
-    setApiBaseUrl('')
-    setTokenUrl('')
+    setDiscoveryUrl('')
     onClose()
   }, [onClose])
 
   const canSave =
-    Boolean(apiBaseUrl.trim() && tokenUrl.trim() && clientId.trim()) &&
+    Boolean(discoveryUrl.trim() && clientId.trim()) &&
     (status?.configured || Boolean(clientSecret.trim()))
 
   return (
@@ -173,8 +167,8 @@ export default function CgeCredentialsDialog({
           <DialogHeader>
             <DialogTitle>CASE Global</DialogTitle>
             <DialogDescription>
-              Configure this organization&apos;s CASE Global endpoint and consumer credentials.
-              The client secret is kept on the OpenCASE server only and never returned after save.
+              Configure this organization&apos;s CASE Global OpenID discovery endpoint and consumer credentials.
+              Token and API URLs are resolved automatically from discovery. The client secret is kept on the OpenCASE server only.
             </DialogDescription>
           </DialogHeader>
 
@@ -198,9 +192,9 @@ export default function CgeCredentialsDialog({
                 <p className="font-mono text-xs text-gray-600">
                   Client ID: {status.clientIdMasked}
                 </p>
-                {status.apiBaseUrl ? (
+                {status.discoveryUrl ? (
                   <p className="font-mono text-xs text-gray-600 break-all">
-                    API: {status.apiBaseUrl}
+                    Discovery: {status.discoveryUrl}
                   </p>
                 ) : null}
                 {status.updatedAt ? (
@@ -217,30 +211,20 @@ export default function CgeCredentialsDialog({
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
             <div className="grid gap-3">
               <div className="grid gap-2">
-                <Label htmlFor="cge_api_base" className="text-xs font-medium text-gray-600">
-                  API base URL
+                <Label htmlFor="cge_discovery_url" className="text-xs font-medium text-gray-600">
+                  OpenID discovery URL
                 </Label>
                 <Input
-                  id="cge_api_base"
-                  value={apiBaseUrl}
-                  onChange={(e) => setApiBaseUrl(e.target.value)}
-                  placeholder="https://cge.example.com"
+                  id="cge_discovery_url"
+                  value={discoveryUrl}
+                  onChange={(e) => setDiscoveryUrl(e.target.value)}
+                  placeholder={DISCOVERY_PLACEHOLDER}
                   className="font-mono text-sm"
                   autoComplete="off"
                 />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="cge_token_url" className="text-xs font-medium text-gray-600">
-                  Token URL
-                </Label>
-                <Input
-                  id="cge_token_url"
-                  value={tokenUrl}
-                  onChange={(e) => setTokenUrl(e.target.value)}
-                  placeholder="https://cge.example.com/.../token"
-                  className="font-mono text-sm"
-                  autoComplete="off"
-                />
+                <p className="text-xs text-gray-400">
+                  Realm issuer URLs are accepted too — the well-known path is appended automatically.
+                </p>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="cge_client_id" className="text-xs font-medium text-gray-600">
@@ -276,8 +260,8 @@ export default function CgeCredentialsDialog({
             </div>
             <p className="mt-2 text-xs text-gray-400">
               {status?.configured
-                ? 'Saving updates endpoints and credentials. Leave the secret blank to keep the current one.'
-                : 'Saving stores the endpoint and credentials for this organization.'}
+                ? 'Saving re-fetches discovery and updates credentials. Leave the secret blank to keep the current one.'
+                : 'Saving fetches the discovery document and stores resolved endpoints with your credentials.'}
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
@@ -323,7 +307,7 @@ export default function CgeCredentialsDialog({
           <DialogHeader>
             <DialogTitle>Remove CASE Global connection</DialogTitle>
             <DialogDescription>
-              Remove the stored CASE Global endpoint and API key for this organization?
+              Remove the stored CASE Global discovery endpoint and API key for this organization?
               Search and import from CASE Global will stop working until a new connection is saved.
             </DialogDescription>
           </DialogHeader>

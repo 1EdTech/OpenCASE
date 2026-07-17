@@ -17,7 +17,8 @@ describe('UpdateCFItem', () => {
     } as any
 
     mockStore = {
-      getDocumentIdForItem: jest.fn()
+      getDocumentIdForItem: jest.fn(),
+      getDocumentMetadata: jest.fn().mockReturnValue(null),
     } as any
 
     updateCFItem = new UpdateCFItem(mockRepository, mockStore)

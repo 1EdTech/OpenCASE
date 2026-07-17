@@ -207,8 +207,8 @@ export default function HomeScreen({
   const [error, setError] = useState<string | null>(null)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
 
-  // Active / Archived tab
-  const [viewMode, setViewMode] = useState<'active' | 'archived'>('active')
+  // Active / Remote / Archived tabs
+  const [viewMode, setViewMode] = useState<'active' | 'remote' | 'archived'>('active')
 
   // Archived frameworks (loaded when switching to Archived tab)
   const [archivedFrameworks, setArchivedFrameworks] = useState<CfDocumentSummary[]>([])
@@ -235,7 +235,9 @@ export default function HomeScreen({
     setLoading(true)
     setError(null)
     try {
-      const docs = await api.listCfDocuments({ caseVersion: 'v1p1' })
+      const docs = tenantId
+        ? await api.listManagementCfPackages({ tenantId, caseVersion: '1.1' })
+        : await api.listCfDocuments({ caseVersion: 'v1p1' })
       setServerFrameworks(docs)
       setHasLoadedOnce(true)
     } catch (e: unknown) {
@@ -244,7 +246,7 @@ export default function HomeScreen({
     } finally {
       setLoading(false)
     }
-  }, [api])
+  }, [api, tenantId])
 
   // Auto-load when authenticated
   useEffect(() => {
@@ -445,26 +447,49 @@ export default function HomeScreen({
     [visibleDrafts, searchQuery, statusFilter, typeFilter],
   )
 
-  // Filtered server frameworks
+  // Editable vs read-only remote cache frameworks
+  const editableServerFrameworks = useMemo(
+    () => serverFrameworks.filter((doc) => doc.readOnly !== true),
+    [serverFrameworks],
+  )
+
+  const remoteServerFrameworks = useMemo(
+    () => serverFrameworks.filter((doc) => doc.readOnly === true),
+    [serverFrameworks],
+  )
+
+  // Filtered editable server frameworks (Active tab)
   const filteredServerFrameworks = useMemo(
     () =>
-      serverFrameworks.filter((doc) => {
+      editableServerFrameworks.filter((doc) => {
         return matchesSearch(doc.title, doc.creator, doc.description) && matchesFilters(doc.adoptionStatus, doc.frameworkType)
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [serverFrameworks, searchQuery, statusFilter, typeFilter],
+    [editableServerFrameworks, searchQuery, statusFilter, typeFilter],
+  )
+
+  // Filtered remote cache frameworks (Remote tab)
+  const filteredRemoteFrameworks = useMemo(
+    () =>
+      remoteServerFrameworks.filter((doc) => {
+        return matchesSearch(doc.title, doc.creator, doc.description) && matchesFilters(doc.adoptionStatus, doc.frameworkType)
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [remoteServerFrameworks, searchQuery, statusFilter, typeFilter],
   )
 
   // Collect unique framework types for the type filter dropdown
   const allFrameworkTypes = useMemo(() => {
     const types = new Set<string>()
     visibleDrafts.forEach((d) => { if (d.cfDocument.frameworkType) types.add(d.cfDocument.frameworkType) })
-    serverFrameworks.forEach((d) => { if (d.frameworkType) types.add(d.frameworkType) })
+    editableServerFrameworks.forEach((d) => { if (d.frameworkType) types.add(d.frameworkType) })
+    remoteServerFrameworks.forEach((d) => { if (d.frameworkType) types.add(d.frameworkType) })
     return Array.from(types).sort((a, b) => a.localeCompare(b))
-  }, [visibleDrafts, serverFrameworks])
+  }, [visibleDrafts, editableServerFrameworks, remoteServerFrameworks])
 
   const hasActiveFilters = Boolean(searchQuery || statusFilter || typeFilter)
-  const totalResults = filteredDrafts.length + filteredServerFrameworks.length
+  const totalActiveResults = filteredDrafts.length + filteredServerFrameworks.length
+  const totalRemoteResults = filteredRemoteFrameworks.length
 
   const clearFilters = useCallback(() => {
     setSearchQuery('')
@@ -645,7 +670,7 @@ export default function HomeScreen({
           )}
         </div>
 
-        {/* ── Active / Archived tabs + Refresh icon ───────────────── */}
+        {/* ── Active / Remote / Archived tabs + Refresh icon ───────── */}
         {isAuthenticated && (
           <div className="mb-6 flex items-center justify-between">
             <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
@@ -660,6 +685,23 @@ export default function HomeScreen({
                 ].join(' ')}
               >
                 Active
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('remote')}
+                className={[
+                  'rounded-md px-4 py-2 text-sm font-medium transition-colors',
+                  viewMode === 'remote'
+                    ? 'bg-white text-[#2E2F2F] shadow-sm'
+                    : 'text-gray-500 hover:text-[#2E2F2F]',
+                ].join(' ')}
+              >
+                Remote
+                {remoteServerFrameworks.length > 0 ? (
+                  <span className="ml-1.5 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                    {remoteServerFrameworks.length}
+                  </span>
+                ) : null}
               </button>
               <button
                 type="button"
@@ -692,8 +734,8 @@ export default function HomeScreen({
           </div>
         )}
 
-        {/* ── Search & filter bar (active tab only) ──────────────────── */}
-        {viewMode === 'active' && <div className="flex flex-wrap items-center gap-3">
+        {/* ── Search & filter bar (active / remote tabs) ─────────────── */}
+        {(viewMode === 'active' || viewMode === 'remote') && <div className="flex flex-wrap items-center gap-3">
           {/* Search input (always visible) */}
           <div className="relative min-w-0 flex-1">
             <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -754,7 +796,15 @@ export default function HomeScreen({
         {/* Active filter summary */}
         {viewMode === 'active' && hasActiveFilters && (
           <div className="mt-3 text-sm text-gray-400">
-            Showing {totalResults} {totalResults === 1 ? 'framework' : 'frameworks'}
+            Showing {totalActiveResults} {totalActiveResults === 1 ? 'framework' : 'frameworks'}
+            {searchQuery ? <> matching &ldquo;{searchQuery}&rdquo;</> : null}
+          </div>
+        )}
+
+        {/* Remote filter summary */}
+        {viewMode === 'remote' && hasActiveFilters && (
+          <div className="mt-3 text-sm text-gray-400">
+            Showing {totalRemoteResults} {totalRemoteResults === 1 ? 'framework' : 'frameworks'}
             {searchQuery ? <> matching &ldquo;{searchQuery}&rdquo;</> : null}
           </div>
         )}
@@ -818,14 +868,20 @@ export default function HomeScreen({
                 </div>
               )}
 
-              {isAuthenticated && !loading && hasLoadedOnce && serverFrameworks.length === 0 && !error && (
+              {isAuthenticated && !loading && hasLoadedOnce && editableServerFrameworks.length === 0 && remoteServerFrameworks.length === 0 && !error && (
                 <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
                   No frameworks found. Create a new framework to get started.
                 </div>
               )}
 
+              {isAuthenticated && !loading && hasLoadedOnce && editableServerFrameworks.length === 0 && remoteServerFrameworks.length > 0 && !error && (
+                <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
+                  No editable frameworks yet. Remote cached frameworks are listed under the Remote tab.
+                </div>
+              )}
+
               {/* No results after filtering */}
-              {isAuthenticated && hasLoadedOnce && serverFrameworks.length > 0 && filteredServerFrameworks.length === 0 && hasActiveFilters && (
+              {isAuthenticated && hasLoadedOnce && editableServerFrameworks.length > 0 && filteredServerFrameworks.length === 0 && hasActiveFilters && (
                 <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
                   No frameworks match your current filters.{' '}
                   <button type="button" onClick={clearFilters} className="font-medium text-[#662F90] underline underline-offset-2 hover:text-[#2E2F2F]">
@@ -853,6 +909,73 @@ export default function HomeScreen({
                         }}
                         sourcePackageURI={doc.sourcePackageURI}
                         isModifiedFromSource={doc.isModifiedFromSource}
+                        readOnly={doc.readOnly === true}
+                        rightHint={isArchiving ? 'Archiving' : hint}
+                        lastChanged={doc.lastChangeDateTime}
+                        onClick={() => openRemote(doc.identifier)}
+                        onDelete={tenantId ? () => handleArchiveRequest(doc.identifier, title) : undefined}
+                        deleteDisabled={isArchiving || remoteOpenLoading}
+                        actionStyle="archive"
+                        className={cardClass}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Remote frameworks view ──────────────────────────────── */}
+          {viewMode === 'remote' && (
+            <>
+              <div className="mb-1">
+                <p className="text-sm text-gray-500">
+                  Read-only copies of frameworks linked from CASE Global or other publishers. Open to browse items or use as remote references on your editable frameworks.
+                </p>
+              </div>
+
+              {isAuthenticated && loading && !hasLoadedOnce && (
+                <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
+                  <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                  Loading remote frameworks
+                </div>
+              )}
+
+              {isAuthenticated && !loading && hasLoadedOnce && remoteServerFrameworks.length === 0 && !error && (
+                <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
+                  No remote frameworks cached yet. Add one from the editor using &ldquo;Add remote framework&rdquo;.
+                </div>
+              )}
+
+              {isAuthenticated && hasLoadedOnce && remoteServerFrameworks.length > 0 && filteredRemoteFrameworks.length === 0 && hasActiveFilters && (
+                <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
+                  No remote frameworks match your current filters.{' '}
+                  <button type="button" onClick={clearFilters} className="font-medium text-[#662F90] underline underline-offset-2 hover:text-[#2E2F2F]">
+                    Clear filters
+                  </button>
+                </div>
+              )}
+
+              {isAuthenticated && filteredRemoteFrameworks.length > 0 && (
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredRemoteFrameworks.map((doc) => {
+                    const title = doc.title ?? doc.identifier ?? 'Untitled Framework'
+                    const hint = remoteOpenLoading ? 'Loading' : 'Open'
+                    const isArchiving = archivingDocId === doc.identifier
+                    const cardClass = remoteOpenLoading || isArchiving ? 'opacity-60 pointer-events-none' : undefined
+                    return (
+                      <FrameworkCard
+                        key={doc.identifier}
+                        cfDocument={{
+                          title,
+                          creator: doc.creator && doc.creator !== 'Unknown' ? doc.creator : undefined,
+                          description: doc.description,
+                          frameworkType: doc.frameworkType,
+                          adoptionStatus: doc.adoptionStatus,
+                        }}
+                        sourcePackageURI={doc.sourcePackageURI}
+                        isModifiedFromSource={doc.isModifiedFromSource}
+                        readOnly
                         rightHint={isArchiving ? 'Archiving' : hint}
                         lastChanged={doc.lastChangeDateTime}
                         onClick={() => openRemote(doc.identifier)}
@@ -904,6 +1027,7 @@ export default function HomeScreen({
                         }}
                         sourcePackageURI={doc.sourcePackageURI}
                         isModifiedFromSource={doc.isModifiedFromSource}
+                        readOnly={doc.readOnly === true}
                         rightHint={isDeleting ? 'Deleting' : (isRestoring ? 'Restoring' : undefined)}
                         lastChanged={doc.lastChangeDateTime}
                         onDelete={tenantId ? () => handleHardDeleteRequest(doc.identifier, title) : undefined}

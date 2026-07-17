@@ -1,5 +1,8 @@
 import type { CFDocument, CFLicense, CFPackage, CFDefinition } from '@/domain/case/types'
 import type { HttpClient } from './http'
+import type { CgeImportResult, CachedFrameworkItemSummary } from './cgeTypes'
+export type { CgeImportResult, CachedFrameworkItemSummary, CgeFrameworkSummary, CgeSubscriptionSummary } from './cgeTypes'
+export { normalizeCgeFrameworkList, normalizeCgeSubscriptionList } from './cgeTypes'
 
 export type OpenCaseCfPackageResponse = { CFPackage: CFPackage }
 
@@ -34,6 +37,8 @@ export type CfDocumentSummary = {
   isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
+  readOnly?: boolean
+  cgeFrameworkId?: string
 }
 
 export class CaseApiClient {
@@ -75,15 +80,31 @@ export class CaseApiClient {
     )) as { status: string; role?: string; scopes?: string[]; note?: string }
   }
 
-  async listManagementCfPackages(params: { tenantId: string; caseVersion?: '1.0' | '1.1' }): Promise<OpenCaseManagementCfPackageSummary[]> {
+  async listManagementCfPackages(params: { tenantId: string; caseVersion?: '1.0' | '1.1' }): Promise<CfDocumentSummary[]> {
     const caseVersion = params.caseVersion ?? '1.1'
     const res = (await this._http.get(`/management/tenants/${encodeURIComponent(params.tenantId)}/CFPackages?caseVersion=${encodeURIComponent(caseVersion)}`)) as unknown
 
-    // Be tolerant of shape differences: `{ CFPackages: [...] }` or `[...]`.
-    if (Array.isArray(res)) return res as OpenCaseManagementCfPackageSummary[]
+    if (res && typeof res === 'object' && 'frameworks' in res && Array.isArray((res as { frameworks: unknown }).frameworks)) {
+      return ((res as { frameworks: Array<Record<string, unknown>> }).frameworks).map((f) => ({
+        identifier: String(f.sourcedId ?? f.identifier ?? ''),
+        title: typeof f.title === 'string' ? f.title : undefined,
+        creator: typeof f.creator === 'string' ? f.creator : undefined,
+        frameworkType: typeof f.frameworkType === 'string' ? f.frameworkType : undefined,
+        subject: typeof f.subject === 'string' ? f.subject : undefined,
+        version: typeof f.version === 'string' ? f.version : undefined,
+        lastChangeDateTime: typeof f.lastChangeDateTime === 'string' ? f.lastChangeDateTime : undefined,
+        caseVersion: typeof f.caseVersion === 'string' ? f.caseVersion : undefined,
+        sourcePackageURI: typeof f.sourcePackageURI === 'string' ? f.sourcePackageURI : undefined,
+        readOnly: f.readOnly === true,
+        cgeFrameworkId: typeof f.cgeFrameworkId === 'string' ? f.cgeFrameworkId : undefined,
+      }))
+    }
+
+    // Legacy tolerance
+    if (Array.isArray(res)) return res as CfDocumentSummary[]
     if (res && typeof res === 'object' && 'CFPackages' in res) {
       const any = res as { CFPackages?: unknown }
-      if (Array.isArray(any.CFPackages)) return any.CFPackages as OpenCaseManagementCfPackageSummary[]
+      if (Array.isArray(any.CFPackages)) return any.CFPackages as CfDocumentSummary[]
     }
     return []
   }
@@ -474,46 +495,41 @@ export class CaseApiClient {
       return {
         configured: obj.configured === true,
         clientIdMasked: obj.clientIdMasked ?? null,
-        apiBaseUrl: obj.apiBaseUrl ?? null,
-        tokenUrl: obj.tokenUrl ?? null,
+        discoveryUrl: obj.discoveryUrl ?? null,
         updatedAt: obj.updatedAt ?? null,
       }
     }
     return {
       configured: false,
       clientIdMasked: null,
-      apiBaseUrl: null,
-      tokenUrl: null,
+      discoveryUrl: null,
       updatedAt: null,
     }
   }
 
   /**
-   * Store / replace CGE org API key and endpoint URLs.
+   * Store / replace CGE org API key and OpenID discovery URL.
    * Requires `case.owner` (or `case.admin`).
-   * Omit `clientSecret` (or pass empty) when updating endpoints/clientId and keeping the existing secret.
+   * Omit `clientSecret` (or pass empty) when updating discovery/clientId and keeping the existing secret.
    */
   async putCgeCredentials(params: {
     tenantId: string
     clientId: string
     clientSecret?: string
-    apiBaseUrl: string
-    tokenUrl: string
+    discoveryUrl: string
   }): Promise<CgeCredentialsPublic> {
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/credentials`
     const res = (await this._http.put(url, {
       clientId: params.clientId,
       clientSecret: params.clientSecret ?? '',
-      apiBaseUrl: params.apiBaseUrl,
-      tokenUrl: params.tokenUrl,
+      discoveryUrl: params.discoveryUrl,
     })) as unknown
     if (res && typeof res === 'object') {
       const obj = res as CgeCredentialsPublic
       return {
         configured: obj.configured === true,
         clientIdMasked: obj.clientIdMasked ?? null,
-        apiBaseUrl: obj.apiBaseUrl ?? null,
-        tokenUrl: obj.tokenUrl ?? null,
+        discoveryUrl: obj.discoveryUrl ?? null,
         updatedAt: obj.updatedAt ?? null,
       }
     }
@@ -542,6 +558,144 @@ export class CaseApiClient {
     }
     return { ok: false, message: 'Unexpected test response' }
   }
+
+  // ── CASE Global (CGE) framework discovery + cache ─────────────────
+
+  async listCgeFrameworks(params: {
+    tenantId: string
+    /** Coalition API `search` param (title/id text search). */
+    search?: string
+    /** @deprecated Use `search` — kept for backward compatibility. */
+    q?: string
+    limit?: number
+    page?: number
+    /** @deprecated Use `page` — converted server-side when present. */
+    offset?: number
+    region?: string
+    sector?: string
+    sort?: 'title' | 'published_at' | 'created_at'
+    order?: 'asc' | 'desc'
+  }): Promise<unknown> {
+    const qs = new URLSearchParams()
+    const search = params.search ?? params.q
+    if (search) qs.set('search', search)
+    if (params.limit != null) qs.set('limit', String(params.limit))
+    if (params.page != null) qs.set('page', String(params.page))
+    if (params.offset != null) qs.set('offset', String(params.offset))
+    if (params.region) qs.set('region', params.region)
+    if (params.sector) qs.set('sector', params.sector)
+    if (params.sort) qs.set('sort', params.sort)
+    if (params.order) qs.set('order', params.order)
+    const query = qs.toString()
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/frameworks${query ? `?${query}` : ''}`
+    return await this._http.get(url)
+  }
+
+  async getCgeFramework(params: { tenantId: string; frameworkId: string }): Promise<unknown> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/frameworks/${encodeURIComponent(params.frameworkId)}`
+    return await this._http.get(url)
+  }
+
+  async listCgeSubscriptions(params: { tenantId: string }): Promise<unknown> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/subscriptions`
+    return await this._http.get(url)
+  }
+
+  async createCgeSubscription(params: {
+    tenantId: string
+    frameworkId: string
+  }): Promise<unknown> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/subscriptions`
+    return await this._http.post(url, { frameworkId: params.frameworkId })
+  }
+
+  async importCgeFramework(params: {
+    tenantId: string
+    frameworkId: string
+    sourceUri?: string
+    registryId?: string
+    readOnly?: boolean
+    subscribe?: boolean
+    refresh?: boolean
+    linkedFromDocId?: string
+    caseVersion?: '1.0' | '1.1'
+    skipPublisherAuth?: boolean
+  }): Promise<CgeImportResult> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/import`
+    const res = (await this._http.post(url, {
+      frameworkId: params.frameworkId,
+      sourceUri: params.sourceUri,
+      registryId: params.registryId,
+      readOnly: params.readOnly ?? true,
+      subscribe: params.subscribe ?? false,
+      refresh: params.refresh ?? false,
+      linkedFromDocId: params.linkedFromDocId,
+      caseVersion: params.caseVersion ?? '1.1',
+      skipPublisherAuth: params.skipPublisherAuth ?? false,
+    })) as unknown
+    if (res && typeof res === 'object') {
+      const obj = res as CgeImportResult
+      return {
+        status: obj.status ?? 'imported',
+        id: obj.id ?? obj.docId ?? '',
+        docId: obj.docId ?? obj.id ?? '',
+        version: obj.version,
+        cgeFrameworkId: obj.cgeFrameworkId,
+        title: obj.title,
+        sourceUri: obj.sourceUri,
+        itemCount: obj.itemCount,
+        cachedAt: obj.cachedAt,
+        readOnly: obj.readOnly,
+        fromCache: obj.fromCache,
+      }
+    }
+    throw new Error('Unexpected CGE import response')
+  }
+
+  async refreshCgeCache(params: {
+    tenantId: string
+    frameworkId: string
+    skipPublisherAuth?: boolean
+  }): Promise<CgeImportResult> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/frameworks/${encodeURIComponent(params.frameworkId)}/refresh`
+    const res = (await this._http.post(url, {
+      skipPublisherAuth: params.skipPublisherAuth ?? false,
+    })) as unknown
+    if (res && typeof res === 'object') {
+      const obj = res as CgeImportResult
+      return {
+        status: obj.status ?? 'refreshed',
+        id: obj.id ?? obj.docId ?? '',
+        docId: obj.docId ?? obj.id ?? '',
+        cgeFrameworkId: obj.cgeFrameworkId,
+        title: obj.title,
+        sourceUri: obj.sourceUri,
+        itemCount: obj.itemCount,
+        cachedAt: obj.cachedAt,
+      }
+    }
+    throw new Error('Unexpected CGE refresh response')
+  }
+
+  async searchCachedFrameworkItems(params: {
+    tenantId: string
+    docId: string
+    q?: string
+    limit?: number
+    caseVersion?: '1.0' | '1.1'
+  }): Promise<{ items: CachedFrameworkItemSummary[] }> {
+    const qs = new URLSearchParams()
+    if (params.q) qs.set('q', params.q)
+    if (params.limit != null) qs.set('limit', String(params.limit))
+    if (params.caseVersion) qs.set('caseVersion', params.caseVersion)
+    const query = qs.toString()
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/cache/${encodeURIComponent(params.docId)}/items${query ? `?${query}` : ''}`
+    const res = (await this._http.get(url)) as unknown
+    if (res && typeof res === 'object' && Array.isArray((res as any).items)) {
+      return { items: (res as any).items as CachedFrameworkItemSummary[] }
+    }
+    return { items: [] }
+  }
 }
 
 /** Summary of an API key returned by the list endpoint. */
@@ -564,8 +718,7 @@ export type TenantMember = {
 export type CgeCredentialsPublic = {
   configured: boolean
   clientIdMasked: string | null
-  apiBaseUrl: string | null
-  tokenUrl: string | null
+  discoveryUrl: string | null
   updatedAt: string | null
 }
 

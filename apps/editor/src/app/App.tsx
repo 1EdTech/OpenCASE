@@ -10,7 +10,7 @@ import { getAppConfig } from '@/app/config'
 import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
-import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage } from '@/ui/editor/reactflow/mapping'
+import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage, extractRemoteFrameworkDataFromCfPackage, normalizeLinkedFrameworkColors } from '@/ui/editor/reactflow/mapping'
 import type { LayoutState } from '@/ui/editor/reactflow/mapping'
 import type { CaseVersion } from '@/application/framework/mappers/case/CasePackageSnapshot'
 import type { CFAssociationGrouping, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
@@ -316,6 +316,9 @@ function AppInner() {
 
         // Create a HomeFramework entry from the domain Framework
         const fw = createHomeFrameworkFromDomain(framework)
+        if (pkg.CFDocument?.extensions) {
+          fw.cfDocument = { ...fw.cfDocument, extensions: pkg.CFDocument.extensions }
+        }
 
         // Store the extracted layout
         if (layout) {
@@ -369,7 +372,13 @@ function AppInner() {
 
     // Get the stored layout for this framework (from CASE extensions)
     const layout = frameworkLayouts[activeFramework.id]
-    const graph = toReactFlowGraph({ framework: activeFramework.framework, layout })
+    const remoteEditorData = extractRemoteFrameworkDataFromCfPackage({
+      CFDocument: activeFramework.cfDocument,
+      CFItems: [],
+      CFAssociations: [],
+    })
+    remoteEditorData.linkedFrameworks = normalizeLinkedFrameworkColors(remoteEditorData.linkedFrameworks)
+    const graph = toReactFlowGraph({ framework: activeFramework.framework, layout, remoteEditorData })
 
     // If no saved layout, detect topology and apply appropriate layout
     if (!layout) {

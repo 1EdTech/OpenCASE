@@ -26,6 +26,19 @@ export class HttpError extends Error {
   }
 }
 
+/** Extract a user-facing message from OpenCASE management API error bodies. */
+export function formatApiErrorMessage (error: unknown, fallback: string): string {
+  if (error instanceof HttpError && error.body && typeof error.body === 'object') {
+    const body = error.body as Record<string, unknown>
+    if (typeof body.message === 'string' && body.message.trim()) return body.message
+    if (typeof body.error === 'string' && body.error.trim() && body.error !== 'cge_import_failed') {
+      return body.error
+    }
+  }
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
+
 function joinUrl(baseUrl: string, url: string) {
   const b = baseUrl.replace(/\/+$/, '')
   const u = url.startsWith('/') ? url : `/${url}`

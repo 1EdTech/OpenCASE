@@ -109,14 +109,12 @@ function incrementVersion(currentVersion?: string): string {
 type OpencaseExtension = {
   layout?: NodeLayout
   notes?: string
-  /** Persisted handle ID on the origin (from) node — preserves user-defined edge anchors */
   originHandle?: string
-  /** Persisted handle ID on the destination (to) node — preserves user-defined edge anchors */
   destinationHandle?: string
-  /** Edge rendering style for this framework (e.g. 'default', 'smoothstep', 'straight') */
   edgeType?: string
-  /** Visual color band hex color for item nodes */
   colorBand?: string
+  linkedFrameworks?: unknown[]
+  remoteItemLinks?: unknown[]
 }
 
 /**
@@ -130,7 +128,7 @@ function mergeOpencaseExtension(
   const extensions = { ...base }
   
   // Only add if there's data to store
-  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType || opencaseData.colorBand) {
+  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType || opencaseData.colorBand || opencaseData.linkedFrameworks || opencaseData.remoteItemLinks) {
     const existing = (extensions[OPENCASE_EXT_KEY] as OpencaseExtension | undefined) ?? {}
     extensions[OPENCASE_EXT_KEY] = {
       ...existing,
@@ -148,7 +146,7 @@ function frameworkToCfDocument(
   framework: Framework,
   caseVersion: CaseVersion,
   layout?: NodeLayout,
-  options?: { incrementVersion?: boolean; edgeType?: string }
+  options?: { incrementVersion?: boolean; edgeType?: string; linkedFrameworks?: unknown[]; remoteItemLinks?: unknown[] }
 ): CFDocument {
   const meta = framework.metadata
   const fwId = String(framework.id)
@@ -188,8 +186,13 @@ function frameworkToCfDocument(
       title: docTitle,
       identifier: fwId,
     },
-    extensions: (layout || options?.edgeType)
-      ? mergeOpencaseExtension(undefined, { layout, edgeType: options?.edgeType })
+    extensions: (layout || options?.edgeType || options?.linkedFrameworks || options?.remoteItemLinks)
+      ? mergeOpencaseExtension(undefined, {
+          layout,
+          edgeType: options?.edgeType,
+          linkedFrameworks: options?.linkedFrameworks,
+          remoteItemLinks: options?.remoteItemLinks,
+        })
       : undefined,
   }
 
@@ -296,6 +299,7 @@ function associationToCfAssociation(
   }
 
   const existingExtensions = (md.extensions as CaseExtensions | undefined) ?? undefined
+  const remoteExt = (existingExtensions?.[OPENCASE_EXT_KEY] as { remoteLink?: boolean; remoteItemUri?: string; remoteItemIdentifier?: string; remoteLabel?: string; localItemUri?: string } | undefined)
 
   // Persist user-defined edge handle positions in ext:opencase
   const originHandle = s('originHandle')
@@ -304,21 +308,35 @@ function associationToCfAssociation(
     ? mergeOpencaseExtension(existingExtensions, { originHandle, destinationHandle })
     : existingExtensions
 
+  const isRemoteLink = remoteExt?.remoteLink === true
+
   const cfAssociation: CFAssociation & { sourcedId: string } = {
     identifier: assocId,
     sourcedId: assocId, // OpenCASE requires sourcedId
     uri: s('caseUri') ?? `urn:case:association:${assocId}`,
     associationType: assoc.associationType,
-    originNodeURI: {
-      identifier: fromId,
-      uri: s('originUri') ?? `urn:case:item:${fromId}`,
-      title: fromTitle,
-    },
-    destinationNodeURI: {
-      identifier: toId,
-      uri: s('destinationUri') ?? `urn:case:item:${toId}`,
-      title: toTitle,
-    },
+    originNodeURI: isRemoteLink
+      ? {
+          identifier: fromId,
+          uri: remoteExt?.localItemUri ?? s('originUri') ?? `urn:case:item:${fromId}`,
+          title: fromTitle,
+        }
+      : {
+          identifier: fromId,
+          uri: s('originUri') ?? `urn:case:item:${fromId}`,
+          title: fromTitle,
+        },
+    destinationNodeURI: isRemoteLink
+      ? {
+          identifier: remoteExt?.remoteItemIdentifier ?? toId,
+          uri: remoteExt?.remoteItemUri ?? s('destinationUri') ?? `urn:case:item:${toId}`,
+          title: remoteExt?.remoteLabel ?? toTitle,
+        }
+      : {
+          identifier: toId,
+          uri: s('destinationUri') ?? `urn:case:item:${toId}`,
+          title: toTitle,
+        },
     sequenceNumber: n('sequenceNumber'),
     CFAssociationGroupingURI: s('CFAssociationGroupingIdentifier')
       ? {
@@ -368,13 +386,20 @@ export function frameworkToCfPackage(params: {
   cfAssociationGroupings?: CFAssociationGrouping[]
   /** CFLicense definitions to include in CFDefinitions (from editor state) */
   cfLicenses?: CFLicense[]
+  /** Remote framework editor data from canvas */
+  remoteEditorData?: { linkedFrameworks: unknown[]; remoteItemLinks: unknown[] }
 }): CFPackage {
-  const { framework, caseVersion, layout, incrementVersion, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses } = params
+  const { framework, caseVersion, layout, incrementVersion, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses, remoteEditorData } = params
   const fwId = String(framework.id)
 
   // Build CFDocument
   const documentLayout = layout?.byNodeId?.[fwId]
-  const document = frameworkToCfDocument(framework, caseVersion, documentLayout, { incrementVersion, edgeType })
+  const document = frameworkToCfDocument(framework, caseVersion, documentLayout, {
+    incrementVersion,
+    edgeType,
+    linkedFrameworks: remoteEditorData?.linkedFrameworks,
+    remoteItemLinks: remoteEditorData?.remoteItemLinks,
+  })
 
   // Build CFItems
   const itemIds = Array.from(framework.items.keys()).map(String)

@@ -2,11 +2,13 @@ import type { CSSProperties } from 'react'
 import { MarkerType } from '@xyflow/react'
 import type { CFDocument, CFItem } from '@/domain/case/types'
 import type { CaseEditorEdge, CaseEditorNodeType, CaseFrameworkNodeType, CaseItemNodeType } from '@/ui/editor/reactflow/types'
+import type { RemoteItemLink } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
 import { FRAMEWORK_ROOT_ASSOCIATION_TYPE } from '@/ui/editor/reactflow/types'
 
 export type EditorGraph = {
   nodes: CaseEditorNodeType[]
   edges: CaseEditorEdge[]
+  remoteLinks?: RemoteItemLink[]
 }
 
 /** Default arrow marker for edges - solid filled arrow */

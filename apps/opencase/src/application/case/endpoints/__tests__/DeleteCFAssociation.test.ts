@@ -18,7 +18,8 @@ describe('DeleteCFAssociation', () => {
 
     mockStore = {
       getDocumentIdForAssociation: jest.fn(),
-      removeAssociationFromIndex: jest.fn()
+      removeAssociationFromIndex: jest.fn(),
+      getDocumentMetadata: jest.fn().mockReturnValue(null),
     } as any
 
     deleteCFAssociation = new DeleteCFAssociation(mockRepository, mockStore)

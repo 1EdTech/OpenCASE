@@ -16,7 +16,11 @@ describe('UpdateCFDocument', () => {
       saveNewVersion: jest.fn().mockResolvedValue(undefined)
     } as any
 
-    updateCFDocument = new UpdateCFDocument(mockRepository)
+    const mockStore = {
+      getDocumentMetadata: jest.fn().mockReturnValue(null),
+    } as any
+
+    updateCFDocument = new UpdateCFDocument(mockRepository, mockStore)
   })
 
   describe('execute', () => {

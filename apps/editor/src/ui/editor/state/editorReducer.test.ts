@@ -8,6 +8,7 @@ function makeState(overrides: Partial<EditorState> = {}): EditorState {
   return {
     nodes: [makeFrameworkNode(), makeItemNode('item-1'), makeItemNode('item-2')],
     edges: [makeEdge('fw-1', 'item-1'), makeEdge('fw-1', 'item-2')],
+    remoteLinks: [],
     selectedNodeId: null,
     selectedEdgeId: null,
     selectedNodeIds: [],
@@ -262,6 +263,42 @@ describe('node/updateData', () => {
     const item = next.nodes.find((n) => n.id === 'item-1')
     expect((item?.data as { cfItem: { fullStatement: string } }).cfItem.fullStatement).toBe('Updated statement')
     expect(next.dirty).toBe(true)
+  })
+
+  it('syncs remote link banner colors when external framework color changes', () => {
+    const state = makeState({
+      nodes: [
+        ...makeState().nodes,
+        {
+          id: 'ext-1',
+          type: 'externalFrameworkNode',
+          position: { x: 500, y: 0 },
+          data: { refId: 'fw-ref-1', title: 'Remote', color: '#0ea5e9' },
+        },
+      ],
+      remoteLinks: [
+        {
+          id: 'link-1',
+          localItemId: 'item-1',
+          remoteItemUri: 'urn:case:item:r1',
+          remoteItemIdentifier: 'r1',
+          remoteFrameworkRefId: 'fw-ref-1',
+          associationType: 'isRelatedTo',
+          remoteLabel: 'Remote item',
+          remoteFrameworkColor: '#0ea5e9',
+          remoteFrameworkTitle: 'Remote',
+        },
+      ],
+    })
+
+    const next = editorReducer(state, {
+      type: 'node/updateData',
+      nodeId: 'ext-1',
+      patch: { color: '#dc2626' },
+    })
+
+    expect(next.remoteLinks[0]?.remoteFrameworkColor).toBe('#dc2626')
+    expect((next.nodes.find((n) => n.id === 'ext-1')?.data as { color: string }).color).toBe('#dc2626')
   })
 })
 

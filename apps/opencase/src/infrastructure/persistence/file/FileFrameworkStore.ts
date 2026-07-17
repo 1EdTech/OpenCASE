@@ -28,6 +28,14 @@ export interface DocumentMetadata {
   isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
+  /** When true, framework is a cached remote reference and cannot be mutated. */
+  readOnly?: boolean
+  /** CASE Global coalition registry ID (read-only caches). */
+  cgeFrameworkId?: string
+  /** Local framework that triggered a CGE cache import. */
+  linkedFromDocId?: string
+  /** When a read-only CGE cache was last fetched. */
+  cgeCachedAt?: Date
 }
 
 export interface DocumentVersionInfo {
@@ -154,6 +162,10 @@ export class FileFrameworkStore {
           sourcePackageURI: d.sourcePackageURI,
           isModifiedFromSource: d.isModifiedFromSource,
           archived: d.archived,
+          readOnly: d.readOnly === true,
+          cgeFrameworkId: typeof d.cgeFrameworkId === 'string' ? d.cgeFrameworkId : undefined,
+          linkedFromDocId: typeof d.linkedFromDocId === 'string' ? d.linkedFromDocId : undefined,
+          cgeCachedAt: d.cgeCachedAt ? new Date(d.cgeCachedAt as string | number | Date) : undefined,
         })
       }
     } catch {
@@ -386,6 +398,10 @@ export class FileFrameworkStore {
     // Extract sourcePackageURI and isModifiedFromSource from ext:opencase extension
     let sourcePackageURI: string | undefined
     let isModifiedFromSource: boolean | undefined
+    let readOnly: boolean | undefined
+    let cgeFrameworkId: string | undefined
+    let linkedFromDocId: string | undefined
+    let cgeCachedAt: Date | undefined
     const extOpencase = doc.extensions?.['ext:opencase']
     if (extOpencase && typeof extOpencase === 'object') {
       if (typeof (extOpencase as any).sourcePackageURI === 'string') {
@@ -394,7 +410,26 @@ export class FileFrameworkStore {
       if (typeof (extOpencase as any).isModifiedFromSource === 'boolean') {
         isModifiedFromSource = (extOpencase as any).isModifiedFromSource
       }
+      if ((extOpencase as any).readOnly === true) {
+        readOnly = true
+      }
+      if (typeof (extOpencase as any).cgeFrameworkId === 'string') {
+        cgeFrameworkId = (extOpencase as any).cgeFrameworkId
+      }
+      if (typeof (extOpencase as any).linkedFromDocId === 'string') {
+        linkedFromDocId = (extOpencase as any).linkedFromDocId
+      }
+      if (typeof (extOpencase as any).cgeCachedAt === 'string') {
+        cgeCachedAt = new Date((extOpencase as any).cgeCachedAt)
+      }
     }
+
+    // Preserve index-only flags when a new bundle omits ext:opencase fields (e.g. partial update).
+    const previous = versionMap.get(docId)
+    if (readOnly !== true && previous?.readOnly === true) readOnly = true
+    if (!cgeFrameworkId && previous?.cgeFrameworkId) cgeFrameworkId = previous.cgeFrameworkId
+    if (!linkedFromDocId && previous?.linkedFromDocId) linkedFromDocId = previous.linkedFromDocId
+    if (!cgeCachedAt && previous?.cgeCachedAt) cgeCachedAt = previous.cgeCachedAt
 
     versionMap.set(docId, {
       sourcedId: docId,
@@ -411,6 +446,10 @@ export class FileFrameworkStore {
       licenseIdentifier,
       sourcePackageURI,
       isModifiedFromSource,
+      readOnly,
+      cgeFrameworkId,
+      linkedFromDocId,
+      cgeCachedAt,
     })
   }
 
@@ -608,6 +647,10 @@ export class FileFrameworkStore {
       sourcePackageURI: meta.sourcePackageURI,
       isModifiedFromSource: meta.isModifiedFromSource,
       archived: meta.archived,
+      readOnly: meta.readOnly,
+      cgeFrameworkId: meta.cgeFrameworkId,
+      linkedFromDocId: meta.linkedFromDocId,
+      cgeCachedAt: meta.cgeCachedAt?.toISOString(),
     }))
 
     await fs.writeFile(
@@ -765,6 +808,58 @@ export class FileFrameworkStore {
     const versionMap = this.documents.get(tenantId)?.get(version)
     if (!versionMap) return []
     return Array.from(versionMap.values())
+  }
+
+  findDocumentByCgeFrameworkId (
+    tenantId: TenantId,
+    version: CaseVersion,
+    cgeFrameworkId: string
+  ): DocumentMetadata | null {
+    const docs = this.getAllDocuments(tenantId, version)
+    return docs.find(d => d.cgeFrameworkId === cgeFrameworkId && d.readOnly === true) ?? null
+  }
+
+  async searchItemsInDocument (
+    tenantId: TenantId,
+    version: CaseVersion,
+    docId: string,
+    query: string,
+    limit: number
+  ): Promise<Array<{
+    identifier: string
+    uri?: string
+    fullStatement?: string
+    abbreviatedStatement?: string
+    humanCodingScheme?: string
+    CFItemType?: string
+  }>> {
+    const bundle = await this.loadDocumentBundle(tenantId, version, docId)
+    if (!bundle?.items || !Array.isArray(bundle.items)) return []
+
+    const q = query.trim().toLowerCase()
+    const matches = (item: any): boolean => {
+      if (!q) return true
+      const parts = [
+        item.fullStatement,
+        item.abbreviatedStatement,
+        item.humanCodingScheme,
+        item.identifier,
+        item.CFItemType
+      ]
+      return parts.some(p => typeof p === 'string' && p.toLowerCase().includes(q))
+    }
+
+    return bundle.items
+      .filter(matches)
+      .slice(0, limit)
+      .map((item: any) => ({
+        identifier: item.identifier ?? item.sourcedId,
+        uri: item.uri,
+        fullStatement: item.fullStatement,
+        abbreviatedStatement: item.abbreviatedStatement,
+        humanCodingScheme: item.humanCodingScheme,
+        CFItemType: item.CFItemType
+      }))
   }
 
   // ──────────────────────────────────────────────────────────────────────────

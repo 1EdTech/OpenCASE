@@ -9,6 +9,7 @@ import { CFAssociation } from '../../../domain/case/entities/CFAssociation'
 import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { logger } from '../../../infrastructure/logging/Logger'
+import type { ImportDocumentFlags } from '../types/ImportDocumentFlags'
 
 export interface ImportFrameworkCommand {
   tenantId: TenantId
@@ -18,6 +19,10 @@ export interface ImportFrameworkCommand {
   cfPackage?: any
   validateSchema?: boolean
   schemaName?: string
+  /** Optional import flags — omit for standard editable imports (default). */
+  documentFlags?: ImportDocumentFlags
+  /** Publisher CFPackage URL — used for provenance when importing from cfPackage JSON. */
+  sourcePackageUri?: string
 }
 
 export interface ImportFrameworkResult {
@@ -30,22 +35,68 @@ export interface ImportFrameworkResult {
  * Merge or create the `ext:opencase` extension on a CFDocument payload,
  * setting sourcePackageURI and marking it as a pristine import.
  */
-function injectSourceProvenance (docPayload: any, endpointUrl: string): any {
+function injectSourceProvenance (
+  docPayload: any,
+  endpointUrl: string,
+  documentFlags?: ImportDocumentFlags
+): any {
   const existing = docPayload.extensions ?? {}
   const existingOpencase = (existing['ext:opencase'] && typeof existing['ext:opencase'] === 'object')
     ? existing['ext:opencase']
     : {}
 
+  const extPatch: Record<string, unknown> = {
+    ...existingOpencase,
+    sourcePackageURI: endpointUrl,
+    isModifiedFromSource: false,
+    importedAt: new Date().toISOString(),
+  }
+
+  if (documentFlags?.readOnly === true) {
+    extPatch.readOnly = true
+  }
+  if (documentFlags?.cgeFrameworkId) {
+    extPatch.cgeFrameworkId = documentFlags.cgeFrameworkId
+  }
+  if (documentFlags?.linkedFromDocId) {
+    extPatch.linkedFromDocId = documentFlags.linkedFromDocId
+  }
+  if (documentFlags?.cgeCachedAt) {
+    extPatch.cgeCachedAt = documentFlags.cgeCachedAt
+  }
+
   return {
     ...docPayload,
     extensions: {
       ...existing,
-      'ext:opencase': {
-        ...existingOpencase,
-        sourcePackageURI: endpointUrl,
-        isModifiedFromSource: false,
-        importedAt: new Date().toISOString(),
-      }
+      'ext:opencase': extPatch
+    }
+  }
+}
+
+function applyDocumentFlags (docPayload: any, documentFlags?: ImportDocumentFlags): any {
+  if (!documentFlags) return docPayload
+  const endpointUrl = docPayload?.extensions?.['ext:opencase']?.sourcePackageURI as string | undefined
+  if (endpointUrl) {
+    return injectSourceProvenance(docPayload, endpointUrl, documentFlags)
+  }
+
+  const existing = docPayload.extensions ?? {}
+  const existingOpencase = (existing['ext:opencase'] && typeof existing['ext:opencase'] === 'object')
+    ? existing['ext:opencase']
+    : {}
+
+  const extPatch: Record<string, unknown> = { ...existingOpencase, importedAt: new Date().toISOString() }
+  if (documentFlags.readOnly === true) extPatch.readOnly = true
+  if (documentFlags.cgeFrameworkId) extPatch.cgeFrameworkId = documentFlags.cgeFrameworkId
+  if (documentFlags.linkedFromDocId) extPatch.linkedFromDocId = documentFlags.linkedFromDocId
+  if (documentFlags.cgeCachedAt) extPatch.cgeCachedAt = documentFlags.cgeCachedAt
+
+  return {
+    ...docPayload,
+    extensions: {
+      ...existing,
+      'ext:opencase': extPatch
     }
   }
 }
@@ -58,7 +109,7 @@ export class ImportFramework {
   ) {}
 
   async execute (cmd: ImportFrameworkCommand): Promise<ImportFrameworkResult> {
-    const { tenantId, caseVersion, endpointUrl, accessToken, cfPackage, validateSchema, schemaName } = cmd
+    const { tenantId, caseVersion, endpointUrl, accessToken, cfPackage, validateSchema, schemaName, documentFlags, sourcePackageUri } = cmd
 
     if (!endpointUrl && !cfPackage) {
       throw new Error('Either endpointUrl or cfPackage must be provided')
@@ -70,11 +121,18 @@ export class ImportFramework {
       const response = await this.apiClient.fetchCFPackage(endpointUrl, accessToken)
       sourceCFPackage = {
         ...response.CFPackage,
-        CFDocument: injectSourceProvenance(response.CFPackage.CFDocument, endpointUrl)
+        CFDocument: injectSourceProvenance(response.CFPackage.CFDocument, endpointUrl, documentFlags)
       }
     } else {
       logger.info({ tenantId, caseVersion }, 'Importing framework from provided JSON')
-      sourceCFPackage = normalizeCfPackageData(cfPackage)
+      const normalized = normalizeCfPackageData(cfPackage)
+      const provenanceUri = (sourcePackageUri ?? endpointUrl ?? '').trim()
+      sourceCFPackage = {
+        ...normalized,
+        CFDocument: provenanceUri
+          ? injectSourceProvenance(normalized.CFDocument, provenanceUri, documentFlags)
+          : applyDocumentFlags(normalized.CFDocument, documentFlags)
+      }
     }
 
     // Use CFPackage format directly (matches API response format)

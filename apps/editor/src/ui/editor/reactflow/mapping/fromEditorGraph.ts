@@ -3,9 +3,12 @@ import type { Framework, FrameworkMetadata, Item, Association, AssociationType, 
 import type { AssociationId, FrameworkId, ItemId } from '@/domain/shared/types'
 import type { LayoutState } from './types'
 import type { CFDocument, CFItem } from '@/domain/case/types'
+import type { ExternalFrameworkNodeData } from '@/ui/editor/reactflow/types'
+import type { LinkedFrameworkRef, RemoteItemLink } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
 
 const isFrameworkNode = (n: EditorGraph['nodes'][number]) => n.type === 'caseFrameworkNode'
 const isItemNode = (n: EditorGraph['nodes'][number]) => n.type === 'caseItemNode'
+const isExternalFrameworkNode = (n: EditorGraph['nodes'][number]) => n.type === 'externalFrameworkNode'
 
 function mapItemType(rawType?: string): ItemType {
   const raw = (rawType ?? '').toLowerCase()
@@ -39,7 +42,12 @@ function readCfItem(node: EditorGraph['nodes'][number]): CFItem | null {
   return any?.cfItem ?? null
 }
 
-export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Framework; layout: LayoutState } {
+export type RemoteEditorData = {
+  linkedFrameworks: LinkedFrameworkRef[]
+  remoteItemLinks: RemoteItemLink[]
+}
+
+export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Framework; layout: LayoutState; remoteEditorData: RemoteEditorData } {
   const { graph } = params
   const fwNode = graph.nodes.find(isFrameworkNode)
   const fwId = (fwNode?.id ?? 'fw') as unknown as FrameworkId
@@ -204,6 +212,71 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     }
   }
 
-  return { framework, layout: { byNodeId } }
+  const linkedFrameworks: LinkedFrameworkRef[] = graph.nodes
+    .filter(isExternalFrameworkNode)
+    .map((n) => {
+      const d = n.data as ExternalFrameworkNodeData
+      return {
+        id: d.refId,
+        cgeFrameworkId: d.cgeFrameworkId ?? '',
+        cacheDocId: d.cacheDocId ?? '',
+        title: d.title,
+        color: d.color,
+        sourceUri: d.sourceUri ?? d.uri,
+        nodePosition: { x: n.position.x, y: n.position.y },
+        itemCount: d.itemCount,
+        cachedAt: d.cachedAt,
+        skipPublisherAuth: d.skipPublisherAuth,
+        cacheError: d.cacheError ?? undefined,
+      }
+    })
+
+  const remoteItemLinks = (graph.remoteLinks ?? []).map((link) => {
+    const fw = graph.nodes.find(
+      (n) => n.type === 'externalFrameworkNode' && (n.data as ExternalFrameworkNodeData).refId === link.remoteFrameworkRefId,
+    )
+    const fwData = fw?.data as ExternalFrameworkNodeData | undefined
+    return {
+      ...link,
+      remoteFrameworkColor: fwData?.color ?? link.remoteFrameworkColor,
+      remoteFrameworkTitle: fwData?.title ?? link.remoteFrameworkTitle,
+    }
+  })
+
+  // Add cross-framework associations for remote links
+  for (const link of remoteItemLinks) {
+    if (!items.has(link.localItemId as unknown as ItemId)) continue
+    const localItem = items.get(link.localItemId as unknown as ItemId)!
+    const localUri = (localItem.metadata?.caseUri as string | undefined) ?? link.localItemId
+    const assocId = (link.cfAssociationId ?? link.id) as unknown as AssociationId
+    const assoc: Association = {
+      id: assocId,
+      fromItemId: link.localItemId as unknown as ItemId,
+      toItemId: link.localItemId as unknown as ItemId,
+      associationType: link.associationType as AssociationType,
+      metadata: {
+        caseUri: link.remoteItemUri,
+        extensions: {
+          'ext:opencase': {
+            remoteLink: true,
+            remoteItemUri: link.remoteItemUri,
+            remoteItemIdentifier: link.remoteItemIdentifier,
+            remoteFrameworkRefId: link.remoteFrameworkRefId,
+            localItemUri: localUri,
+            remoteLabel: link.remoteLabel,
+            remoteHumanCodingScheme: link.remoteHumanCodingScheme,
+            remoteFrameworkTitle: link.remoteFrameworkTitle,
+          },
+        },
+      },
+    }
+    associations.set(assoc.id, assoc)
+  }
+
+  return {
+    framework,
+    layout: { byNodeId },
+    remoteEditorData: { linkedFrameworks, remoteItemLinks },
+  }
 }
 

@@ -16,6 +16,8 @@ import type {
   CaseItemNodeType,
   ExternalFrameworkNodeData,
 } from '@/ui/editor/reactflow/types'
+import type { SidePanelMode, RemoteItemLink } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
+import { nextRemoteFrameworkColor } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
 import type { CFAssociationGrouping, CFDocument, CFItem, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
 import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
 import type { EditorSettings } from '@/ui/editor/components/SettingsModal'
@@ -26,7 +28,7 @@ import type { CaseVersion } from '@/application/framework/mappers/case/CasePacka
 // ── Extracted domain modules ───────────────────────────────────────────
 import { editorReducer } from '@/ui/editor/state/editorReducer'
 import type { EditorState } from '@/ui/editor/state/editorReducer'
-import { isFrameworkNode, isItemNode, WRAPPER_NODE_CLASS } from '@/ui/editor/state/helpers/nodeGeometry'
+import { isFrameworkNode, isItemNode, isExternalFrameworkNode, WRAPPER_NODE_CLASS } from '@/ui/editor/state/helpers/nodeGeometry'
 import { computeHierarchyLayout } from '@/ui/editor/layout/hierarchyLayout'
 import { computeStarLayout } from '@/ui/editor/layout/starLayout'
 import { computeTreeLayout } from '@/ui/editor/layout/treeLayout'
@@ -81,7 +83,22 @@ type EditorContextValue = {
   reconnectEdge: (_edgeId: string, _newSource: string, _newTarget: string, _newSourceHandle?: string, _newTargetHandle?: string) => void
   addChild: (_parentId: string) => void
   addDetachedItem: (_viewportCenter?: { x: number; y: number }) => void
-  addExternalFramework: (_data: ExternalFrameworkNodeData, _viewportCenter?: { x: number; y: number }) => void
+  addExternalFramework: (_data: ExternalFrameworkNodeData, _viewportCenter?: { x: number; y: number }) => string
+  remoteLinks: RemoteItemLink[]
+  addRemoteLink: (_link: RemoteItemLink) => void
+  removeRemoteLink: (_linkId: string) => void
+  updateRemoteLinkType: (_linkId: string, _associationType: string) => void
+  removeRemoteFramework: (_nodeId: string) => void
+  sidePanelMode: SidePanelMode
+  setSidePanelMode: (_mode: SidePanelMode) => void
+  previousSidePanelMode: SidePanelMode | null
+  activeRemoteFrameworkNodeId: string | null
+  setActiveRemoteFrameworkNodeId: (_nodeId: string | null) => void
+  openCgeSearchPanel: () => void
+  openRemoteItemsPanel: (_nodeId: string) => void
+  closeSidePanel: () => void
+  /** Select an external framework node and open the properties panel (from browse panel or node gear). */
+  openExternalFrameworkSettings: (_nodeId: string) => void
   addItemDialog: {
     open: boolean
     parentId: string | null
@@ -275,10 +292,48 @@ export function EditorProvider({
   // ── Active grouping filter (UI-only, not persisted) ──────────────────
   const [activeGroupingFilter, setActiveGroupingFilter] = useState<string | null>(null)
 
+  // ── Side panel (CGE search / remote items) ─────────────────────────────
+  const [sidePanelMode, setSidePanelModeState] = useState<SidePanelMode>('closed')
+  const [previousSidePanelMode, setPreviousSidePanelMode] = useState<SidePanelMode | null>(null)
+  const [activeRemoteFrameworkNodeId, setActiveRemoteFrameworkNodeId] = useState<string | null>(null)
+
+  const setSidePanelMode = useCallback((mode: SidePanelMode) => {
+    setSidePanelModeState((prev) => {
+      if (mode === 'properties' && (prev === 'cgeSearch' || prev === 'remoteItems')) {
+        setPreviousSidePanelMode(prev)
+      }
+      if (mode === 'closed') {
+        setPreviousSidePanelMode(null)
+      }
+      return mode
+    })
+  }, [])
+
+  const openCgeSearchPanel = useCallback(() => {
+    setPreviousSidePanelMode(null)
+    setSidePanelModeState('cgeSearch')
+  }, [])
+
+  const openRemoteItemsPanel = useCallback((nodeId: string) => {
+    setActiveRemoteFrameworkNodeId(nodeId)
+    setPreviousSidePanelMode(null)
+    setSidePanelModeState('remoteItems')
+  }, [])
+
+  const closeSidePanel = useCallback(() => {
+    if (sidePanelMode === 'properties' && previousSidePanelMode) {
+      setSidePanelModeState(previousSidePanelMode)
+      setPreviousSidePanelMode(null)
+      return
+    }
+    setSidePanelModeState('closed')
+    setPreviousSidePanelMode(null)
+  }, [sidePanelMode, previousSidePanelMode])
+
   // ── Reducer state ────────────────────────────────────────────────────
   const seed = useMemo(() => initialGraph ?? DEFAULT_GRAPH, [initialGraph])
   const initialState: EditorState = useMemo(
-    () => ({ nodes: seed.nodes, edges: seed.edges, selectedNodeId: null, selectedEdgeId: null, selectedNodeIds: [], selectedEdgeIds: [], layoutVersion: 0, dirty: false }),
+    () => ({ nodes: seed.nodes, edges: seed.edges, remoteLinks: seed.remoteLinks ?? [], selectedNodeId: null, selectedEdgeId: null, selectedNodeIds: [], selectedEdgeIds: [], layoutVersion: 0, dirty: false }),
     [seed],
   )
   const [state, dispatch] = useReducer(editorReducer, initialState)
@@ -430,7 +485,30 @@ export function EditorProvider({
     const uuid = globalThis.crypto?.randomUUID?.()
     const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
     const nodeId = `ext_${uuid ?? fallbackId}`
-    dispatch({ type: 'node/addExternalFramework', nodeId, data, viewportCenter })
+    const extCount = state.nodes.filter((n) => n.type === 'externalFrameworkNode').length
+    const fullData: ExternalFrameworkNodeData = {
+      ...data,
+      refId: data.refId || (uuid ?? fallbackId),
+      color: data.color || nextRemoteFrameworkColor(extCount),
+    }
+    dispatch({ type: 'node/addExternalFramework', nodeId, data: fullData, viewportCenter })
+    return nodeId
+  }, [state.nodes])
+
+  const addRemoteLink = useCallback((link: RemoteItemLink) => {
+    dispatch({ type: 'remoteLink/add', link })
+  }, [])
+
+  const removeRemoteLink = useCallback((linkId: string) => {
+    dispatch({ type: 'remoteLink/remove', linkId })
+  }, [])
+
+  const updateRemoteLinkType = useCallback((linkId: string, associationType: string) => {
+    dispatch({ type: 'remoteLink/updateType', linkId, associationType })
+  }, [])
+
+  const removeRemoteFramework = useCallback((nodeId: string) => {
+    dispatch({ type: 'node/removeRemoteFramework', nodeId })
   }, [])
 
   const setAddItemDraft = useCallback((patch: Partial<AddItemDraft>) => {
@@ -530,6 +608,33 @@ export function EditorProvider({
     [updateNodeData],
   )
 
+  // Refs for selection helpers (keeps callbacks stable without state deps)
+  const nodesRef = useRef(state.nodes)
+  nodesRef.current = state.nodes
+  const edgesRef = useRef(state.edges)
+  edgesRef.current = state.edges
+
+  const openExternalFrameworkSettings = useCallback((nodeId: string) => {
+    setActiveRemoteFrameworkNodeId(nodeId)
+    const nodeChanges: NodeChange<CaseEditorNodeType>[] = []
+    for (const n of nodesRef.current) {
+      const shouldSelect = n.id === nodeId
+      if (n.selected !== shouldSelect) {
+        nodeChanges.push({ type: 'select', id: n.id, selected: shouldSelect })
+      }
+    }
+    if (nodeChanges.length > 0) {
+      dispatch({ type: 'nodes/applyChanges', changes: nodeChanges })
+    }
+    const edgeDeselects: EdgeChange[] = edgesRef.current
+      .filter((e) => e.selected)
+      .map((e) => ({ type: 'select' as const, id: e.id, selected: false }))
+    if (edgeDeselects.length > 0) {
+      dispatch({ type: 'edges/applyChanges', changes: edgeDeselects })
+    }
+    setSidePanelMode('properties')
+  }, [setSidePanelMode])
+
   // ── Nodes with callbacks ─────────────────────────────────────────────
   // Per-element cache: only create new objects for nodes whose *data* actually
   // changed. Selection/position-only changes reuse the previous output's data
@@ -571,20 +676,28 @@ export function EditorProvider({
         return output
       }
 
+      if (isExternalFrameworkNode(n)) {
+        const reuseData = cached && (cached.input as ExternalFrameworkNodeType).data === n.data
+        const data = reuseData
+          ? (cached!.output as ExternalFrameworkNodeType).data
+          : {
+              ...n.data,
+              onRemoveRemoteFramework: removeRemoteFramework,
+              onOpenExternalFrameworkSettings: openExternalFrameworkSettings,
+            }
+        const output: CaseEditorNodeType = { ...n, className: WRAPPER_NODE_CLASS, data }
+        next.set(n.id, { input: n, output })
+        return output
+      }
+
       return n
     })
 
     nodesCacheRef.current = next
     return result
-  }, [state.nodes, addChild, updateItem, updateDocument])
+  }, [state.nodes, addChild, updateItem, updateDocument, removeRemoteFramework, openExternalFrameworkSettings])
 
   // ── React Flow event handlers ────────────────────────────────────────
-
-  // Refs for clearSelection (keeps the callback stable without state deps)
-  const nodesRef = useRef(state.nodes)
-  nodesRef.current = state.nodes
-  const edgesRef = useRef(state.edges)
-  edgesRef.current = state.edges
 
   // onSelectionChange no longer dispatches anything — selection state is
   // derived purely from `selected` flags managed by onNodesChange/onEdgesChange.
@@ -625,6 +738,7 @@ export function EditorProvider({
       dispatch({ type: 'edges/applyChanges', changes: edgeDeselects })
     }
   }, [])
+
   const clearDirty = useCallback(() => dispatch({ type: 'dirty/clear' }), [])
 
   // ── Context value ────────────────────────────────────────────────────
@@ -633,6 +747,7 @@ export function EditorProvider({
     () => ({
       nodes: state.nodes,
       edges: state.edges,
+      remoteLinks: state.remoteLinks,
       selectedNodeId: selectedNodeIds.length === 1 ? selectedNodeIds[0] : null,
       selectedEdgeId: selectedEdgeIds.length === 1 ? selectedEdgeIds[0] : null,
       selectedNodeIds,
@@ -675,6 +790,19 @@ export function EditorProvider({
       addChild,
       addDetachedItem,
       addExternalFramework,
+      addRemoteLink,
+      removeRemoteLink,
+      updateRemoteLinkType,
+      removeRemoteFramework,
+      sidePanelMode,
+      setSidePanelMode,
+      previousSidePanelMode,
+      activeRemoteFrameworkNodeId,
+      setActiveRemoteFrameworkNodeId,
+      openCgeSearchPanel,
+      openRemoteItemsPanel,
+      closeSidePanel,
+      openExternalFrameworkSettings,
       addItemDialog,
       setAddItemDraft,
       cancelAddItem,
@@ -684,7 +812,7 @@ export function EditorProvider({
       applyStarLayout,
     }),
     [
-      state.nodes, state.edges, selectedNodeIds, selectedEdgeIds,
+      state.nodes, state.edges, state.remoteLinks, selectedNodeIds, selectedEdgeIds,
       selectedNode, selectedEdge, nodesWithCallbacks, frameworkInfo,
       state.layoutVersion, state.dirty, clearDirty,
       caseVersion, cfItemTypes, addCfItemType, ensureCfItemType,
@@ -696,6 +824,10 @@ export function EditorProvider({
       onSelectionChange, onNodesChange, onEdgesChange, onConnect,
       clearSelection, updateNodeData, updateEdgeData, flipEdge, reconnectEdge,
       addChild, addDetachedItem, addExternalFramework,
+      addRemoteLink, removeRemoteLink, updateRemoteLinkType, removeRemoteFramework,
+      sidePanelMode, setSidePanelMode, previousSidePanelMode,
+      activeRemoteFrameworkNodeId, setActiveRemoteFrameworkNodeId,
+      openCgeSearchPanel, openRemoteItemsPanel, closeSidePanel, openExternalFrameworkSettings,
       addItemDialog, setAddItemDraft, cancelAddItem, confirmAddItem,
       deleteElements, applyHierarchyLayout, applyStarLayout,
     ],
