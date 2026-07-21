@@ -31,10 +31,12 @@ In the application's **Settings** tab, scroll to **Application URIs** and set:
 | Field | Value |
 |-------|-------|
 | **Allowed Callback URLs** | `https://YOUR_DOMAIN/realms/opencase/broker/auth0/endpoint` |
-| **Allowed Logout URLs** | `https://YOUR_DOMAIN` |
+| **Allowed Logout URLs** | `https://YOUR_DOMAIN`, `https://YOUR_DOMAIN/realms/opencase/broker/auth0/endpoint/logout_response` |
 | **Allowed Web Origins** | `https://YOUR_DOMAIN` |
 
 Replace `YOUR_DOMAIN` with your OpenCASE hostname (e.g. `opencase.1edtech.org`).
+
+> The second logout URL is Keycloak's own broker callback, not the OpenCASE app itself. Keycloak's front-channel logout (see [Logout Settings](#logout-settings) below) redirects the browser to Auth0, and Auth0 needs to redirect it back to this exact Keycloak URL before Keycloak can finish logging the user out and return them to OpenCASE. Without it, Auth0 will reject the return redirect after processing the logout.
 
 > The callback URL follows Keycloak's broker pattern: `/realms/{realm}/broker/{alias}/endpoint`. We'll use `auth0` as the alias in Step 2.
 
@@ -96,13 +98,16 @@ After entering the discovery endpoint, click outside the field -- Keycloak will 
 
 ### Logout Settings
 
-By default, logging out of OpenCASE only ends the Keycloak session -- the Auth0 session stays active. To propagate logouts to Auth0:
+By default, logging out of OpenCASE only ends the Keycloak session -- the Auth0 session stays active. If left this way, a user who logs out and then logs back in will be silently re-authenticated by Auth0 (skipping the credentials/password step entirely), because their Auth0 SSO cookie is still valid. To propagate logouts to Auth0:
 
 1. Scroll to **Advanced settings** (or **OpenID Connect settings**)
 2. Set **Logout URL** to `https://YOUR_AUTH0_DOMAIN/oidc/logout` (may already be populated from the discovery endpoint)
-3. Enable **Backchannel logout**
+3. Enable **Store Tokens** (on the main provider settings page) -- this lets Keycloak attach the user's Auth0-issued ID token as `id_token_hint` when it logs them out of Auth0, so Auth0 can identify the exact session and end it silently instead of prompting for confirmation
+4. Leave **Backchannel logout** **disabled**
 
-Also ensure your Auth0 application has the correct **Allowed Logout URLs** (see Step 1).
+> **Do not enable Backchannel Logout here.** Despite the name, this setting makes Keycloak call Auth0's logout endpoint as a server-to-server backend request, not through the user's browser. Auth0 will report the call as successful, but it has no way to clear a cookie in a browser it never talked to -- the user's Auth0 session survives. Only the front-channel (browser-redirect) logout that happens when this is left disabled can actually clear the Auth0 SSO cookie.
+
+Also ensure your Auth0 application has the correct **Allowed Logout URLs**, including the Keycloak broker callback (see [Step 1](#configure-application-settings)).
 
 ### Click **Save**
 
@@ -310,6 +315,10 @@ Set **Trust Email** to **On** in the Auth0 identity provider settings in Keycloa
 ### Auth0 button doesn't appear on login page
 
 Make sure the Auth0 identity provider is **Enabled** (toggle at the top of the IdP settings page in Keycloak).
+
+### Logging out and back in skips the password prompt
+
+If a user logs out of OpenCASE and immediately logging back in with the same account goes straight to the home page without ever showing Auth0's login form, the Auth0 SSO cookie in their browser is still valid -- see [Logout Settings](#logout-settings). This almost always means **Backchannel Logout** is enabled on the Auth0 IdP; disable it and confirm **Store Tokens** is enabled instead. Also double-check the Keycloak broker callback URL is present in Auth0's **Allowed Logout URLs** (see [Step 1](#configure-application-settings)) -- without it, Auth0 will reject the redirect back to Keycloak after processing the logout.
 
 ---
 
