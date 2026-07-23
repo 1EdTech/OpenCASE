@@ -334,6 +334,29 @@ Now when users click "Sign in", they'll be sent directly to Auth0. To still allo
 
 ---
 
+## Making Auth0 the Only Login Option
+
+The default-IdP redirect above still leaves the Keycloak username/password form reachable (e.g. via `?kc_idp_hint=`). To remove native Keycloak login entirely -- so Auth0 is the only way in -- you need to strip the login form out of the realm's browser authentication flow, not just set a default IdP.
+
+> **This locks out any native Keycloak user accounts in this realm** -- there is no local login path left once the form is disabled. Migrate or federate any KC-native admin/service accounts through Auth0 first. This only affects the realm you edit (e.g. `opencase`, or a given `tenant-{id}` realm) -- other realms, including `master`, are untouched, so Keycloak admin console access is unaffected.
+
+1. **Authentication** → **Flows** → select the **Browser** flow → **Duplicate** it (e.g. name it `Browser - Auth0 Only`). Don't edit the built-in flow directly.
+2. In the duplicated flow, set requirements:
+   - **Cookie** → `Alternative`
+   - **Identity Provider Redirector** → `Alternative` -- click its gear/settings and set **Default Identity Provider** to `auth0`
+   - **Forms** (the sub-flow containing Username Password Form) → `Disabled`
+3. Disabling **Forms** removes the username/password form entirely, so there's nothing left to fall back to except the Auth0 redirect -- `kc_idp_hint=` tricks no longer work either.
+4. Bind the new flow as the realm's browser flow. In Keycloak 26, this is done from inside the flow rather than a separate Bindings tab:
+   - Open `Browser - Auth0 Only`
+   - Click the **Action** dropdown (top-right, near "Add step"/"Add sub-flow") → **Bind flow**
+   - Choose **Browser flow** as the usage, then **Save**
+   - Back on the **Flows** list, confirm `Browser - Auth0 Only` now shows the **Browser flow** tag and the old built-in `browser` flow no longer does
+5. Test in an incognito window: hitting the OpenCASE login should redirect straight to Auth0 with no Keycloak form ever rendered.
+
+If you have multiple tenant realms (`tenant-{id}`), repeat this per realm that should be Auth0-only.
+
+---
+
 ## Architecture with Auth0
 
 ![Auth0 Architecture](assets/auth0-architecture.png)
