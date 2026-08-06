@@ -15,6 +15,7 @@ import type {
   CaseItemNodeData,
   CaseItemNodeType,
   ExternalFrameworkNodeData,
+  RegistryItemNodeData,
 } from '@/ui/editor/reactflow/types'
 import type { CFAssociationGrouping, CFDocument, CFItem, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
 import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
@@ -27,6 +28,7 @@ import type { CaseVersion } from '@/application/framework/mappers/case/CasePacka
 import { editorReducer } from '@/ui/editor/state/editorReducer'
 import type { EditorState } from '@/ui/editor/state/editorReducer'
 import { isFrameworkNode, isItemNode, WRAPPER_NODE_CLASS } from '@/ui/editor/state/helpers/nodeGeometry'
+import { readDocProvenance } from '@/ui/editor/state/provenance'
 import { computeHierarchyLayout } from '@/ui/editor/layout/hierarchyLayout'
 import { computeStarLayout } from '@/ui/editor/layout/starLayout'
 import { computeTreeLayout } from '@/ui/editor/layout/treeLayout'
@@ -82,6 +84,7 @@ type EditorContextValue = {
   addChild: (_parentId: string) => void
   addDetachedItem: (_viewportCenter?: { x: number; y: number }) => void
   addExternalFramework: (_data: ExternalFrameworkNodeData, _viewportCenter?: { x: number; y: number }) => void
+  addRegistryFramework: (_items: RegistryItemNodeData[], _viewportCenter?: { x: number; y: number }) => void
   addItemDialog: {
     open: boolean
     parentId: string | null
@@ -94,6 +97,12 @@ type EditorContextValue = {
   deleteElements: (_params: { nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }) => void
   applyHierarchyLayout: () => void
   applyStarLayout: () => void
+  /** True when the framework was imported from a registry (forked or not). */
+  isImported: boolean
+  /** True when the framework is an unforked registry import — content is read-only. */
+  isLocked: boolean
+  /** Fork an imported framework so its content becomes editable (records derivation). */
+  enableEditing: () => void
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null)
@@ -380,6 +389,22 @@ export function EditorProvider({
     }
   }, [state.nodes])
 
+  // ── Import lock state ────────────────────────────────────────────────
+  // A framework imported from a registry is read-only until the user forks it.
+  // `isLocked` gates every content mutation below; layout changes stay allowed.
+  const provenance = useMemo(() => {
+    const fw = state.nodes.find(isFrameworkNode)
+    return readDocProvenance(fw?.data.cfDocument)
+  }, [state.nodes])
+  const isImported = provenance.imported
+  const isLocked = provenance.imported && !provenance.modified
+  const isLockedRef = useRef(isLocked)
+  isLockedRef.current = isLocked
+
+  const enableEditing = useCallback(() => {
+    dispatch({ type: 'framework/enableEditing' })
+  }, [])
+
   // ── One-time initial auto-layout ─────────────────────────────────────
   useEffect(() => {
     if (didInitialLayout.current) return
@@ -419,18 +444,26 @@ export function EditorProvider({
   // ── CRUD callbacks ───────────────────────────────────────────────────
 
   const addChild = useCallback((parentId: string) => {
+    if (isLockedRef.current) return
     setAddItemDialog({ open: true, parentId, viewportCenter: undefined, draft: { fullStatement: '' } })
   }, [])
 
   const addDetachedItem = useCallback((viewportCenter?: { x: number; y: number }) => {
+    if (isLockedRef.current) return
     setAddItemDialog({ open: true, parentId: null, viewportCenter, draft: { fullStatement: '' } })
   }, [])
 
   const addExternalFramework = useCallback((data: ExternalFrameworkNodeData, viewportCenter?: { x: number; y: number }) => {
+    if (isLockedRef.current) return
     const uuid = globalThis.crypto?.randomUUID?.()
     const fallbackId = `${Date.now()}_${Math.random().toString(16).slice(2)}`
     const nodeId = `ext_${uuid ?? fallbackId}`
     dispatch({ type: 'node/addExternalFramework', nodeId, data, viewportCenter })
+  }, [])
+
+  const addRegistryFramework = useCallback((items: RegistryItemNodeData[], viewportCenter?: { x: number; y: number }) => {
+    if (isLockedRef.current) return
+    dispatch({ type: 'node/addRegistryFramework', items, viewportCenter })
   }, [])
 
   const setAddItemDraft = useCallback((patch: Partial<AddItemDraft>) => {
@@ -442,6 +475,7 @@ export function EditorProvider({
   }, [])
 
   const confirmAddItem = useCallback(() => {
+    if (isLockedRef.current) return
     const fullStatement = addItemDialog.draft.fullStatement.trim()
     if (!fullStatement) return
 
@@ -493,28 +527,42 @@ export function EditorProvider({
   }, [addItemDialog, ensureCfItemType, ensureCfSubject])
 
   const deleteElements = useCallback(
-    (params: { nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }) => dispatch({ type: 'graph/delete', ...params }),
+    (params: { nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }) => {
+      if (isLockedRef.current) return
+      dispatch({ type: 'graph/delete', ...params })
+    },
     [],
   )
 
   const updateNodeData = useCallback(
-    (nodeId: string, patch: CaseEditorNodeDataPatch) => dispatch({ type: 'node/updateData', nodeId, patch }),
+    (nodeId: string, patch: CaseEditorNodeDataPatch) => {
+      if (isLockedRef.current) return
+      dispatch({ type: 'node/updateData', nodeId, patch })
+    },
     [],
   )
 
   const updateEdgeData = useCallback(
-    (edgeId: string, patch: CaseEdgeDataPatch) => dispatch({ type: 'edge/updateData', edgeId, patch }),
+    (edgeId: string, patch: CaseEdgeDataPatch) => {
+      if (isLockedRef.current) return
+      dispatch({ type: 'edge/updateData', edgeId, patch })
+    },
     [],
   )
 
   const flipEdge = useCallback(
-    (edgeId: string) => dispatch({ type: 'edge/flip', edgeId }),
+    (edgeId: string) => {
+      if (isLockedRef.current) return
+      dispatch({ type: 'edge/flip', edgeId })
+    },
     [],
   )
 
   const reconnectEdge = useCallback(
-    (edgeId: string, newSource: string, newTarget: string, newSourceHandle?: string, newTargetHandle?: string) =>
-      dispatch({ type: 'edge/reconnect', edgeId, newSource, newTarget, newSourceHandle, newTargetHandle }),
+    (edgeId: string, newSource: string, newTarget: string, newSourceHandle?: string, newTargetHandle?: string) => {
+      if (isLockedRef.current) return
+      dispatch({ type: 'edge/reconnect', edgeId, newSource, newTarget, newSourceHandle, newTargetHandle })
+    },
     [],
   )
 
@@ -595,17 +643,30 @@ export function EditorProvider({
   }, [])
 
   const onNodesChange = useCallback(
-    (changes: NodeChange<CaseEditorNodeType>[]) => dispatch({ type: 'nodes/applyChanges', changes }),
+    (changes: NodeChange<CaseEditorNodeType>[]) => {
+      // When locked, allow layout/selection changes but drop structural ones
+      // (node removal) so imported frameworks keep their content intact.
+      const applied = isLockedRef.current ? changes.filter((c) => c.type !== 'remove') : changes
+      if (applied.length === 0) return
+      dispatch({ type: 'nodes/applyChanges', changes: applied })
+    },
     [],
   )
 
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => dispatch({ type: 'edges/applyChanges', changes }),
+    (changes: EdgeChange[]) => {
+      const applied = isLockedRef.current ? changes.filter((c) => c.type !== 'remove') : changes
+      if (applied.length === 0) return
+      dispatch({ type: 'edges/applyChanges', changes: applied })
+    },
     [],
   )
 
   const onConnect = useCallback(
-    (connection: Connection) => dispatch({ type: 'edges/connect', connection }),
+    (connection: Connection) => {
+      if (isLockedRef.current) return
+      dispatch({ type: 'edges/connect', connection })
+    },
     [],
   )
 
@@ -675,6 +736,7 @@ export function EditorProvider({
       addChild,
       addDetachedItem,
       addExternalFramework,
+      addRegistryFramework,
       addItemDialog,
       setAddItemDraft,
       cancelAddItem,
@@ -682,6 +744,9 @@ export function EditorProvider({
       deleteElements,
       applyHierarchyLayout,
       applyStarLayout,
+      isImported,
+      isLocked,
+      enableEditing,
     }),
     [
       state.nodes, state.edges, selectedNodeIds, selectedEdgeIds,
@@ -695,9 +760,10 @@ export function EditorProvider({
       settings, updateSettings,
       onSelectionChange, onNodesChange, onEdgesChange, onConnect,
       clearSelection, updateNodeData, updateEdgeData, flipEdge, reconnectEdge,
-      addChild, addDetachedItem, addExternalFramework,
+      addChild, addDetachedItem, addExternalFramework, addRegistryFramework,
       addItemDialog, setAddItemDraft, cancelAddItem, confirmAddItem,
       deleteElements, applyHierarchyLayout, applyStarLayout,
+      isImported, isLocked, enableEditing,
     ],
   )
 

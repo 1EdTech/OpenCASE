@@ -45,9 +45,11 @@ type Props = {
   onFlipEdge?: (_edgeId: string) => void
   cfAssociationGroupings?: CFAssociationGrouping[]
   ensureCfAssociationGrouping?: (_title: string) => CFAssociationGrouping | null
+  /** When true, association fields are shown read-only (imported, unforked framework). */
+  readOnly?: boolean
 }
 
-export default memo(function EdgePropertiesPanel({ edge, nodes, onClose, onChangeEdge, onFlipEdge, cfAssociationGroupings = [], ensureCfAssociationGrouping }: Readonly<Props>) {
+export default memo(function EdgePropertiesPanel({ edge, nodes, onClose, onChangeEdge, onFlipEdge, cfAssociationGroupings = [], ensureCfAssociationGrouping, readOnly = false }: Readonly<Props>) {
   const [copied, setCopied] = useState<null | 'uri'>(null)
   const [customType, setCustomType] = useState('')
   const [groupingInput, setGroupingInput] = useState('')
@@ -168,7 +170,7 @@ export default memo(function EdgePropertiesPanel({ edge, nodes, onClose, onChang
       </div>
 
       {edge ? (
-        <div className="flex-1 overflow-auto px-2 py-3">
+        <fieldset disabled={readOnly} className="m-0 min-w-0 flex-1 overflow-auto border-0 px-2 py-3">
           <div className="space-y-1">
 
             {/* ── Connection ── */}
@@ -379,7 +381,7 @@ export default memo(function EdgePropertiesPanel({ edge, nodes, onClose, onChang
             </SidebarSection>
 
           </div>
-        </div>
+        </fieldset>
       ) : null}
     </aside>
   )

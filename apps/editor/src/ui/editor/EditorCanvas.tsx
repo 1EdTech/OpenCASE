@@ -15,6 +15,7 @@ import ConfirmLeaveDialog from '@/ui/editor/components/ConfirmLeaveDialog'
 import SettingsModal from '@/ui/editor/components/SettingsModal'
 import FloatingAddButton from '@/ui/editor/components/FloatingAddButton'
 import AddExternalFrameworkDialog from '@/ui/editor/components/AddExternalFrameworkDialog'
+import ImportFromRegistryDialog from '@/ui/home/ImportFromRegistryDialog'
 import ViewCFPackageDialog from '@/ui/editor/components/ViewCFPackageDialog'
 import { useEditor } from '@/ui/editor/state/EditorContext'
 import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/types'
@@ -30,9 +31,11 @@ type EditorCanvasProps = {
   isPublishedToOpenCase?: boolean
   /** Archive the current framework on the server and navigate home */
   onArchiveFramework?: () => Promise<void>
+  /** Fetch Registry competencies for canvas alignment (no library save) */
+  onImportFromRegistry?: (registryUrl: string) => Promise<{ frameworkTitle: string; items: Array<{ id: string; fullStatement: string; codedNotation?: string; ctdlUri: string; ctdlCtid: string }> }>
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onImportFromRegistry }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -75,8 +78,12 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     updateSettings,
     addDetachedItem,
     addExternalFramework,
+    addRegistryFramework,
     applyHierarchyLayout,
     applyStarLayout,
+    isImported,
+    isLocked,
+    enableEditing,
   } = useEditor()
 
   const reactFlowWrapRef = useRef<HTMLDivElement | null>(null)
@@ -85,8 +92,10 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const didInitialViewportRef = useRef(false)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [forkConfirmOpen, setForkConfirmOpen] = useState(false)
   const [externalFwDialogOpen, setExternalFwDialogOpen] = useState(false)
   const [externalFwViewportCenter, setExternalFwViewportCenter] = useState<{ x: number; y: number } | undefined>(undefined)
+  const [registryImportOpen, setRegistryImportOpen] = useState(false)
   const [cfPackageDialogOpen, setCfPackageDialogOpen] = useState(false)
   const [generatedCfPackage, setGeneratedCfPackage] = useState<CFPackage | null>(null)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
@@ -143,9 +152,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const handleViewCFPackage = useCallback(() => {
     const { nodes: n, edges: e } = graphRef.current
     const ctx = saveCtxRef.current
-    const { framework, layout } = fromEditorGraph({ graph: { nodes: n, edges: e } })
+    const { framework, layout, registryNodes, externalNodes } = fromEditorGraph({ graph: { nodes: n, edges: e } })
     const cfPackage = frameworkToCfPackage({
-      framework, layout, incrementVersion: false,
+      framework, layout, incrementVersion: false, registryNodes, externalNodes,
       caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
       cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
       cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
@@ -158,9 +167,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const handleSave = useCallback(async () => {
     const { nodes: n, edges: e } = graphRef.current
     const ctx = saveCtxRef.current
-    const { framework, layout } = fromEditorGraph({ graph: { nodes: n, edges: e } })
+    const { framework, layout, registryNodes, externalNodes } = fromEditorGraph({ graph: { nodes: n, edges: e } })
     const cfPackage = frameworkToCfPackage({
-      framework, layout, incrementVersion: true,
+      framework, layout, incrementVersion: true, registryNodes, externalNodes,
       caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
       cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
       cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
@@ -1138,6 +1147,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         cfAssociationGroupings={inUseGroupings}
         activeGroupingFilter={activeGroupingFilter}
         onSetGroupingFilter={setActiveGroupingFilter}
+        isImported={isImported}
+        isLocked={isLocked}
+        onEnableEditing={() => setForkConfirmOpen(true)}
       />
 
       <div ref={reactFlowWrapRef} className="h-full w-full" onPointerDownCapture={onCanvasPointerDownCapture}>
@@ -1211,6 +1223,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         ensureCfSubject={ensureCfSubject}
         cfConcepts={cfConcepts}
         ensureCfConcept={ensureCfConcept}
+        readOnly={isLocked}
       />
 
       <EdgePropertiesPanel
@@ -1221,6 +1234,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onFlipEdge={flipEdge}
         cfAssociationGroupings={cfAssociationGroupings}
         ensureCfAssociationGrouping={ensureCfAssociationGrouping}
+        readOnly={isLocked}
       />
 
       <MultiSelectionPanel
@@ -1310,17 +1324,32 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onSave={updateSettings}
       />
 
-      <FloatingAddButton
-        onAddItem={() => {
-          const viewportCenter = getViewportCenter()
-          addDetachedItem(viewportCenter)
+      {!isLocked ? (
+        <FloatingAddButton
+          onAddItem={() => {
+            const viewportCenter = getViewportCenter()
+            addDetachedItem(viewportCenter)
+          }}
+          onAddExternalFramework={() => {
+            const viewportCenter = getViewportCenter()
+            setExternalFwViewportCenter(viewportCenter)
+            setExternalFwDialogOpen(true)
+          }}
+          onImportFromRegistry={onImportFromRegistry ? () => setRegistryImportOpen(true) : undefined}
+          sidePanelOpen={Boolean(selectedNode || selectedEdge || (selectedNodeIds.length + selectedEdgeIds.length > 1))}
+        />
+      ) : null}
+
+      <ConfirmActionDialog
+        open={forkConfirmOpen}
+        title="Enable editing?"
+        description="This framework was imported from a registry and is read-only. Enabling editing marks it as derived from the source: each competency and the framework will record a &quot;derivedFrom&quot; link back to the original registry resource instead of asserting it is that exact resource. Layout changes are always allowed; this affects content edits."
+        confirmLabel="Enable editing"
+        onCancel={() => setForkConfirmOpen(false)}
+        onConfirm={() => {
+          setForkConfirmOpen(false)
+          enableEditing()
         }}
-        onAddExternalFramework={() => {
-          const viewportCenter = getViewportCenter()
-          setExternalFwViewportCenter(viewportCenter)
-          setExternalFwDialogOpen(true)
-        }}
-        sidePanelOpen={Boolean(selectedNode || selectedEdge || (selectedNodeIds.length + selectedEdgeIds.length > 1))}
       />
 
       <AddExternalFrameworkDialog
@@ -1335,6 +1364,30 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
           setExternalFwViewportCenter(undefined)
         }}
       />
+
+      {onImportFromRegistry && (
+        <ImportFromRegistryDialog
+          open={registryImportOpen}
+          onCancel={() => setRegistryImportOpen(false)}
+          onImport={async (registryUrl) => {
+            const result = await onImportFromRegistry(registryUrl)
+            // Place competencies as read-only registry reference nodes on canvas
+            const viewportCenter = getViewportCenter()
+            addRegistryFramework(
+              result.items.map((item) => ({
+                ctdlUri: item.ctdlUri,
+                ctdlCtid: item.ctdlCtid,
+                fullStatement: item.fullStatement,
+                codedNotation: item.codedNotation,
+                frameworkTitle: result.frameworkTitle,
+              })),
+              viewportCenter,
+            )
+            setRegistryImportOpen(false)
+            return { status: 'placed', version: 1, itemCount: result.items.length, associationCount: 0, id: '' }
+          }}
+        />
+      )}
 
       <ViewCFPackageDialog
         open={cfPackageDialogOpen}

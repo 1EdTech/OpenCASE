@@ -6,6 +6,7 @@ import { FrameworkCard } from '@/ui/shared/components/FrameworkCard'
 import type { HomeFramework } from '@/ui/home/frameworkStore'
 import CreateFrameworkDialog, { type CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 import ImportFrameworkDialog from '@/ui/home/ImportFrameworkDialog'
+import ImportFromRegistryDialog from '@/ui/home/ImportFromRegistryDialog'
 import UploadFrameworkDialog from '@/ui/home/UploadFrameworkDialog'
 import ApiKeysDialog from '@/ui/home/ApiKeysDialog'
 import type { Framework } from '@/domain/framework/model/types'
@@ -132,6 +133,7 @@ export default function HomeScreen({
 }>) {
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [registryImportOpen, setRegistryImportOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [apiKeysOpen, setApiKeysOpen] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
@@ -320,6 +322,18 @@ export default function HomeScreen({
     setDraftDeleteConfirm(null)
   }, [draftDeleteConfirm, onDeleteDraft])
 
+  // Handle import from Credential Engine Registry
+  const handleRegistryImport = useCallback(async (registryUrl: string) => {
+    if (!tenantId) throw new Error('Not authenticated')
+    const result = await api.importCfPackageFromRegistry({ tenantId, registryUrl })
+    void loadFrameworks()
+    if (result.id && onOpenRemoteFramework) {
+      void onOpenRemoteFramework(result.id)
+    }
+    setRegistryImportOpen(false)
+    return result
+  }, [api, tenantId, loadFrameworks, onOpenRemoteFramework])
+
   // Handle import from external CASE endpoint
   const handleImport = useCallback(async (endpointUrl: string, accessToken?: string) => {
     if (!tenantId) throw new Error('Not authenticated')
@@ -504,6 +518,12 @@ export default function HomeScreen({
                 Import framework
               </Button>
             )}
+            {isAuthenticated && viewMode === 'active' && (
+              <Button variant="outline" onClick={() => setRegistryImportOpen(true)}>
+                <CloudArrowDownIcon className="h-4 w-4" aria-hidden />
+                Import from Registry
+              </Button>
+            )}
             {viewMode === 'active' && (
               <Button variant="outline" onClick={() => setUploadOpen(true)}>
                 <ArrowUpTrayIcon className="h-4 w-4" aria-hidden />
@@ -542,6 +562,17 @@ export default function HomeScreen({
                       >
                         <CloudArrowDownIcon className="h-4 w-4 text-gray-500" aria-hidden />
                         Import framework
+                      </button>
+                    )}
+                    {isAuthenticated && (
+                      <button
+                        role="menuitem"
+                        type="button"
+                        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm text-[#2E2F2F] hover:bg-gray-50"
+                        onClick={() => { setRegistryImportOpen(true); setActionsMenuOpen(false) }}
+                      >
+                        <CloudArrowDownIcon className="h-4 w-4 text-gray-500" aria-hidden />
+                        Import from Registry
                       </button>
                     )}
                     <button
@@ -895,6 +926,12 @@ export default function HomeScreen({
         open={importOpen}
         onCancel={() => setImportOpen(false)}
         onImport={handleImport}
+      />
+
+      <ImportFromRegistryDialog
+        open={registryImportOpen}
+        onCancel={() => setRegistryImportOpen(false)}
+        onImport={handleRegistryImport}
       />
 
       <UploadFrameworkDialog

@@ -187,6 +187,71 @@ export class CaseApiClient {
   }
 
   /**
+   * Import a CFPackage from the Credential Engine Registry via the OpenCASE backend.
+   *
+   * Accepts a full registry resource URL or bare CTID. The backend fetches the
+   * CTDL-ASN graph, translates it to CASE, and stores it in the tenant's framework store.
+   */
+  async importCfPackageFromRegistry(params: {
+    tenantId: string
+    registryUrl: string
+    caseVersion?: 'v1p0' | 'v1p1'
+  }): Promise<{ status: string; id: string; version: number; itemCount: number; associationCount: number }> {
+    const v = params.caseVersion ?? 'v1p1'
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages/import-from-registry`
+
+    const res = (await this._http.post(url, { registryUrl: params.registryUrl })) as unknown
+
+    if (res && typeof res === 'object') {
+      const obj = res as { status?: string; id?: string; version?: number; itemCount?: number; associationCount?: number }
+      return {
+        status: obj.status ?? 'imported',
+        id: obj.id ?? '',
+        version: obj.version ?? 1,
+        itemCount: obj.itemCount ?? 0,
+        associationCount: obj.associationCount ?? 0,
+      }
+    }
+
+    throw new Error('Unexpected import response shape')
+  }
+
+  /**
+   * Preview a framework from the Credential Engine Registry without saving it.
+   * Returns competency items for placement as read-only reference nodes on the canvas.
+   */
+  async previewRegistryFramework(params: {
+    tenantId: string
+    registryUrl: string
+    caseVersion?: 'v1p0' | 'v1p1'
+  }): Promise<{ frameworkTitle: string; items: Array<{ id: string; fullStatement: string; codedNotation?: string; ctdlUri: string; ctdlCtid: string }> }> {
+    const v = params.caseVersion ?? 'v1p1'
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages/preview-registry`
+
+    const res = (await this._http.post(url, { registryUrl: params.registryUrl })) as unknown
+
+    if (res && typeof res === 'object') {
+      const obj = res as { frameworkTitle?: string; items?: unknown[] }
+      return {
+        frameworkTitle: obj.frameworkTitle ?? 'Registry Framework',
+        items: Array.isArray(obj.items)
+          ? (obj.items as Array<{ id?: string; fullStatement?: string; codedNotation?: string; ctdlUri?: string; ctdlCtid?: string }>)
+              .filter((item) => item.id && item.fullStatement && item.ctdlUri && item.ctdlCtid)
+              .map((item) => ({
+                id: item.id!,
+                fullStatement: item.fullStatement!,
+                codedNotation: item.codedNotation,
+                ctdlUri: item.ctdlUri!,
+                ctdlCtid: item.ctdlCtid!,
+              }))
+          : [],
+      }
+    }
+
+    throw new Error('Unexpected preview response shape')
+  }
+
+  /**
    * List all CFDocuments from the CASE API.
    *
    * Uses the standard CASE endpoint: GET /ims/case/{version}/CFDocuments

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
-import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon, ShareIcon } from '@heroicons/react/24/solid'
+import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon, ShareIcon, LockClosedIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
 import type { CFAssociationGrouping } from '@/domain/case/types'
 
@@ -203,6 +203,9 @@ export default function CanvasHeader({
   cfAssociationGroupings,
   activeGroupingFilter,
   onSetGroupingFilter,
+  isImported,
+  isLocked,
+  onEnableEditing,
 }: {
   frameworkTitle: string
   frameworkSubtitle?: string
@@ -234,6 +237,12 @@ export default function CanvasHeader({
   activeGroupingFilter?: string | null
   /** Set the active grouping filter */
   onSetGroupingFilter?: (_id: string | null) => void
+  /** True when this framework was imported from a registry (forked or not). */
+  isImported?: boolean
+  /** True when the framework is an unforked registry import — content is read-only. */
+  isLocked?: boolean
+  /** Called when the user chooses to fork an imported framework for editing. */
+  onEnableEditing?: () => void
 }) {
   // Build user menu items
   const userMenuItems: (MenuItem | 'divider')[] = []
@@ -292,9 +301,31 @@ export default function CanvasHeader({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="truncate text-sm font-semibold text-[#2E2F2F]">{frameworkTitle}</span>
+              {isImported && !isLocked ? (
+                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700" title="Derived from an imported registry framework">
+                  Derived
+                </span>
+              ) : null}
             </div>
             {frameworkSubtitle ? <div className="truncate text-xs text-gray-500">{frameworkSubtitle}</div> : null}
           </div>
+
+          {isImported && isLocked ? (
+            <>
+              <span
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-teal-100 px-2 py-0.5 text-[11px] font-semibold text-teal-700"
+                title="Imported from a registry — content is read-only until you enable editing"
+              >
+                <LockClosedIcon className="h-3 w-3" aria-hidden />
+                Read-only
+              </span>
+              {onEnableEditing ? (
+                <Button size="sm" variant="secondary" onClick={onEnableEditing} title="Fork this imported framework so its content can be edited">
+                  Enable editing
+                </Button>
+              ) : null}
+            </>
+          ) : null}
 
           {/* Save button / status indicator */}
           {onSave ? (

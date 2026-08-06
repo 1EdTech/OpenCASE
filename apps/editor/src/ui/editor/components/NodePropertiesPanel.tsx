@@ -11,6 +11,8 @@ import type {
   CaseItemNodeType,
   ExternalFrameworkNodeType,
   ExternalFrameworkNodeData,
+  RegistryItemNodeType,
+  RegistryItemNodeData,
 } from '../reactflow/types'
 import type { CFConcept, CFDocument, CFItem, CFItemType, CFLicense, CFSubject } from '@/domain/case/types'
 import type { ComboboxOption } from '@/ui/shared/components/ui/combobox-input'
@@ -25,6 +27,23 @@ const INPUT_CLS = 'w-full rounded-xl border border-black/15 bg-white px-3 py-2.5
 const LABEL_CLS = 'mb-1.5 block text-sm font-medium text-slate-700'
 const HINT_CLS = 'mt-1.5 text-sm text-slate-500'
 
+/**
+ * Extract Registry provenance from the `source` block of an `ext:opencase` extension.
+ * Returns undefined when the node has no Registry provenance.
+ */
+function readRegistryProvenance(
+  ext: Record<string, unknown> | undefined,
+): { uri?: string; ctid?: string; registry?: string } | undefined {
+  const source = ext?.source as Record<string, unknown> | undefined
+  if (!source) return undefined
+  const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
+  const uri = str(source.uri)
+  const ctid = str(source.ctid)
+  const registry = str(source.registry)
+  if (!uri && !ctid) return undefined
+  return { uri, ctid, registry }
+}
+
 type Props = {
   node: CaseEditorNodeType | null
   onClose?: () => void
@@ -38,11 +57,14 @@ type Props = {
   ensureCfSubject?: (_title: string) => CFSubject | null
   cfConcepts?: CFConcept[]
   ensureCfConcept?: (_title: string) => CFConcept | null
+  /** When true, the item/framework fields are shown read-only (imported, unforked). */
+  readOnly?: boolean
 }
 
 export default memo(function NodePropertiesPanel({
   node, onClose, onChangeNode, onViewCFPackage, isPublishedToOpenCase, availableLicenses,
   cfItemTypes = [], ensureCfItemType, cfSubjects = [], ensureCfSubject, cfConcepts = [], ensureCfConcept,
+  readOnly = false,
 }: Readonly<Props>) {
   const [copied, setCopied] = useState<null | 'code' | 'uri' | 'opencase'>(null)
   const [conceptInput, setConceptInput] = useState('')
@@ -57,13 +79,25 @@ export default memo(function NodePropertiesPanel({
   const isItemNode = (n: CaseEditorNodeType): n is CaseItemNodeType => n.type === 'caseItemNode'
   const isFrameworkNode = (n: CaseEditorNodeType): n is CaseFrameworkNodeType => n.type === 'caseFrameworkNode'
   const isExternalFrameworkNode = (n: CaseEditorNodeType): n is ExternalFrameworkNodeType => n.type === 'externalFrameworkNode'
+  const isRegistryNode = (n: CaseEditorNodeType): n is RegistryItemNodeType => n.type === 'registryItemNode'
 
   const isFramework = Boolean(node && isFrameworkNode(node))
   const isExternalFramework = Boolean(node && isExternalFrameworkNode(node))
+  const isRegistry = Boolean(node && isRegistryNode(node))
 
   const cfItem: CFItem | undefined = node && isItemNode(node) ? node.data.cfItem : undefined
   const cfDocument: CFDocument | undefined = node && isFrameworkNode(node) ? node.data.cfDocument : undefined
   const externalData: ExternalFrameworkNodeData | undefined = node && isExternalFrameworkNode(node) ? node.data : undefined
+  const registryData: RegistryItemNodeData | undefined = node && isRegistryNode(node) ? node.data : undefined
+
+  // Registry provenance from the ext:opencase extension (present on frameworks/items
+  // imported from a CTDL registry). Surfaced read-only in Technical details.
+  const itemOpencaseExt = (cfItem?.extensions as Record<string, unknown> | undefined)?.['ext:opencase'] as Record<string, unknown> | undefined
+  const docOpencaseExt = (cfDocument?.extensions as Record<string, unknown> | undefined)?.['ext:opencase'] as Record<string, unknown> | undefined
+  const registryProvenance = readRegistryProvenance(itemOpencaseExt) ?? readRegistryProvenance(docOpencaseExt)
+  const registryCtid = registryProvenance?.ctid
+  const registryCtdlUri = registryProvenance?.uri
+  const registrySource = registryProvenance?.registry
 
   useEffect(() => {
     setConceptInput(cfItem?.conceptKeywordsURI?.title ?? '')
@@ -139,15 +173,19 @@ export default memo(function NodePropertiesPanel({
   /* ── Title for the header ── */
   const headerTitle = isExternalFramework
     ? (externalData?.title || 'External framework')
-    : isFramework
-      ? (cfDocument?.title ?? 'Untitled framework')
-      : (cfItem?.humanCodingScheme ?? cfItem?.alternativeLabel ?? cfItem?.CFItemType ?? 'Untitled item')
+    : isRegistry
+      ? (registryData?.codedNotation || registryData?.frameworkTitle || 'Registry competency')
+      : isFramework
+        ? (cfDocument?.title ?? 'Untitled framework')
+        : (cfItem?.humanCodingScheme ?? cfItem?.alternativeLabel ?? cfItem?.CFItemType ?? 'Untitled item')
 
   const headerSubtitle = isExternalFramework
     ? 'External reference'
-    : isFramework
-      ? 'Framework'
-      : (cfItem?.CFItemType ?? 'Item')
+    : isRegistry
+      ? 'Registry competency'
+      : isFramework
+        ? 'Framework'
+        : (cfItem?.CFItemType ?? 'Item')
 
   return (
     <aside
@@ -219,9 +257,100 @@ export default memo(function NodePropertiesPanel({
             </div>
           </div>
         </div>
-      ) : node ? (
+      ) : node && isRegistry ? (
         <div className="flex-1 overflow-auto px-2 py-3">
           <div className="space-y-1">
+
+            {/* ── Statement (read-only) ── */}
+            <SidebarSection
+              title="Statement"
+              subtitle="The competency text from the Credential Registry."
+              accentColor="#0d9488"
+              defaultOpen
+            >
+              <textarea
+                id="registry-fullStatement"
+                rows={6}
+                readOnly
+                className={`${INPUT_CLS} resize-y bg-slate-50 text-slate-700`}
+                value={registryData?.fullStatement ?? ''}
+              />
+            </SidebarSection>
+
+            {/* ── About this competency (read-only) ── */}
+            <SidebarSection
+              title="About this competency"
+              subtitle="Details from the source framework."
+              accentColor="#0d9488"
+              defaultOpen
+            >
+              <div className="space-y-4">
+                <div>
+                  <label className={LABEL_CLS} htmlFor="registry-codedNotation">Coded notation</label>
+                  <input id="registry-codedNotation" readOnly className={`${INPUT_CLS} bg-slate-50 text-slate-700`} value={registryData?.codedNotation ?? '—'} />
+                </div>
+                <div>
+                  <label className={LABEL_CLS} htmlFor="registry-frameworkTitle">Framework</label>
+                  <input id="registry-frameworkTitle" readOnly className={`${INPUT_CLS} bg-slate-50 text-slate-700`} value={registryData?.frameworkTitle ?? '—'} />
+                </div>
+              </div>
+            </SidebarSection>
+
+            {/* ── Registry identifiers ── */}
+            <SidebarSection title="Registry details" subtitle="Identifiers from the Credential Engine Registry." accentColor="#0d9488" defaultOpen>
+              <div className="space-y-4">
+                <div>
+                  <label className={LABEL_CLS} htmlFor="registry-ctid">CTID</label>
+                  <div className="flex gap-2">
+                    <input id="registry-ctid" readOnly className={`${INPUT_CLS} font-mono bg-slate-50 text-slate-700`} value={registryData?.ctdlCtid ?? ''} />
+                    <Button variant="secondary" size="xs" disabled={!registryData?.ctdlCtid} onClick={() => { if (registryData?.ctdlCtid) void copyToClipboard(registryData.ctdlCtid, 'code') }} title="Copy CTID">
+                      {copied === 'code' ? 'Copied' : 'Copy'}
+                    </Button>
+                  </div>
+                </div>
+                <div>
+                  <label className={LABEL_CLS} htmlFor="registry-uri">CTDL URI</label>
+                  <div className="flex items-stretch gap-2">
+                    <a
+                      id="registry-uri"
+                      href={registryData?.ctdlUri}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="min-w-0 flex-1 rounded-xl border border-teal-200 bg-white px-3 py-2.5 font-mono text-sm text-teal-800 hover:bg-teal-50 hover:underline break-all"
+                      title="Open in Registry"
+                    >
+                      {registryData?.ctdlUri}
+                    </a>
+                    <Button variant="secondary" size="xs" disabled={!registryData?.ctdlUri} onClick={() => { if (registryData?.ctdlUri) void copyToClipboard(registryData.ctdlUri, 'uri') }} title="Copy URI" className="shrink-0 self-center">
+                      {copied === 'uri' ? 'Copied' : 'Copy'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </SidebarSection>
+
+            <div className="mx-4 my-2 flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50 p-4">
+              <svg className="mt-0.5 h-5 w-5 shrink-0 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <div className="text-sm font-medium text-teal-900">Registry reference</div>
+                <div className="mt-1 text-sm text-teal-700">
+                  This competency is imported from the Credential Engine Registry and is read-only.
+                  Align your items to it by drawing an association (e.g. &quot;Is Related To&quot;).
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : node ? (
+        <div className="flex-1 overflow-auto px-2 py-3">
+          <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-1 border-0 p-0">
+            {readOnly ? (
+              <div className="mx-4 mb-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5 text-sm text-teal-800">
+                Imported from a registry — read-only. Use <span className="font-semibold">Enable editing</span> in the header to fork it for changes.
+              </div>
+            ) : null}
 
             {/* ── Description / Statement ── */}
             <SidebarSection
@@ -580,6 +709,9 @@ export default memo(function NodePropertiesPanel({
                   [
                     ['Identifier', cfItem?.identifier ?? cfDocument?.identifier],
                     ['URI', cfItem?.uri ?? cfDocument?.uri],
+                    ['Registry CTID', registryCtid],
+                    ['Registry CTDL URI', registryCtdlUri],
+                    ['Source registry', registrySource],
                     ['CFDocumentURI', cfItem?.CFDocumentURI?.uri],
                     ['Type URI', cfItem?.CFItemTypeURI?.uri],
                     ['Subject URI(s)', cfItem?.subjectURI?.map((s) => s.uri).join(', ')],
@@ -603,7 +735,7 @@ export default memo(function NodePropertiesPanel({
               </div>
             </SidebarSection>
 
-          </div>
+          </fieldset>
         </div>
       ) : null}
     </aside>

@@ -493,6 +493,9 @@ function AppInner() {
         onSaveToServer={tenantId ? handleSaveToServer : undefined}
         isPublishedToOpenCase={activeFrameworkId ? publishedFrameworkIds.has(activeFrameworkId) : false}
         onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
+        onImportFromRegistry={tenantId ? async (registryUrl) => {
+          return api.previewRegistryFramework({ tenantId, registryUrl })
+        } : undefined}
       />
     </EditorProvider>
   )

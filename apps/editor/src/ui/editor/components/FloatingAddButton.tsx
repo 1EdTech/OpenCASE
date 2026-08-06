@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { PlusIcon, DocumentPlusIcon, LinkIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, DocumentPlusIcon, LinkIcon, CloudArrowDownIcon } from '@heroicons/react/24/solid'
 
 type AddOption = {
   id: string
@@ -27,16 +27,24 @@ const getAddOptions = (): AddOption[] => [
     icon: LinkIcon,
     shortcut: isMac ? '⌘F' : 'Ctrl+F',
   },
+  {
+    id: 'registry',
+    label: 'Import from Registry',
+    description: 'Import a framework from the Credential Engine Registry',
+    icon: CloudArrowDownIcon,
+    shortcut: isMac ? '⌘R' : 'Ctrl+R',
+  },
 ]
 
 type Props = {
   onAddItem: () => void
   onAddExternalFramework: () => void
+  onImportFromRegistry?: () => void
   /** Whether the side panel is open - shifts the button left */
   sidePanelOpen?: boolean
 }
 
-export default function FloatingAddButton({ onAddItem, onAddExternalFramework, sidePanelOpen }: Readonly<Props>) {
+export default function FloatingAddButton({ onAddItem, onAddExternalFramework, onImportFromRegistry, sidePanelOpen }: Readonly<Props>) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const addOptions = useMemo(() => getAddOptions(), [])
@@ -68,6 +76,8 @@ export default function FloatingAddButton({ onAddItem, onAddExternalFramework, s
       onAddItem()
     } else if (optionId === 'external') {
       onAddExternalFramework()
+    } else if (optionId === 'registry') {
+      onImportFromRegistry?.()
     }
   }
 
