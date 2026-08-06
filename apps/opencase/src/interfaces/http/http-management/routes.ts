@@ -275,6 +275,22 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
     '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/import',
     withCaseVersion('1.1', deps.cfPackagesController.importFromEndpoint as unknown as RequestHandler)
   )
+  app.post(
+    '/management/tenants/:tenantId/ims/case/v1p0/CFPackages/import-from-registry',
+    withCaseVersion('1.0', deps.cfPackagesController.importFromRegistry as unknown as RequestHandler)
+  )
+  app.post(
+    '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/import-from-registry',
+    withCaseVersion('1.1', deps.cfPackagesController.importFromRegistry as unknown as RequestHandler)
+  )
+  app.post(
+    '/management/tenants/:tenantId/ims/case/v1p0/CFPackages/preview-registry',
+    withCaseVersion('1.0', deps.cfPackagesController.previewFromRegistry as unknown as RequestHandler)
+  )
+  app.post(
+    '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/preview-registry',
+    withCaseVersion('1.1', deps.cfPackagesController.previewFromRegistry as unknown as RequestHandler)
+  )
   // CASE entity management endpoints (explicit version in the path)
   app.put(
     '/management/tenants/:tenantId/ims/case/v1p0/CFDocuments/:id',

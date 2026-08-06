@@ -124,6 +124,9 @@ services:
       - SMTP_HOST=${SMTP_HOST:-mailpit}
       - SMTP_PORT=${SMTP_PORT:-1025}
       - SMTP_FROM=noreply@${OPENCASE_HOSTNAME:-opencase.local}
+      # Default CTDL registry for framework import (bare CTIDs resolve here; a full
+      # resource URL overrides per request). Point at a sandbox/self-hosted registry as needed.
+      - CREDENTIAL_REGISTRY_BASE_URL=${CREDENTIAL_REGISTRY_BASE_URL:-https://credentialengineregistry.org}
     restart: on-failure
     volumes:
       - ./apps/opencase/data:/app/data

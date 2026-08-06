@@ -5,11 +5,13 @@ import { RestoreFramework } from '../../../../../application/case/endpoints/Rest
 import { ListFrameworks } from '../../../../../application/case/endpoints/ListFrameworks'
 import { CreateFramework } from '../../../../../application/case/endpoints/CreateFramework'
 import { ImportFrameworkFromEndpoint } from '../../../../../application/case/endpoints/ImportFrameworkFromEndpoint'
+import { ImportFrameworkFromRegistry } from '../../../../../application/case/endpoints/ImportFrameworkFromRegistry'
 
 describe('CFPackagesManagementController', () => {
   let controller: CFPackagesManagementController
   let mockCreateFramework: jest.Mocked<CreateFramework>
   let mockImportFramework: jest.Mocked<ImportFrameworkFromEndpoint>
+  let mockImportFromRegistry: jest.Mocked<ImportFrameworkFromRegistry>
   let mockListFrameworks: jest.Mocked<ListFrameworks>
   let mockDeleteCFDocument: jest.Mocked<DeleteCFDocument>
   let mockRestoreFramework: jest.Mocked<RestoreFramework>
@@ -22,6 +24,7 @@ describe('CFPackagesManagementController', () => {
   beforeEach(() => {
     mockCreateFramework = { execute: jest.fn() } as any
     mockImportFramework = { execute: jest.fn() } as any
+    mockImportFromRegistry = { execute: jest.fn() } as any
     mockListFrameworks = { execute: jest.fn() } as any
     mockDeleteCFDocument = { execute: jest.fn() } as any
     mockRestoreFramework = { execute: jest.fn() } as any
@@ -29,6 +32,7 @@ describe('CFPackagesManagementController', () => {
     controller = new CFPackagesManagementController(
       mockCreateFramework,
       mockImportFramework,
+      mockImportFromRegistry,
       mockListFrameworks,
       mockDeleteCFDocument,
       mockRestoreFramework

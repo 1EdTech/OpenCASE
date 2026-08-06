@@ -39,6 +39,13 @@ export interface AppConfig {
   smtpHost?: string;
   smtpPort?: string;
   smtpFrom?: string;
+
+  /**
+   * Default CTDL registry origin used to resolve bare CTIDs on import
+   * (e.g. https://credentialengineregistry.org, or a sandbox/self-hosted registry).
+   * A full resource URL passed to import overrides this per request.
+   */
+  credentialRegistryBaseUrl: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -78,6 +85,8 @@ export function loadConfig(): AppConfig {
     smtpHost: process.env.SMTP_HOST ?? (isProduction ? undefined : 'mailpit'),
     smtpPort: process.env.SMTP_PORT ?? '1025',
     smtpFrom: process.env.SMTP_FROM ?? 'noreply@opencase.local',
+
+    credentialRegistryBaseUrl: process.env.CREDENTIAL_REGISTRY_BASE_URL ?? 'https://credentialengineregistry.org',
   };
 }
 

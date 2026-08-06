@@ -149,14 +149,24 @@ export class CreateFramework {
           const existingOpencase = (existingExt['ext:opencase'] && typeof existingExt['ext:opencase'] === 'object')
             ? existingExt['ext:opencase']
             : {}
-          cfDocPayload = {
-            ...cfDocPayload,
-            extensions: {
-              ...existingExt,
-              'ext:opencase': {
-                ...existingOpencase,
-                sourcePackageURI: existingMeta.sourcePackageURI,
-                isModifiedFromSource: true,
+          // Registry (CTDL) imports manage the modified/derived flag explicitly in the
+          // editor (read-only until the user forks, which rewrites `source` → `derivedFrom`
+          // and sets isModifiedFromSource). For those, trust the incoming flag so a
+          // layout-only save of a still-locked framework isn't wrongly marked "Forked".
+          const isRegistryManaged = Boolean(
+            (existingOpencase as any).source || (existingOpencase as any).derivedFrom,
+          )
+          if (!isRegistryManaged) {
+            // Legacy CASE-package imports: any editor save marks the copy modified.
+            cfDocPayload = {
+              ...cfDocPayload,
+              extensions: {
+                ...existingExt,
+                'ext:opencase': {
+                  ...existingOpencase,
+                  sourcePackageURI: existingMeta.sourcePackageURI,
+                  isModifiedFromSource: true,
+                }
               }
             }
           }

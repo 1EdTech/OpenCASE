@@ -7,6 +7,8 @@ import { FileFrameworkStore } from '../infrastructure/persistence/file/FileFrame
 import { FileCFPackageRepository } from '../infrastructure/persistence/file/FileCFPackageRepository'
 import { CreateFramework } from '../application/case/endpoints/CreateFramework'
 import { ImportFrameworkFromEndpoint } from '../application/case/endpoints/ImportFrameworkFromEndpoint'
+import { ImportFrameworkFromRegistry } from '../application/case/endpoints/ImportFrameworkFromRegistry'
+import { PreviewRegistryFramework } from '../application/case/endpoints/PreviewRegistryFramework'
 import { GetCFPackage } from '../application/case/endpoints/GetCFPackage'
 import { GetCFDocument } from '../application/case/endpoints/GetCFDocument'
 import { GetAllCFDocuments } from '../application/case/endpoints/GetAllCFDocuments'
@@ -62,6 +64,7 @@ import { ListFrameworks } from '../application/case/endpoints/ListFrameworks'
 import { ListTenants } from '../application/case/endpoints/ListTenants'
 import { CreateTenant } from '../application/case/endpoints/CreateTenant'
 import { CaseApiClient } from '../infrastructure/http/CaseApiClient'
+import { CredentialRegistryClient } from '../infrastructure/http/CredentialRegistryClient'
 import { JsonSchemaValidator } from '../infrastructure/validation/JsonSchemaValidator'
 import { KeycloakAdminClient } from '../infrastructure/keycloak/KeycloakAdminClient'
 import { KeycloakTenantProvisioner } from '../infrastructure/keycloak/KeycloakTenantProvisioner'
@@ -252,8 +255,12 @@ export async function buildContainer(): Promise<Container> {
     // But log which schemas were successfully registered (if any)
   }
 
+  const credentialRegistryClient = new CredentialRegistryClient({ baseUrl: config.credentialRegistryBaseUrl, timeout: 30000 })
+
   const createFramework = new CreateFramework(pkgRepo, jsonSchemaValidator, store)
   const importFramework = new ImportFrameworkFromEndpoint(pkgRepo, caseApiClient, jsonSchemaValidator)
+  const importFromRegistry = new ImportFrameworkFromRegistry(pkgRepo, credentialRegistryClient)
+  const previewFromRegistry = new PreviewRegistryFramework(credentialRegistryClient)
   
   // Initialize CASE endpoints
   const getCFPackage = new GetCFPackage(pkgRepo, store)
@@ -369,9 +376,11 @@ export async function buildContainer(): Promise<Container> {
   const cfPackagesManagementController = new CFPackagesManagementController(
     createFramework,
     importFramework,
+    importFromRegistry,
     listFrameworks,
     deleteCFDocument,
-    restoreFramework
+    restoreFramework,
+    previewFromRegistry
   )
   const tenantsManagementController = new TenantsManagementController(
     listTenants,

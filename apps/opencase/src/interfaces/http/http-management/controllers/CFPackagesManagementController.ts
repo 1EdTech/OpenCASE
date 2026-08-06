@@ -2,6 +2,8 @@
 import { type Request, type Response, type RequestHandler } from 'express'
 import { type CreateFramework } from '../../../../application/case/endpoints/CreateFramework'
 import { type ImportFrameworkFromEndpoint } from '../../../../application/case/endpoints/ImportFrameworkFromEndpoint'
+import { type ImportFrameworkFromRegistry } from '../../../../application/case/endpoints/ImportFrameworkFromRegistry'
+import { type PreviewRegistryFramework } from '../../../../application/case/endpoints/PreviewRegistryFramework'
 import { type DeleteCFDocument } from '../../../../application/case/endpoints/DeleteCFDocument'
 import { type RestoreFramework } from '../../../../application/case/endpoints/RestoreFramework'
 import { type ListFrameworks } from '../../../../application/case/endpoints/ListFrameworks'
@@ -12,9 +14,11 @@ export class CFPackagesManagementController {
   constructor (
     private readonly createFramework: CreateFramework,
     private readonly importFramework: ImportFrameworkFromEndpoint,
+    private readonly importFromRegistryUseCase: ImportFrameworkFromRegistry,
     private readonly listFrameworks: ListFrameworks,
     private readonly deleteCFDocument: DeleteCFDocument,
-    private readonly restoreFrameworkUseCase: RestoreFramework
+    private readonly restoreFrameworkUseCase: RestoreFramework,
+    private readonly previewRegistryUseCase?: PreviewRegistryFramework
   ) {}
 
   list: RequestHandler<{ tenantId: string }> = async (req: Request, res: Response) => {
@@ -108,6 +112,49 @@ export class CFPackagesManagementController {
       return res.status(201).json(response)
     } catch (error: any) {
       return res.status(400).json({ error: 'import_failed', message: error.message })
+    }
+  }
+
+  importFromRegistry: RequestHandler<{ tenantId: string }> = async (req: Request, res: Response) => {
+    const tenantId = getParam(req, 'tenantId')
+    const caseVersion = getCaseVersion(req, { default: '1.1' })!
+    const { registryUrl } = req.body
+
+    if (!registryUrl) {
+      return res.status(400).json({ error: 'registryUrl is required' })
+    }
+
+    try {
+      if (!tenantId) return res.status(400).json({ error: 'Missing tenantId' })
+      const result = await this.importFromRegistryUseCase.execute({ tenantId, caseVersion, registryUrl })
+      return res.status(201).json({
+        status: 'imported',
+        id: result.docId,
+        version: result.version,
+        itemCount: result.itemCount,
+        associationCount: result.associationCount
+      })
+    } catch (error: any) {
+      return res.status(400).json({ error: 'import_failed', message: error.message })
+    }
+  }
+
+  previewFromRegistry: RequestHandler<{ tenantId: string }> = async (req: Request, res: Response) => {
+    const { registryUrl } = req.body
+
+    if (!registryUrl) {
+      return res.status(400).json({ error: 'registryUrl is required' })
+    }
+
+    if (!this.previewRegistryUseCase) {
+      return res.status(503).json({ error: 'Preview not available' })
+    }
+
+    try {
+      const result = await this.previewRegistryUseCase.execute({ registryUrl })
+      return res.status(200).json(result)
+    } catch (error: any) {
+      return res.status(400).json({ error: 'preview_failed', message: error.message })
     }
   }
 
