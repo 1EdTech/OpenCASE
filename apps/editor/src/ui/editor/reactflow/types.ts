@@ -32,8 +32,24 @@ export type ExternalFrameworkNodeData = {
 
 export type ExternalFrameworkNodeType = Node<ExternalFrameworkNodeData, 'externalFrameworkNode'>
 
-export type CaseEditorNodeData = CaseItemNodeData | CaseFrameworkNodeData | ExternalFrameworkNodeData
-export type CaseEditorNodeType = CaseItemNodeType | CaseFrameworkNodeType | ExternalFrameworkNodeType
+/** Data for read-only Credential Engine Registry competency reference nodes */
+export type RegistryItemNodeData = {
+  /** CTDL @id URI from the Registry */
+  ctdlUri: string
+  /** Credential Engine CTID (e.g. "ce-abc123") */
+  ctdlCtid: string
+  /** Competency full statement text */
+  fullStatement: string
+  /** Optional coded notation / human coding scheme */
+  codedNotation?: string
+  /** Title of the Registry framework this competency belongs to */
+  frameworkTitle?: string
+}
+
+export type RegistryItemNodeType = Node<RegistryItemNodeData, 'registryItemNode'>
+
+export type CaseEditorNodeData = CaseItemNodeData | CaseFrameworkNodeData | ExternalFrameworkNodeData | RegistryItemNodeData
+export type CaseEditorNodeType = CaseItemNodeType | CaseFrameworkNodeType | ExternalFrameworkNodeType | RegistryItemNodeType
 
 export type CaseItemNodeDataPatch = Partial<Omit<CaseItemNodeData, 'cfItem'>> & {
   cfItem?: Partial<CFItem>
@@ -45,7 +61,9 @@ export type CaseFrameworkNodeDataPatch = Partial<Omit<CaseFrameworkNodeData, 'cf
 
 export type ExternalFrameworkNodeDataPatch = Partial<ExternalFrameworkNodeData>
 
-export type CaseEditorNodeDataPatch = CaseItemNodeDataPatch | CaseFrameworkNodeDataPatch | ExternalFrameworkNodeDataPatch
+export type RegistryItemNodeDataPatch = Partial<RegistryItemNodeData>
+
+export type CaseEditorNodeDataPatch = CaseItemNodeDataPatch | CaseFrameworkNodeDataPatch | ExternalFrameworkNodeDataPatch | RegistryItemNodeDataPatch
 
 // ========== Edge Types ==========
 

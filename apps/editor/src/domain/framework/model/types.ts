@@ -33,6 +33,8 @@ export type FrameworkMetadata = {
   lastChangeDateTime?: string
   /** CASE licenseURI — link to the CFLicense governing this framework */
   licenseURI?: { title?: string; identifier?: string; uri: string }
+  /** Arbitrary CASE extensions — preserved across load/save round-trips */
+  extensions?: Record<string, unknown>
 }
 
 export type ItemMetadata = Record<string, unknown>

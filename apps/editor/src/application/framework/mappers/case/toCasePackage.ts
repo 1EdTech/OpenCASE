@@ -62,6 +62,21 @@ function ensureUuid(id: string): string {
   return generateDeterministicUuid(id)
 }
 
+/** Matches a Credential Engine CTID (`ce-<uuid>`) anywhere in a string (bare or in a URL). */
+const CTID_PATTERN = /\bce-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i
+
+/**
+ * Extract the bare UUID from a CTID or a registry resource URL that contains one,
+ * e.g. "ce-64e0…" or "https://…/resources/ce-64e0…" → "64e0…". Returns undefined
+ * when no CTID is present. Used so alignments to registry resources carry the
+ * resource's real identifier rather than a hash of the "ce-" string.
+ */
+function extractCtidUuid(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const match = CTID_PATTERN.exec(value)
+  return match ? match[1].toLowerCase() : undefined
+}
+
 /**
  * URI format specification for CASE entities.
  * Uses the official CASE v1p1 REST endpoint format.
@@ -106,6 +121,31 @@ function incrementVersion(currentVersion?: string): string {
   return `${parts[0]}.${parts[1]}.${build + 1}`
 }
 
+type PersistedRegistryNode = {
+  id: string
+  ctdlUri: string
+  ctdlCtid: string
+  fullStatement: string
+  codedNotation?: string
+  frameworkTitle?: string
+  x: number
+  y: number
+  w?: number
+  h?: number
+}
+
+type PersistedExternalNode = {
+  id: string
+  title: string
+  uri?: string
+  description?: string
+  source?: string
+  x: number
+  y: number
+  w?: number
+  h?: number
+}
+
 type OpencaseExtension = {
   layout?: NodeLayout
   notes?: string
@@ -117,6 +157,40 @@ type OpencaseExtension = {
   edgeType?: string
   /** Visual color band hex color for item nodes */
   colorBand?: string
+  /** CTDL URI of the destination when the target is a Registry reference node */
+  ctdlDestinationUri?: string
+  /** URI of the destination when the target is an external-framework reference node */
+  externalDestinationUri?: string
+  /** Registry competency nodes placed on canvas for alignment */
+  registryNodes?: PersistedRegistryNode[]
+  /** External-framework reference nodes placed on canvas for alignment */
+  externalNodes?: PersistedExternalNode[]
+  /** Registry provenance for CFDocuments/CFItems imported from a CTDL registry. */
+  source?: {
+    /** Resolvable @id URI of the source resource — authoritative and registry-qualified. */
+    uri: string
+    /** Credential Engine CTID convenience (derivable from uri; omitted when absent). */
+    ctid?: string
+    /** Source registry base/origin — disambiguates multi-registry imports. */
+    registry?: string
+    /** Vocabulary/format of the source, e.g. "ctdl-asn". */
+    format?: string
+  }
+}
+
+/**
+ * Recover a nested extensions object from item/association metadata, which may
+ * hold `ext:opencase` either nested (`metadata.extensions['ext:opencase']`, from
+ * fromEditorGraph) or flattened (`metadata['ext:opencase']`, from
+ * caseToDomainFramework). Returns a nested-shape object so downstream export
+ * logic — and the merge helper — see a single consistent form. This is what
+ * keeps imported Registry provenance (the `source` block) alive across saves.
+ */
+function reconcileExtensions(md: Record<string, unknown>): CaseExtensions | undefined {
+  const nested = md.extensions as CaseExtensions | undefined
+  if (nested) return nested
+  const flattened = md[OPENCASE_EXT_KEY] as OpencaseExtension | undefined
+  return flattened ? { [OPENCASE_EXT_KEY]: flattened } : undefined
 }
 
 /**
@@ -130,7 +204,7 @@ function mergeOpencaseExtension(
   const extensions = { ...base }
   
   // Only add if there's data to store
-  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType || opencaseData.colorBand) {
+  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType || opencaseData.colorBand || opencaseData.ctdlDestinationUri || opencaseData.externalDestinationUri || opencaseData.registryNodes?.length || opencaseData.externalNodes?.length) {
     const existing = (extensions[OPENCASE_EXT_KEY] as OpencaseExtension | undefined) ?? {}
     extensions[OPENCASE_EXT_KEY] = {
       ...existing,
@@ -148,7 +222,7 @@ function frameworkToCfDocument(
   framework: Framework,
   caseVersion: CaseVersion,
   layout?: NodeLayout,
-  options?: { incrementVersion?: boolean; edgeType?: string }
+  options?: { incrementVersion?: boolean; edgeType?: string; registryNodes?: PersistedRegistryNode[]; externalNodes?: PersistedExternalNode[] }
 ): CFDocument {
   const meta = framework.metadata
   const fwId = String(framework.id)
@@ -188,9 +262,9 @@ function frameworkToCfDocument(
       title: docTitle,
       identifier: fwId,
     },
-    extensions: (layout || options?.edgeType)
-      ? mergeOpencaseExtension(undefined, { layout, edgeType: options?.edgeType })
-      : undefined,
+    extensions: (layout || options?.edgeType || options?.registryNodes?.length || options?.externalNodes?.length)
+      ? mergeOpencaseExtension(meta.extensions as CaseExtensions | undefined, { layout, edgeType: options?.edgeType, registryNodes: options?.registryNodes?.length ? options.registryNodes : undefined, externalNodes: options?.externalNodes?.length ? options.externalNodes : undefined })
+      : (meta.extensions as CaseExtensions | undefined),
   }
 
   return document
@@ -224,7 +298,11 @@ function itemToCfItem(
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined
   }
 
-  const existingExtensions = (md.extensions as CaseExtensions | undefined) ?? undefined
+  // Extensions may be nested (metadata.extensions) or flattened into metadata
+  // (metadata['ext:opencase']) depending on the load path (fromEditorGraph vs
+  // caseToDomainFramework). Reconcile both so imported data — e.g. the Registry
+  // `source` block — survives the round-trip. Mirrors toReactFlow.
+  const existingExtensions = reconcileExtensions(md)
 
   const cfItem: CFItem & { sourcedId: string } = {
     identifier: itemId,
@@ -284,24 +362,39 @@ function associationToCfAssociation(
   const fromItem = framework.items.get(assoc.fromItemId)
   const toItem = framework.items.get(assoc.toItemId)
   const fromTitle = fromItem?.statement ?? `Item ${fromId}`
-  const toTitle = toItem?.statement ?? `Item ${toId}`
-  
+
+  // toItem may be undefined when the destination is a Registry reference node
   const s = (k: string): string | undefined => {
     const v = md[k]
     return typeof v === 'string' ? v : undefined
   }
+  const ctdlUri = s('ctdlUri')
+  const externalUri = s('externalUri')
+  const isRegistryDestination = !toItem && !!ctdlUri
+  const isExternalDestination = !toItem && !ctdlUri && !!externalUri
+  const toTitle = toItem?.statement
+    ?? s('ctdlStatement')
+    ?? (isExternalDestination ? s('externalTitle') : undefined)
+    ?? `Item ${toId}`
+  const destinationUri = isRegistryDestination
+    ? ctdlUri!
+    : isExternalDestination
+      ? externalUri!
+      : (s('destinationUri') ?? `urn:case:item:${toId}`)
   const n = (k: string): number | undefined => {
     const v = md[k]
     return typeof v === 'number' ? v : undefined
   }
 
-  const existingExtensions = (md.extensions as CaseExtensions | undefined) ?? undefined
+  const existingExtensions = reconcileExtensions(md)
 
-  // Persist user-defined edge handle positions in ext:opencase
+  // Persist user-defined edge handle positions and external destination URIs in ext:opencase
   const originHandle = s('originHandle')
   const destinationHandle = s('destinationHandle')
-  const extensions = (originHandle || destinationHandle)
-    ? mergeOpencaseExtension(existingExtensions, { originHandle, destinationHandle })
+  const ctdlDestinationUri = isRegistryDestination ? ctdlUri! : undefined
+  const externalDestinationUri = isExternalDestination ? externalUri! : undefined
+  const extensions = (originHandle || destinationHandle || ctdlDestinationUri || externalDestinationUri)
+    ? mergeOpencaseExtension(existingExtensions, { originHandle, destinationHandle, ctdlDestinationUri, externalDestinationUri })
     : existingExtensions
 
   const cfAssociation: CFAssociation & { sourcedId: string } = {
@@ -316,7 +409,7 @@ function associationToCfAssociation(
     },
     destinationNodeURI: {
       identifier: toId,
-      uri: s('destinationUri') ?? `urn:case:item:${toId}`,
+      uri: destinationUri,
       title: toTitle,
     },
     sequenceNumber: n('sequenceNumber'),
@@ -368,13 +461,17 @@ export function frameworkToCfPackage(params: {
   cfAssociationGroupings?: CFAssociationGrouping[]
   /** CFLicense definitions to include in CFDefinitions (from editor state) */
   cfLicenses?: CFLicense[]
+  /** Registry reference nodes placed on canvas — persisted in CFDocument extensions */
+  registryNodes?: PersistedRegistryNode[]
+  /** External-framework reference nodes placed on canvas — persisted in CFDocument extensions */
+  externalNodes?: PersistedExternalNode[]
 }): CFPackage {
-  const { framework, caseVersion, layout, incrementVersion, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses } = params
+  const { framework, caseVersion, layout, incrementVersion, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses, registryNodes, externalNodes } = params
   const fwId = String(framework.id)
 
   // Build CFDocument
   const documentLayout = layout?.byNodeId?.[fwId]
-  const document = frameworkToCfDocument(framework, caseVersion, documentLayout, { incrementVersion, edgeType })
+  const document = frameworkToCfDocument(framework, caseVersion, documentLayout, { incrementVersion, edgeType, registryNodes, externalNodes })
 
   // Build CFItems
   const itemIds = Array.from(framework.items.keys()).map(String)
@@ -618,7 +715,8 @@ export type OpenCaseCFPackage = CaseV1p1Package
  */
 export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
   const doc = cfPackage.CFDocument as CFDocument & { sourcedId?: string }
-  const docId = ensureUuid(doc.sourcedId ?? doc.identifier)
+  const docInternalId = doc.sourcedId ?? doc.identifier
+  const docId = ensureUuid(docInternalId)
   const docTitle = doc.title
   
   // Build a mapping from internal item IDs to normalized UUIDs
@@ -710,6 +808,44 @@ export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
     const originId = itemIdMap.get(originInternalId) ?? ensureUuid(originInternalId)
     const destId = itemIdMap.get(destInternalId) ?? ensureUuid(destInternalId)
     
+    // Preserve external destination URIs for alignment associations
+    const assocExt = (a.extensions as Record<string, unknown> | undefined)?.[OPENCASE_EXT_KEY] as Record<string, unknown> | undefined
+    const ctdlDestUri = typeof assocExt?.ctdlDestinationUri === 'string' ? assocExt.ctdlDestinationUri : undefined
+    const externalDestUri = typeof assocExt?.externalDestinationUri === 'string' ? assocExt.externalDestinationUri : undefined
+
+    // Resolve the destination LinkURI for the possible targets:
+    //  1. Registry alignment — identifier is the CTID's UUID, uri is the registry resource URL.
+    //  2. External-framework alignment — uri is the external resource URI (identifier from its
+    //     CTID if it happens to be a registry-style URL, else a deterministic UUID).
+    //  3. Framework membership (a top-level item's isChildOf → the CFDocument) — CFDocument URI + title.
+    //  4. Ordinary item-to-item — CFItem URI.
+    let destinationNodeURI: CaseLinkURI
+    if (ctdlDestUri) {
+      destinationNodeURI = {
+        title: a.destinationNodeURI.title ?? 'Destination',
+        identifier: extractCtidUuid(destInternalId) ?? extractCtidUuid(ctdlDestUri) ?? destId,
+        uri: ctdlDestUri,
+      }
+    } else if (externalDestUri) {
+      destinationNodeURI = {
+        title: a.destinationNodeURI.title ?? 'Destination',
+        identifier: extractCtidUuid(externalDestUri) ?? destId,
+        uri: externalDestUri,
+      }
+    } else if (destInternalId === docInternalId) {
+      destinationNodeURI = {
+        title: docTitle,
+        identifier: docId,
+        uri: makeDocumentUri(docId),
+      }
+    } else {
+      destinationNodeURI = {
+        title: a.destinationNodeURI.title ?? 'Destination',
+        identifier: destId,
+        uri: makeItemUri(destId),
+      }
+    }
+
     return {
       identifier: assocId,
       uri: makeAssociationUri(assocId),
@@ -719,11 +855,7 @@ export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
         identifier: originId,
         uri: makeItemUri(originId),
       },
-      destinationNodeURI: {
-        title: a.destinationNodeURI.title ?? 'Destination',
-        identifier: destId,
-        uri: makeItemUri(destId),
-      },
+      destinationNodeURI,
       lastChangeDateTime: a.lastChangeDateTime,
       sequenceNumber: a.sequenceNumber,
       CFAssociationGroupingURI: a.CFAssociationGroupingURI ? {

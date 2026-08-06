@@ -2,7 +2,7 @@ import type { Association, Framework } from '@/domain/framework/model/types'
 import type { ItemId } from '@/domain/shared/types'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
 import { getEdgeMarkers, getEdgeStyle, makeEdgeLabel } from '@/ui/editor/state/editorFactories'
-import type { CaseEditorEdge, CaseEditorNodeType, CaseFrameworkNodeType, CaseItemNodeType } from '@/ui/editor/reactflow/types'
+import type { CaseEditorEdge, CaseEditorNodeType, CaseFrameworkNodeType, CaseItemNodeType, RegistryItemNodeType, ExternalFrameworkNodeType } from '@/ui/editor/reactflow/types'
 import { FRAMEWORK_ROOT_ASSOCIATION_TYPE } from '@/ui/editor/reactflow/types'
 import type { CFAssociation, CFDocument, CFItem } from '@/domain/case/types'
 import type { LayoutState } from './types'
@@ -103,6 +103,7 @@ function mapDomainFrameworkToCfDocument(framework: Framework): CFDocument {
     lastChangeDateTime: meta.lastChangeDateTime ?? nowIso(),
     CFPackageURI: { uri: `urn:case:package:${id}` },
     licenseURI: meta.licenseURI,
+    extensions: (meta as { extensions?: unknown }).extensions as CFDocument['extensions'],
   }
 }
 
@@ -118,6 +119,11 @@ function mapDomainItemToCfItem(framework: Framework, itemId: string): CFItem {
   const rawExtensions = md.extensions as Record<string, unknown> | undefined
   const opencaseExt = (rawExtensions?.[OPENCASE_EXT_KEY] ?? md[OPENCASE_EXT_KEY]) as Record<string, unknown> | undefined
   const colorBand = typeof opencaseExt?.colorBand === 'string' ? opencaseExt.colorBand : s('colorBand')
+  // Reconcile extensions shape: caseToDomainFramework flattens ext:opencase into
+  // metadata (metadata['ext:opencase']), while fromEditorGraph nests it under
+  // metadata.extensions. Rebuild a nested object so imported Registry provenance
+  // (the `source` block) rides through to export. Mirrors the association mapping below.
+  const reconciledExtensions = rawExtensions ?? (opencaseExt ? { [OPENCASE_EXT_KEY]: opencaseExt } : undefined)
 
   return {
     identifier: itemId,
@@ -141,7 +147,7 @@ function mapDomainItemToCfItem(framework: Framework, itemId: string): CFItem {
     statusEndDate: s('statusEndDate'),
     colorBand: colorBand || undefined,
     lastChangeDateTime: s('lastChangeDateTime') ?? nowIso(),
-    extensions: rawExtensions ?? undefined,
+    extensions: reconciledExtensions,
     CFDocumentURI: { uri: `urn:case:document:${framework.id as unknown as string}` },
   }
 }
@@ -226,14 +232,41 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
   const nodes: CaseEditorNodeType[] = [fwNode]
   const edges: CaseEditorEdge[] = []
 
+  // Build a map from persisted reference-node URIs → their canvas node id, so alignment
+  // associations reloaded from a CFPackage can be re-linked to the reconstructed
+  // registry/external nodes. On reload an alignment's destinationNodeURI.identifier is
+  // the CTID's UUID (or a derived id), which does NOT equal the reference node's canvas
+  // id — without this remap the edge would dangle and be dropped, losing the alignment
+  // on the next save. Applies to both registry and external reference nodes.
+  const docExtForRefs = (cfDocument as unknown as { extensions?: Record<string, unknown> }).extensions?.[OPENCASE_EXT_KEY] as Record<string, unknown> | undefined
+  const refNodeIdByUri = new Map<string, string>()
+  for (const rn of (Array.isArray(docExtForRefs?.registryNodes) ? docExtForRefs!.registryNodes as Array<Record<string, unknown>> : [])) {
+    if (typeof rn.ctdlUri === 'string' && typeof rn.id === 'string') refNodeIdByUri.set(rn.ctdlUri, rn.id)
+  }
+  for (const en of (Array.isArray(docExtForRefs?.externalNodes) ? docExtForRefs!.externalNodes as Array<Record<string, unknown>> : [])) {
+    if (typeof en.uri === 'string' && typeof en.id === 'string') refNodeIdByUri.set(en.uri, en.id)
+  }
+
+  // Resolve an association's destination to a reconstructed reference node id when its
+  // recorded destination URI matches one; otherwise return the raw destination id.
+  const resolveDestId = (a: Association): string => {
+    const rawToId = a.toItemId as unknown as string
+    if (refNodeIdByUri.size === 0) return rawToId
+    const md = (a.metadata ?? {}) as Record<string, unknown>
+    const ext = md[OPENCASE_EXT_KEY] as Record<string, unknown> | undefined
+    const uri = [md.destinationUri, ext?.ctdlDestinationUri, ext?.externalDestinationUri]
+      .find((v): v is string => typeof v === 'string' && refNodeIdByUri.has(v))
+    return uri ? refNodeIdByUri.get(uri)! : rawToId
+  }
+
   // Map child -> parent and track associations by their origin/destination for edge data
   const parentByChild = new Map<string, string>()
   const associationByEdgeKey = new Map<string, Association>()
   const associatedItemIds = new Set<string>()
-  
+
   for (const a of framework.associations.values()) {
     const fromId = a.fromItemId as unknown as string
-    const toId = a.toItemId as unknown as string
+    const toId = resolveDestId(a)
     if (!fromId || !toId) continue
 
     // Track whether each item participates in any association.
@@ -356,11 +389,89 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
     })
   }
 
+  // Reconstruct Registry reference nodes from CFDocument extensions
+  const docAny = cfDocument as unknown as { extensions?: Record<string, unknown> }
+  const opencaseDocExt = docAny.extensions?.[OPENCASE_EXT_KEY] as Record<string, unknown> | undefined
+  const persistedRegistryNodes = Array.isArray(opencaseDocExt?.registryNodes)
+    ? (opencaseDocExt!.registryNodes as Array<Record<string, unknown>>)
+    : []
+
+  for (const rn of persistedRegistryNodes) {
+    const regId = typeof rn.id === 'string' ? rn.id : typeof rn.ctdlCtid === 'string' ? rn.ctdlCtid : null
+    if (!regId) continue
+    const regLayout = getLayout(layout, regId, {
+      x: typeof rn.x === 'number' ? rn.x : 800,
+      y: typeof rn.y === 'number' ? rn.y : HEADER_SAFE_Y,
+      w: typeof rn.w === 'number' ? rn.w : 260,
+      h: typeof rn.h === 'number' ? rn.h : 72,
+    })
+    const regNode: RegistryItemNodeType = {
+      id: regId,
+      type: 'registryItemNode',
+      position: regLayout.position,
+      style: regLayout.style,
+      data: {
+        ctdlUri: typeof rn.ctdlUri === 'string' ? rn.ctdlUri : '',
+        ctdlCtid: typeof rn.ctdlCtid === 'string' ? rn.ctdlCtid : '',
+        fullStatement: typeof rn.fullStatement === 'string' ? rn.fullStatement : '',
+        codedNotation: typeof rn.codedNotation === 'string' ? rn.codedNotation : undefined,
+        frameworkTitle: typeof rn.frameworkTitle === 'string' ? rn.frameworkTitle : undefined,
+      },
+      className: wrapperNodeClassName,
+    }
+    nodes.push(regNode)
+    // Add to nodePositions so edge handles can be calculated
+    const regStyleAny = regNode.style as { width?: number; height?: number } | undefined
+    nodePositions.set(regId, {
+      x: regNode.position.x,
+      y: regNode.position.y,
+      w: typeof regStyleAny?.width === 'number' ? regStyleAny.width : 260,
+      h: typeof regStyleAny?.height === 'number' ? regStyleAny.height : 72,
+    })
+  }
+
+  // Reconstruct external-framework reference nodes from CFDocument extensions
+  const persistedExternalNodes = Array.isArray(opencaseDocExt?.externalNodes)
+    ? (opencaseDocExt!.externalNodes as Array<Record<string, unknown>>)
+    : []
+
+  for (const en of persistedExternalNodes) {
+    const extId = typeof en.id === 'string' ? en.id : null
+    if (!extId) continue
+    const extLayout = getLayout(layout, extId, {
+      x: typeof en.x === 'number' ? en.x : 800,
+      y: typeof en.y === 'number' ? en.y : HEADER_SAFE_Y,
+      w: typeof en.w === 'number' ? en.w : 280,
+      h: typeof en.h === 'number' ? en.h : 120,
+    })
+    const extNode: ExternalFrameworkNodeType = {
+      id: extId,
+      type: 'externalFrameworkNode',
+      position: extLayout.position,
+      style: extLayout.style,
+      data: {
+        title: typeof en.title === 'string' ? en.title : 'External framework',
+        uri: typeof en.uri === 'string' ? en.uri : undefined,
+        description: typeof en.description === 'string' ? en.description : undefined,
+        source: typeof en.source === 'string' ? en.source : undefined,
+      },
+      className: wrapperNodeClassName,
+    }
+    nodes.push(extNode)
+    const extStyleAny = extNode.style as { width?: number; height?: number } | undefined
+    nodePositions.set(extId, {
+      x: extNode.position.x,
+      y: extNode.position.y,
+      w: typeof extStyleAny?.width === 'number' ? extStyleAny.width : 280,
+      h: typeof extStyleAny?.height === 'number' ? extStyleAny.height : 120,
+    })
+  }
+
   // Non-hierarchical associations as edges (source=from, target=to).
   for (const a of framework.associations.values()) {
     if (a.associationType === 'isChildOf' || a.associationType === 'isPartOf') continue
     const fromId = a.fromItemId as unknown as string
-    const toId = a.toItemId as unknown as string
+    const toId = resolveDestId(a) // re-link registry/external alignments to their reconstructed node
     if (!fromId || !toId) continue
     
     const cfAssociation = mapDomainAssociationToCfAssociation(framework, a)

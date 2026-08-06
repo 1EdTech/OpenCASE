@@ -340,6 +340,7 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
       statusEndDate: asString(doc.statusEndDate),
       lastChangeDateTime: asString(doc.lastChangeDateTime),
       licenseURI,
+      extensions: asRecord(doc.extensions) ?? undefined,
     },
     items,
     associations,

@@ -36,6 +36,8 @@ export type CaseDocumentSnapshot = {
   lastChangeDateTime?: string
   /** Link to the CFLicense governing this framework */
   licenseURI?: { title?: string; identifier?: string; uri: string }
+  /** Namespaced extension data (e.g. ext:opencase — CTID, import provenance, layout) */
+  extensions?: Record<string, unknown>
 }
 
 /**

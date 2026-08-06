@@ -3,9 +3,28 @@ import type { Framework, FrameworkMetadata, Item, Association, AssociationType, 
 import type { AssociationId, FrameworkId, ItemId } from '@/domain/shared/types'
 import type { LayoutState } from './types'
 import type { CFDocument, CFItem } from '@/domain/case/types'
+import type { RegistryItemNodeData, ExternalFrameworkNodeData } from '@/ui/editor/reactflow/types'
 
 const isFrameworkNode = (n: EditorGraph['nodes'][number]) => n.type === 'caseFrameworkNode'
 const isItemNode = (n: EditorGraph['nodes'][number]) => n.type === 'caseItemNode'
+const isRegistryNode = (n: EditorGraph['nodes'][number]) => n.type === 'registryItemNode'
+const isExternalNode = (n: EditorGraph['nodes'][number]) => n.type === 'externalFrameworkNode'
+
+export type PersistedRegistryNode = RegistryItemNodeData & {
+  id: string
+  x: number
+  y: number
+  w?: number
+  h?: number
+}
+
+export type PersistedExternalNode = ExternalFrameworkNodeData & {
+  id: string
+  x: number
+  y: number
+  w?: number
+  h?: number
+}
 
 function mapItemType(rawType?: string): ItemType {
   const raw = (rawType ?? '').toLowerCase()
@@ -39,7 +58,7 @@ function readCfItem(node: EditorGraph['nodes'][number]): CFItem | null {
   return any?.cfItem ?? null
 }
 
-export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Framework; layout: LayoutState } {
+export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Framework; layout: LayoutState; registryNodes: PersistedRegistryNode[]; externalNodes: PersistedExternalNode[] } {
   const { graph } = params
   const fwNode = graph.nodes.find(isFrameworkNode)
   const fwId = (fwNode?.id ?? 'fw') as unknown as FrameworkId
@@ -64,6 +83,19 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     statusEndDate: doc?.statusEndDate,
     lastChangeDateTime: doc?.lastChangeDateTime,
     licenseURI: doc?.licenseURI,
+    extensions: doc?.extensions as Record<string, unknown> | undefined,
+  }
+
+  // Build registry node data map for association metadata
+  const registryDataByNodeId = new Map<string, RegistryItemNodeData>()
+  for (const n of graph.nodes.filter(isRegistryNode)) {
+    registryDataByNodeId.set(n.id, n.data as unknown as RegistryItemNodeData)
+  }
+
+  // Build external-framework node data map for association metadata
+  const externalDataByNodeId = new Map<string, ExternalFrameworkNodeData>()
+  for (const n of graph.nodes.filter(isExternalNode)) {
+    externalDataByNodeId.set(n.id, n.data as unknown as ExternalFrameworkNodeData)
   }
 
   const items: Framework['items'] = new Map()
@@ -146,8 +178,56 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
       continue
     }
 
+    const targetIsRegistry = registryDataByNodeId.has(target)
+    const targetIsExternal = externalDataByNodeId.has(target)
+
     if (!items.has(source as unknown as ItemId)) continue
-    if (!items.has(target as unknown as ItemId)) continue
+    if (!items.has(target as unknown as ItemId) && !targetIsRegistry && !targetIsExternal) continue
+
+    // Handle alignment edges to registry items specially
+    if (targetIsRegistry) {
+      const regData = registryDataByNodeId.get(target)!
+      const assocId = (edgeData?.cfAssociation?.identifier ?? e.id) as unknown as AssociationId
+      const assoc: Association = {
+        id: assocId,
+        fromItemId: source as unknown as ItemId,
+        toItemId: target as unknown as ItemId,
+        associationType: (edgeToAssociationType(e.id, edgeData) as AssociationType),
+        metadata: {
+          caseUri: edgeData?.cfAssociation?.uri,
+          ctdlUri: regData.ctdlUri,
+          ctdlCtid: regData.ctdlCtid,
+          ctdlStatement: regData.fullStatement,
+          notes: edgeData?.cfAssociation?.notes,
+          lastChangeDateTime: edgeData?.cfAssociation?.lastChangeDateTime,
+        },
+      }
+      associations.set(assoc.id, assoc)
+      continue
+    }
+
+    // Handle alignment edges to external-framework reference nodes.
+    // Mirrors the registry branch: the destination is an external resource identified
+    // by its URI, carried through export as the association's destinationNodeURI.
+    if (targetIsExternal) {
+      const extData = externalDataByNodeId.get(target)!
+      const assocId = (edgeData?.cfAssociation?.identifier ?? e.id) as unknown as AssociationId
+      const assoc: Association = {
+        id: assocId,
+        fromItemId: source as unknown as ItemId,
+        toItemId: target as unknown as ItemId,
+        associationType: (edgeToAssociationType(e.id, edgeData) as AssociationType),
+        metadata: {
+          caseUri: edgeData?.cfAssociation?.uri,
+          externalUri: extData.uri,
+          externalTitle: extData.title,
+          notes: edgeData?.cfAssociation?.notes,
+          lastChangeDateTime: edgeData?.cfAssociation?.lastChangeDateTime,
+        },
+      }
+      associations.set(assoc.id, assoc)
+      continue
+    }
 
     const associationType = edgeToAssociationType(e.id, edgeData)
     
@@ -204,6 +284,45 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     }
   }
 
-  return { framework, layout: { byNodeId } }
+  // Extract registry nodes for persistence in CFPackage extensions
+  const registryNodes: PersistedRegistryNode[] = graph.nodes
+    .filter(isRegistryNode)
+    .map((n) => {
+      const data = n.data as unknown as RegistryItemNodeData
+      const styleAny = n.style as unknown as { width?: number; height?: number } | undefined
+      return {
+        id: n.id,
+        ctdlUri: data.ctdlUri,
+        ctdlCtid: data.ctdlCtid,
+        fullStatement: data.fullStatement,
+        codedNotation: data.codedNotation,
+        frameworkTitle: data.frameworkTitle,
+        x: n.position.x,
+        y: n.position.y,
+        w: typeof styleAny?.width === 'number' ? styleAny.width : undefined,
+        h: typeof styleAny?.height === 'number' ? styleAny.height : undefined,
+      }
+    })
+
+  // Extract external-framework reference nodes for persistence in CFPackage extensions
+  const externalNodes: PersistedExternalNode[] = graph.nodes
+    .filter(isExternalNode)
+    .map((n) => {
+      const data = n.data as unknown as ExternalFrameworkNodeData
+      const styleAny = n.style as unknown as { width?: number; height?: number } | undefined
+      return {
+        id: n.id,
+        title: data.title,
+        uri: data.uri,
+        description: data.description,
+        source: data.source,
+        x: n.position.x,
+        y: n.position.y,
+        w: typeof styleAny?.width === 'number' ? styleAny.width : undefined,
+        h: typeof styleAny?.height === 'number' ? styleAny.height : undefined,
+      }
+    })
+
+  return { framework, layout: { byNodeId }, registryNodes, externalNodes }
 }
 

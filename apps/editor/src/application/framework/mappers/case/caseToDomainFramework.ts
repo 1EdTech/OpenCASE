@@ -56,6 +56,7 @@ export function mapCaseSnapshotToDomainFramework(snapshot: CasePackageSnapshot):
     statusEndDate: doc.statusEndDate,
     lastChangeDateTime: doc.lastChangeDateTime,
     licenseURI: doc.licenseURI,
+    extensions: doc.extensions as Record<string, unknown> | undefined,
   }
 
   const items: Framework['items'] = new Map()

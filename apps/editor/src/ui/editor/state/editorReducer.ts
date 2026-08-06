@@ -14,6 +14,8 @@ import type {
   CaseItemNodeType,
   ExternalFrameworkNodeData,
   ExternalFrameworkNodeType,
+  RegistryItemNodeData,
+  RegistryItemNodeType,
 } from '@/ui/editor/reactflow/types'
 import { FRAMEWORK_ROOT_ASSOCIATION_TYPE } from '@/ui/editor/reactflow/types'
 import type { CFItem } from '@/domain/case/types'
@@ -30,6 +32,7 @@ import {
   isFrameworkNode,
   isItemNode,
 } from '@/ui/editor/state/helpers/nodeGeometry'
+import { forkExtensions } from '@/ui/editor/state/provenance'
 
 // ── State ──────────────────────────────────────────────────────────────
 
@@ -63,10 +66,12 @@ export type Action =
   | { type: 'node/addChild'; parentId: string; childId: string; cfItem: CFItem }
   | { type: 'node/addDetachedItem'; nodeId: string; cfItem: CFItem; viewportCenter?: { x: number; y: number } }
   | { type: 'node/addExternalFramework'; nodeId: string; data: ExternalFrameworkNodeData; viewportCenter?: { x: number; y: number } }
+  | { type: 'node/addRegistryFramework'; items: RegistryItemNodeData[]; viewportCenter?: { x: number; y: number } }
   | { type: 'graph/delete'; nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }
   | { type: 'layout/apply'; positions: Record<string, { x: number; y: number }> }
   | { type: 'layout/applyHierarchy'; positions: Record<string, { x: number; y: number }>; edgeHandles: Record<string, { sourceHandle: string; targetHandle: string; edgeType?: string; labelPosition?: 'center' | 'target' }> }
   | { type: 'graph/load'; graph: EditorGraph }
+  | { type: 'framework/enableEditing' }
   | { type: 'dirty/mark' }
   | { type: 'dirty/clear' }
 
@@ -129,9 +134,13 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
       const isTargetMainFramework = targetNode?.type === 'caseFrameworkNode'
       const isSourceExternalFramework = sourceNode?.type === 'externalFrameworkNode'
       const isTargetExternalFramework = targetNode?.type === 'externalFrameworkNode'
+      const isSourceRegistry = sourceNode?.type === 'registryItemNode'
+      const isTargetRegistry = targetNode?.type === 'registryItemNode'
       const isSourceAnyFramework = isSourceMainFramework || isSourceExternalFramework
       const isTargetAnyFramework = isTargetMainFramework || isTargetExternalFramework
 
+      // Registry nodes cannot be sources; two frameworks cannot link
+      if (isSourceRegistry) return state
       if (isSourceAnyFramework && isTargetAnyFramework) return state
 
       const involvesMainFramework = isSourceMainFramework || isTargetMainFramework
@@ -142,6 +151,8 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         defaultAssocType = FRAMEWORK_ROOT_ASSOCIATION_TYPE
       } else if (involvesExternalFramework) {
         defaultAssocType = 'isPartOf'
+      } else if (isTargetRegistry) {
+        defaultAssocType = 'isRelatedTo'
       } else {
         defaultAssocType = 'isChildOf'
       }
@@ -168,7 +179,7 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         labelStyle: { fill: '#94a3b8', fontSize: 11, fontWeight: 500 },
         style: getEdgeStyle(defaultAssocType),
         data: {
-          isHierarchical: true,
+          isHierarchical: !isTargetRegistry && !involvesExternalFramework,
           associationType: defaultAssocType,
           isFrameworkRootConnection: involvesMainFramework,
         },
@@ -276,7 +287,11 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
       const isTargetMainFramework = newTargetNode?.type === 'caseFrameworkNode'
       const isSourceExternalFramework = newSourceNode?.type === 'externalFrameworkNode'
       const isTargetExternalFramework = newTargetNode?.type === 'externalFrameworkNode'
+      const isSourceRegistry = newSourceNode?.type === 'registryItemNode'
+      const isTargetRegistry = newTargetNode?.type === 'registryItemNode'
       const isSourceAnyFramework = isSourceMainFramework || isSourceExternalFramework
+
+      if (isSourceRegistry) return state
       const isTargetAnyFramework = isTargetMainFramework || isTargetExternalFramework
 
       if (isSourceAnyFramework && isTargetAnyFramework) return state
@@ -307,6 +322,8 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
           newAssocType = FRAMEWORK_ROOT_ASSOCIATION_TYPE
         } else if (involvesExternalFramework) {
           newAssocType = 'isPartOf'
+        } else if (isTargetRegistry) {
+          newAssocType = currentData.associationType ?? 'isRelatedTo'
         } else {
           newAssocType = currentData.associationType ?? 'isChildOf'
         }
@@ -510,6 +527,39 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
       const nextNodes = [...state.nodes.map((n) => ({ ...n, selected: false })), { ...newNode, selected: true }]
       return { ...state, nodes: nextNodes, selectedNodeId: action.nodeId, selectedEdgeId: null, selectedNodeIds: [action.nodeId], selectedEdgeIds: [], dirty: true }
     }
+    case 'node/addRegistryFramework': {
+      if (!action.items.length) return state
+
+      const REG_NODE_WIDTH = 260
+      const REG_NODE_HEIGHT = 72
+      const REG_NODE_GAP = 6
+
+      const existingNodeIds = new Set(state.nodes.map((n) => n.id))
+
+      // Find a clear area: right of existing content, or offset from viewport center
+      const maxX = state.nodes.length ? Math.max(...state.nodes.map((n) => n.position.x + ((n.style as { width?: number } | undefined)?.width ?? 280))) : 0
+      const clusterX = action.viewportCenter ? action.viewportCenter.x + 40 : maxX + 80
+      const clusterStartY = action.viewportCenter
+        ? action.viewportCenter.y - (action.items.length * (REG_NODE_HEIGHT + REG_NODE_GAP)) / 2
+        : HEADER_SAFE_Y
+
+      // Use ctdlCtid as stable node ID; skip items already on canvas
+      const newRegistryNodes: RegistryItemNodeType[] = action.items
+        .filter((item) => !existingNodeIds.has(item.ctdlCtid))
+        .map((item, i) => ({
+          id: item.ctdlCtid,
+          type: 'registryItemNode' as const,
+          position: { x: clusterX, y: clusterStartY + i * (REG_NODE_HEIGHT + REG_NODE_GAP) },
+          style: { width: REG_NODE_WIDTH, height: REG_NODE_HEIGHT },
+          data: item,
+          className: WRAPPER_NODE_CLASS,
+        }))
+
+      if (!newRegistryNodes.length) return state
+
+      const nextNodes = [...state.nodes.map((n) => ({ ...n, selected: false })), ...newRegistryNodes]
+      return { ...state, nodes: nextNodes as CaseEditorNodeType[], dirty: true }
+    }
     case 'graph/delete': {
       const deleteNodeIds = new Set(action.nodeIds)
       const deleteEdgeIds = new Set(action.edgeIds)
@@ -617,6 +667,23 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         layoutVersion: 0,
         dirty: false,
       }
+    }
+    case 'framework/enableEditing': {
+      // Fork an imported framework into a derivative: rename each node's
+      // ext:opencase.source → derivedFrom and flag the document isModifiedFromSource.
+      const nodes = state.nodes.map((n) => {
+        if (isFrameworkNode(n)) {
+          const extensions = forkExtensions(n.data.cfDocument.extensions, { markModified: true }) as typeof n.data.cfDocument.extensions
+          return { ...n, data: { ...n.data, cfDocument: { ...n.data.cfDocument, extensions } } }
+        }
+        if (isItemNode(n)) {
+          const extensions = forkExtensions(n.data.cfItem.extensions) as typeof n.data.cfItem.extensions
+          if (extensions === n.data.cfItem.extensions) return n
+          return { ...n, data: { ...n.data, cfItem: { ...n.data.cfItem, extensions } } }
+        }
+        return n
+      })
+      return { ...state, nodes, dirty: true }
     }
     case 'dirty/mark': {
       return state.dirty ? state : { ...state, dirty: true }
