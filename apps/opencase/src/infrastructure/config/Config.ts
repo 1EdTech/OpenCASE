@@ -46,6 +46,21 @@ export interface AppConfig {
    * A full resource URL passed to import overrides this per request.
    */
   credentialRegistryBaseUrl: string;
+
+  /**
+   * Registry Assistant publishing config. Per-tenant secrets live in env for now
+   * (future: fetched via a Keycloak sign-on event with the Registry). Defaults to
+   * the sandbox environment; production is opt-in per publish request.
+   */
+  registryAssistant: {
+    environment: 'sandbox' | 'production';
+    sandboxBaseUrl: string;
+    productionBaseUrl: string;
+    /** Per-organization API key (secret). Absent = publishing disabled. */
+    apiKey?: string;
+    /** CTID of the publishing organization (PublishForOrganizationIdentifier). */
+    organizationCtid?: string;
+  };
 }
 
 export function loadConfig(): AppConfig {
@@ -87,6 +102,14 @@ export function loadConfig(): AppConfig {
     smtpFrom: process.env.SMTP_FROM ?? 'noreply@opencase.local',
 
     credentialRegistryBaseUrl: process.env.CREDENTIAL_REGISTRY_BASE_URL ?? 'https://credentialengineregistry.org',
+
+    registryAssistant: {
+      environment: (process.env.REGISTRY_ASSISTANT_ENVIRONMENT === 'production' ? 'production' : 'sandbox'),
+      sandboxBaseUrl: process.env.REGISTRY_ASSISTANT_SANDBOX_BASE_URL ?? 'https://sandbox.credentialengine.org',
+      productionBaseUrl: process.env.REGISTRY_ASSISTANT_PRODUCTION_BASE_URL ?? 'https://apps.credentialengine.org',
+      apiKey: process.env.REGISTRY_ASSISTANT_API_KEY,
+      organizationCtid: process.env.REGISTRY_ASSISTANT_ORG_CTID,
+    },
   };
 }
 

@@ -9,6 +9,8 @@ import { CreateFramework } from '../application/case/endpoints/CreateFramework'
 import { ImportFrameworkFromEndpoint } from '../application/case/endpoints/ImportFrameworkFromEndpoint'
 import { ImportFrameworkFromRegistry } from '../application/case/endpoints/ImportFrameworkFromRegistry'
 import { PreviewRegistryFramework } from '../application/case/endpoints/PreviewRegistryFramework'
+import { PreviewPublishToRegistry } from '../application/case/endpoints/PreviewPublishToRegistry'
+import { RegistryAssistantClient } from '../infrastructure/http/RegistryAssistantClient'
 import { GetCFPackage } from '../application/case/endpoints/GetCFPackage'
 import { GetCFDocument } from '../application/case/endpoints/GetCFDocument'
 import { GetAllCFDocuments } from '../application/case/endpoints/GetAllCFDocuments'
@@ -261,6 +263,14 @@ export async function buildContainer(): Promise<Container> {
   const importFramework = new ImportFrameworkFromEndpoint(pkgRepo, caseApiClient, jsonSchemaValidator)
   const importFromRegistry = new ImportFrameworkFromRegistry(pkgRepo, credentialRegistryClient)
   const previewFromRegistry = new PreviewRegistryFramework(credentialRegistryClient)
+
+  const registryAssistantClient = new RegistryAssistantClient({
+    environment: config.registryAssistant.environment,
+    sandboxBaseUrl: config.registryAssistant.sandboxBaseUrl,
+    productionBaseUrl: config.registryAssistant.productionBaseUrl,
+    apiKey: config.registryAssistant.apiKey,
+  })
+  const previewPublish = new PreviewPublishToRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid)
   
   // Initialize CASE endpoints
   const getCFPackage = new GetCFPackage(pkgRepo, store)
@@ -380,7 +390,8 @@ export async function buildContainer(): Promise<Container> {
     listFrameworks,
     deleteCFDocument,
     restoreFramework,
-    previewFromRegistry
+    previewFromRegistry,
+    previewPublish
   )
   const tenantsManagementController = new TenantsManagementController(
     listTenants,
