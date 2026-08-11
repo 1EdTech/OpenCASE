@@ -14,6 +14,7 @@ import ConfirmActionDialog from '@/ui/editor/components/ConfirmActionDialog'
 import ConfirmLeaveDialog from '@/ui/editor/components/ConfirmLeaveDialog'
 import SettingsModal from '@/ui/editor/components/SettingsModal'
 import FloatingAddButton from '@/ui/editor/components/FloatingAddButton'
+import PublishPreviewDialog from '@/ui/editor/components/PublishPreviewDialog'
 import AddExternalFrameworkDialog from '@/ui/editor/components/AddExternalFrameworkDialog'
 import ImportFromRegistryDialog from '@/ui/home/ImportFromRegistryDialog'
 import ViewCFPackageDialog from '@/ui/editor/components/ViewCFPackageDialog'
@@ -33,9 +34,11 @@ type EditorCanvasProps = {
   onArchiveFramework?: () => Promise<void>
   /** Fetch Registry competencies for canvas alignment (no library save) */
   onImportFromRegistry?: (registryUrl: string) => Promise<{ frameworkTitle: string; items: Array<{ id: string; fullStatement: string; codedNotation?: string; ctdlUri: string; ctdlCtid: string }> }>
+  /** Dry-run publish the saved framework to the Credential Registry (validation only) */
+  onPreviewPublish?: (environment?: 'sandbox' | 'production') => Promise<{ request: unknown; format: { ok: boolean; status: number; body: unknown } }>
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onImportFromRegistry }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onImportFromRegistry, onPreviewPublish }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -93,6 +96,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [forkConfirmOpen, setForkConfirmOpen] = useState(false)
+  const [publishPreviewOpen, setPublishPreviewOpen] = useState(false)
   const [externalFwDialogOpen, setExternalFwDialogOpen] = useState(false)
   const [externalFwViewportCenter, setExternalFwViewportCenter] = useState<{ x: number; y: number } | undefined>(undefined)
   const [registryImportOpen, setRegistryImportOpen] = useState(false)
@@ -1215,6 +1219,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onClose={clearSelection}
         onChangeNode={updateNodeData}
         onViewCFPackage={handleViewCFPackage}
+        onPreviewPublish={onPreviewPublish && isPublishedToOpenCase && !isLocked ? () => setPublishPreviewOpen(true) : undefined}
         isPublishedToOpenCase={isPublishedToOpenCase}
         availableLicenses={availableLicenses}
         cfItemTypes={cfItemTypes}
@@ -1337,6 +1342,14 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
           }}
           onImportFromRegistry={onImportFromRegistry ? () => setRegistryImportOpen(true) : undefined}
           sidePanelOpen={Boolean(selectedNode || selectedEdge || (selectedNodeIds.length + selectedEdgeIds.length > 1))}
+        />
+      ) : null}
+
+      {onPreviewPublish ? (
+        <PublishPreviewDialog
+          open={publishPreviewOpen}
+          onClose={() => setPublishPreviewOpen(false)}
+          onRun={(environment) => onPreviewPublish(environment)}
         />
       ) : null}
 

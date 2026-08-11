@@ -110,6 +110,29 @@ export class CaseApiClient {
   }
 
   /**
+   * Dry-run publishing a saved framework to the Credential Registry.
+   *
+   * Calls the backend, which maps the stored CASE package to a Registry Assistant
+   * request and POSTs it to the /format endpoint. Nothing is published — returns
+   * the request that would be sent plus the Registry Assistant validation result.
+   */
+  async previewPublish(params: {
+    tenantId: string
+    docId: string
+    caseVersion?: 'v1p0' | 'v1p1'
+    environment?: 'sandbox' | 'production'
+  }): Promise<{ request: unknown; format: { ok: boolean; status: number; body: unknown } }> {
+    const v = params.caseVersion ?? 'v1p1'
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages/${encodeURIComponent(params.docId)}/preview-publish`
+    const body = params.environment ? { environment: params.environment } : {}
+    const res = (await this._http.post(url, body)) as { request?: unknown; format?: { ok: boolean; status: number; body: unknown } }
+    return {
+      request: res?.request,
+      format: res?.format ?? { ok: false, status: 0, body: null },
+    }
+  }
+
+  /**
    * Delete (archive) or permanently delete a CFPackage on the server.
    * 
    * Uses the management endpoint: DELETE /management/tenants/{tenantId}/ims/case/{version}/CFPackages/{docId}

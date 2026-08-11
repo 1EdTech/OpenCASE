@@ -496,6 +496,9 @@ function AppInner() {
         onImportFromRegistry={tenantId ? async (registryUrl) => {
           return api.previewRegistryFramework({ tenantId, registryUrl })
         } : undefined}
+        onPreviewPublish={tenantId && activeFrameworkId ? async (environment) => {
+          return api.previewPublish({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, environment })
+        } : undefined}
       />
     </EditorProvider>
   )

@@ -49,6 +49,7 @@ type Props = {
   onClose?: () => void
   onChangeNode?: (_nodeId: string, _patch: CaseEditorNodeDataPatch) => void
   onViewCFPackage?: () => void
+  onPreviewPublish?: () => void
   isPublishedToOpenCase?: boolean
   availableLicenses?: CFLicense[]
   cfItemTypes?: CFItemType[]
@@ -62,7 +63,7 @@ type Props = {
 }
 
 export default memo(function NodePropertiesPanel({
-  node, onClose, onChangeNode, onViewCFPackage, isPublishedToOpenCase, availableLicenses,
+  node, onClose, onChangeNode, onViewCFPackage, onPreviewPublish, isPublishedToOpenCase, availableLicenses,
   cfItemTypes = [], ensureCfItemType, cfSubjects = [], ensureCfSubject, cfConcepts = [], ensureCfConcept,
   readOnly = false,
 }: Readonly<Props>) {
@@ -671,6 +672,11 @@ export default memo(function NodePropertiesPanel({
                 <Button variant="secondary" onClick={onViewCFPackage} className="w-full">
                   View CFPackage JSON
                 </Button>
+                {onPreviewPublish ? (
+                  <Button variant="secondary" onClick={onPreviewPublish} className="mt-2 w-full">
+                    Preview publish to registry…
+                  </Button>
+                ) : null}
               </SidebarSection>
             ) : null}
 
