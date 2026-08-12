@@ -94,9 +94,10 @@ export class RegistryAssistantClient {
       return { ok: response.ok && successful, status: response.status, body }
     } catch (error: any) {
       clearTimeout(timeoutId)
-      if (error.name === 'AbortError') throw new Error(`Registry Assistant request timed out after ${this.timeout}ms`)
-      logger.error({ url, error: error.message }, 'Registry Assistant request failed')
-      throw error
+      const timedOut = error?.name === 'AbortError'
+      const message = timedOut ? `Registry Assistant request timed out after ${this.timeout}ms` : (error?.message ?? String(error))
+      logger.error({ url, environment: env, action, timedOut, error: message }, 'Registry Assistant request failed')
+      throw timedOut ? new Error(message) : error
     }
   }
 }

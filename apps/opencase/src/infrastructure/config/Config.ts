@@ -60,6 +60,8 @@ export interface AppConfig {
     apiKey?: string;
     /** CTID of the publishing organization (PublishForOrganizationIdentifier). */
     organizationCtid?: string;
+    /** Request timeout in ms for Registry Assistant calls (format/publish). */
+    timeoutMs: number;
   };
 }
 
@@ -109,6 +111,7 @@ export function loadConfig(): AppConfig {
       productionBaseUrl: process.env.REGISTRY_ASSISTANT_PRODUCTION_BASE_URL ?? 'https://apps.credentialengine.org',
       apiKey: process.env.REGISTRY_ASSISTANT_API_KEY,
       organizationCtid: process.env.REGISTRY_ASSISTANT_ORG_CTID,
+      timeoutMs: Number(process.env.REGISTRY_ASSISTANT_TIMEOUT_MS ?? 60000),
     },
   };
 }

@@ -269,6 +269,7 @@ export async function buildContainer(): Promise<Container> {
     sandboxBaseUrl: config.registryAssistant.sandboxBaseUrl,
     productionBaseUrl: config.registryAssistant.productionBaseUrl,
     apiKey: config.registryAssistant.apiKey,
+    timeout: config.registryAssistant.timeoutMs,
   })
   const previewPublish = new PreviewPublishToRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid)
   

@@ -59,7 +59,12 @@ export function createFetchHttpClient(baseUrl: string, options: FetchHttpClientO
 
     const parsed = await readBody(res)
     if (!res.ok) {
-      const msg = `HTTP ${res.status} ${method} ${url}`
+      // Surface the server's error detail ({ error, message }) so callers/UI see the
+      // real cause instead of a bare status code.
+      const detail = parsed && typeof parsed === 'object'
+        ? ((parsed as { message?: string; error?: string }).message ?? (parsed as { error?: string }).error)
+        : typeof parsed === 'string' && parsed ? parsed : undefined
+      const msg = `HTTP ${res.status} ${method} ${url}${detail ? ` — ${detail}` : ''}`
       throw new HttpError(msg, res.status, fullUrl, parsed)
     }
 
