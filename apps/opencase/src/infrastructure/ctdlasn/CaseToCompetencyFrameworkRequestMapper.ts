@@ -25,6 +25,8 @@ export interface CompetencyInput {
   CompetencyLabel?: string
   CodedNotation?: string
   Comment?: string[]
+  IsPartOf?: string           // framework CTID this competency belongs to (all competencies)
+  IsTopChildOf?: string       // framework CTID, for top-level competencies
   IsChildOf?: string[]        // parent competency CTIDs (item → item only)
   ExactAlignment?: string[]   // resource URIs (exactMatchOf)
   AlignTo?: string[]          // resource URIs (generic related alignment)
@@ -121,9 +123,10 @@ export function mapCaseToCompetencyFrameworkRequest (
 
   const publisherName = str(doc.publisher)
   const source = str(doc.officialSourceURL)
+  const frameworkCtid = opts.ctidFor(docId)
 
   const CompetencyFramework: CompetencyFrameworkInput = {
-    CTID: opts.ctidFor(docId),
+    CTID: frameworkCtid,
     Name: str(doc.title) ?? 'Untitled Framework',
     Description: str(doc.description),
     InLanguage: [language],
@@ -138,6 +141,7 @@ export function mapCaseToCompetencyFrameworkRequest (
     const parents = childOfItemParents.get(id)
     const align = alignmentsByOrigin.get(id)
     const notes = str(item.notes)
+    const isTopLevel = topLevelIds.has(id)
     return {
       CTID: opts.ctidFor(id),
       CompetencyText: str(item.fullStatement) ?? '',
@@ -146,6 +150,10 @@ export function mapCaseToCompetencyFrameworkRequest (
         : {}),
       ...(str(item.humanCodingScheme) ? { CodedNotation: str(item.humanCodingScheme) } : {}),
       ...(notes ? { Comment: [notes] } : {}),
+      // Every competency declares membership in the framework; top-level ones also
+      // declare IsTopChildOf. Registry Assistant requires this relationship.
+      IsPartOf: frameworkCtid,
+      ...(isTopLevel ? { IsTopChildOf: frameworkCtid } : {}),
       ...(parents && parents.size ? { IsChildOf: Array.from(parents).map(opts.ctidFor) } : {}),
       ...(align && align.exact.size ? { ExactAlignment: Array.from(align.exact) } : {}),
       ...(align && align.related.size ? { AlignTo: Array.from(align.related) } : {}),

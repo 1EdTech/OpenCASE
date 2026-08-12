@@ -57,4 +57,15 @@ describe('mapCaseToCompetencyFrameworkRequest', () => {
     const parent = req.Competencies.find((c) => c.CTID === 'ce-item-parent')!
     expect(parent.IsChildOf).toBeUndefined()
   })
+
+  it('declares every competency as part of the framework (IsPartOf), and top-level ones as IsTopChildOf', () => {
+    const child = req.Competencies.find((c) => c.CTID === 'ce-item-child')!
+    const parent = req.Competencies.find((c) => c.CTID === 'ce-item-parent')!
+    // All competencies belong to the framework
+    expect(child.IsPartOf).toBe('ce-doc-1')
+    expect(parent.IsPartOf).toBe('ce-doc-1')
+    // Only the top-level competency is a top child of the framework
+    expect(parent.IsTopChildOf).toBe('ce-doc-1')
+    expect(child.IsTopChildOf).toBeUndefined()
+  })
 })
