@@ -50,6 +50,11 @@ type Props = {
   onChangeNode?: (_nodeId: string, _patch: CaseEditorNodeDataPatch) => void
   onViewCFPackage?: () => void
   onPreviewPublish?: () => void
+  publishSummary?: {
+    ctid: string
+    needsUpdate: boolean
+    environments: Array<{ environment: 'sandbox' | 'production'; resourceUrl: string; status?: string }>
+  }
   isPublishedToOpenCase?: boolean
   availableLicenses?: CFLicense[]
   cfItemTypes?: CFItemType[]
@@ -63,7 +68,7 @@ type Props = {
 }
 
 export default memo(function NodePropertiesPanel({
-  node, onClose, onChangeNode, onViewCFPackage, onPreviewPublish, isPublishedToOpenCase, availableLicenses,
+  node, onClose, onChangeNode, onViewCFPackage, onPreviewPublish, publishSummary, isPublishedToOpenCase, availableLicenses,
   cfItemTypes = [], ensureCfItemType, cfSubjects = [], ensureCfSubject, cfConcepts = [], ensureCfConcept,
   readOnly = false,
 }: Readonly<Props>) {
@@ -672,9 +677,30 @@ export default memo(function NodePropertiesPanel({
                 <Button variant="secondary" onClick={onViewCFPackage} className="w-full">
                   View CFPackage JSON
                 </Button>
+                {publishSummary && publishSummary.environments.length ? (
+                  <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
+                    <div className="mb-1 font-semibold text-slate-700">
+                      {publishSummary.needsUpdate
+                        ? 'Credential Registry — changed since publish'
+                        : 'Published to the Credential Registry'}
+                    </div>
+                    <ul className="space-y-0.5">
+                      {publishSummary.environments.map((e) => (
+                        <li key={e.environment} className="flex items-center gap-1.5">
+                          <span className={`inline-block h-1.5 w-1.5 rounded-full ${e.status === 'Deprecated' ? 'bg-gray-400' : publishSummary.needsUpdate ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                          <span className="capitalize text-slate-600">{e.environment}{e.status === 'Deprecated' ? ' (deprecated)' : ''}</span>
+                          <a href={e.resourceUrl} target="_blank" rel="noreferrer" className="ml-auto text-violet-600 underline" onClick={(ev) => ev.stopPropagation()}>view</a>
+                        </li>
+                      ))}
+                    </ul>
+                    {publishSummary.needsUpdate ? (
+                      <div className="mt-1 text-amber-700">Re-publish to update the registry.</div>
+                    ) : null}
+                  </div>
+                ) : null}
                 {onPreviewPublish ? (
                   <Button variant="secondary" onClick={onPreviewPublish} className="mt-2 w-full">
-                    Publish to registry…
+                    {publishSummary && publishSummary.environments.length ? 'Manage registry publication…' : 'Publish to registry…'}
                   </Button>
                 ) : null}
               </SidebarSection>

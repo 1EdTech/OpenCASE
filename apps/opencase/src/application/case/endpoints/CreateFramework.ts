@@ -7,7 +7,7 @@ import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { JsonSchemaValidator } from '../../../infrastructure/validation/JsonSchemaValidator'
 import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
-import { carryForwardPublishState } from '../../../infrastructure/ctdlasn/publishState'
+import { carryForwardPublishState, frameworkContentHash } from '../../../infrastructure/ctdlasn/publishState'
 
 export interface CreateFrameworkCommand {
   tenantId: TenantId
@@ -53,6 +53,28 @@ function stableStringify (value: any): string {
 function sortById (arr: any[]): any[] {
   const getId = (o: any): string => (o?.sourcedId ?? o?.identifier ?? o?.id ?? '').toString()
   return [...arr].sort((a, b) => getId(a).localeCompare(getId(b)))
+}
+
+/**
+ * Drop the derived `ext:opencase.contentHash` before comparing versions for idempotency.
+ * It's a fingerprint of the rest of the content, so including it in the comparison would
+ * be circular — and would spuriously flag a re-save as changed when the stored version
+ * predates the hash.
+ */
+function stripContentHash (docJSON: any): any {
+  const oc = docJSON?.extensions?.['ext:opencase']
+  if (!oc || typeof oc !== 'object' || !('contentHash' in oc)) return docJSON
+  const { contentHash, ...rest } = oc
+  const extensions = { ...docJSON.extensions }
+  // Drop empty containers so a doc with only a contentHash compares equal to one with no
+  // extensions at all (e.g. a stored version that predates the hash).
+  if (Object.keys(rest).length === 0) delete extensions['ext:opencase']
+  else extensions['ext:opencase'] = rest
+  if (Object.keys(extensions).length === 0) {
+    const { extensions: _omit, ...docWithout } = docJSON
+    return docWithout
+  }
+  return { ...docJSON, extensions }
 }
 
 /**
@@ -193,6 +215,20 @@ export class CreateFramework {
       prior,
     )
 
+    // Record a content fingerprint on the document so the library can flag a framework
+    // as "changed since published" by comparing this to the hash snapshotted at publish.
+    const contentHash = frameworkContentHash({ ...merged, CFAssociations: payload.CFAssociations ?? [] })
+    const existingExt = (merged.CFDocument.extensions && typeof merged.CFDocument.extensions === 'object')
+      ? merged.CFDocument.extensions
+      : {}
+    const existingOc = (existingExt['ext:opencase'] && typeof existingExt['ext:opencase'] === 'object')
+      ? existingExt['ext:opencase']
+      : {}
+    merged.CFDocument = {
+      ...merged.CFDocument,
+      extensions: { ...existingExt, 'ext:opencase': { ...existingOc, contentHash } },
+    }
+
     // Extract from CFPackage format and create domain entities
     const document = CFDocument.fromRaw(tenantId, caseVersion, merged.CFDocument)
     const docId = document.sourcedId
@@ -217,14 +253,14 @@ export class CreateFramework {
     // Compare using CFPackage format (CFDocument, CFItems, etc.) to match validation format
     if (existing) {
       const existingBundle = {
-        CFDocument: existing.document.toJSON(),
+        CFDocument: stripContentHash(existing.document.toJSON()),
         CFItems: sortById(existing.items.map(i => i.toJSON())),
         CFAssociations: sortById(existing.associations.map(a => a.toJSON())),
         CFRubrics: sortById((existing.rubrics ?? []).map(r => r.toJSON())),
         CFDefinitions: existing.definitions ?? null
       }
       const newBundle = {
-        CFDocument: docJSON,
+        CFDocument: stripContentHash(docJSON),
         CFItems: sortById(items.map(i => i.toJSON())),
         CFAssociations: sortById(associations.map(a => a.toJSON())),
         CFRubrics: sortById(rubrics.map(r => r.toJSON())),

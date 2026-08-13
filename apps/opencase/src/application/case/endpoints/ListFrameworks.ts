@@ -1,6 +1,19 @@
 import { type CaseVersion, type TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { type FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
+import { registryResourceUrl, type RegistryEnvironment } from '../../../infrastructure/ctdlasn/publishState'
 import { logger } from '../../../infrastructure/logging/Logger'
+
+export interface FrameworkPublishSummary {
+  ctid: string
+  needsUpdate: boolean
+  environments: Array<{
+    environment: RegistryEnvironment
+    resourceUrl: string
+    registryEnvelopeId?: string
+    publishedAt?: string
+    status?: string
+  }>
+}
 
 export interface ListFrameworksQuery {
   tenantId: TenantId
@@ -24,6 +37,7 @@ export class ListFrameworks {
       subject?: string
       version?: string
       lastChangeDateTime: string
+      publish?: FrameworkPublishSummary
     }> = []
 
     for (const version of versions) {
@@ -36,6 +50,21 @@ export class ListFrameworks {
           }
         }
         
+        const publish: FrameworkPublishSummary | undefined =
+          doc.publishedCtid && doc.publishedEnvironments?.length
+            ? {
+                ctid: doc.publishedCtid,
+                needsUpdate: Boolean(doc.publishNeedsUpdate),
+                environments: doc.publishedEnvironments.map((e) => ({
+                  environment: e.environment,
+                  resourceUrl: registryResourceUrl(e.environment, doc.publishedCtid!),
+                  registryEnvelopeId: e.registryEnvelopeId,
+                  publishedAt: e.publishedAt,
+                  status: e.status,
+                })),
+              }
+            : undefined
+
         frameworks.push({
           sourcedId: doc.sourcedId,
           title: doc.title,
@@ -44,7 +73,8 @@ export class ListFrameworks {
           frameworkType: doc.frameworkType,
           subject: doc.subject,
           version: doc.version,
-          lastChangeDateTime: doc.lastChangeDateTime.toISOString()
+          lastChangeDateTime: doc.lastChangeDateTime.toISOString(),
+          ...(publish ? { publish } : {}),
         })
       }
     }

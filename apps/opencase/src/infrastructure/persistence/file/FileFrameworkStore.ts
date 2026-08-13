@@ -28,6 +28,17 @@ export interface DocumentMetadata {
   isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
+  /** Framework CTID once published to the Credential Registry (undefined = never published). */
+  publishedCtid?: string
+  /** Per-environment publish records (present environments only). */
+  publishedEnvironments?: Array<{
+    environment: 'sandbox' | 'production'
+    registryEnvelopeId?: string
+    publishedAt?: string
+    status?: string
+  }>
+  /** True when the framework content changed since it was last published (contentHash drift). */
+  publishNeedsUpdate?: boolean
 }
 
 export interface DocumentVersionInfo {
@@ -386,6 +397,9 @@ export class FileFrameworkStore {
     // Extract sourcePackageURI and isModifiedFromSource from ext:opencase extension
     let sourcePackageURI: string | undefined
     let isModifiedFromSource: boolean | undefined
+    let publishedCtid: string | undefined
+    let publishedEnvironments: DocumentMetadata['publishedEnvironments']
+    let publishNeedsUpdate: boolean | undefined
     const extOpencase = doc.extensions?.['ext:opencase']
     if (extOpencase && typeof extOpencase === 'object') {
       if (typeof (extOpencase as any).sourcePackageURI === 'string') {
@@ -393,6 +407,24 @@ export class FileFrameworkStore {
       }
       if (typeof (extOpencase as any).isModifiedFromSource === 'boolean') {
         isModifiedFromSource = (extOpencase as any).isModifiedFromSource
+      }
+      const published = (extOpencase as any).published
+      if (published && typeof published === 'object' && published.byEnvironment && typeof published.byEnvironment === 'object') {
+        const envs = Object.entries(published.byEnvironment)
+          .filter(([env]) => env === 'sandbox' || env === 'production')
+          .map(([env, rec]: [string, any]) => ({
+            environment: env as 'sandbox' | 'production',
+            registryEnvelopeId: typeof rec?.registryEnvelopeId === 'string' ? rec.registryEnvelopeId : undefined,
+            publishedAt: typeof rec?.publishedAt === 'string' ? rec.publishedAt : undefined,
+            status: typeof rec?.status === 'string' ? rec.status : undefined,
+          }))
+        if (envs.length && typeof published.ctid === 'string') {
+          publishedCtid = published.ctid
+          publishedEnvironments = envs
+          const currentHash = typeof (extOpencase as any).contentHash === 'string' ? (extOpencase as any).contentHash : undefined
+          const publishedHash = typeof published.contentHash === 'string' ? published.contentHash : undefined
+          publishNeedsUpdate = Boolean(currentHash && publishedHash && currentHash !== publishedHash)
+        }
       }
     }
 
@@ -411,6 +443,9 @@ export class FileFrameworkStore {
       licenseIdentifier,
       sourcePackageURI,
       isModifiedFromSource,
+      publishedCtid,
+      publishedEnvironments,
+      publishNeedsUpdate,
     })
   }
 

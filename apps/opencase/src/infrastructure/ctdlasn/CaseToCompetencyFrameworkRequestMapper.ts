@@ -17,6 +17,7 @@ export interface CompetencyFrameworkInput {
   PublisherName?: string[]    // display names
   Source?: string[]
   HasTopChild?: string[]      // CTIDs of top-level competencies
+  PublicationStatusType?: string // e.g. 'Published' | 'Deprecated'
 }
 
 export interface CompetencyInput {
@@ -55,6 +56,8 @@ export interface MapPublishOptions {
   ctidFor: (localIdentifier: string) => string
   /** Existing registry envelope id, when re-publishing (update). */
   registryEnvelopeId?: string
+  /** Registry publication status for the framework (e.g. 'Deprecated' to deprecate on republish). */
+  publicationStatusType?: string
 }
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v : undefined)
@@ -133,6 +136,7 @@ export function mapCaseToCompetencyFrameworkRequest (
     Publisher: [opts.organizationCtid],
     ...(publisherName ? { PublisherName: [publisherName] } : {}),
     ...(source ? { Source: [source] } : {}),
+    ...(opts.publicationStatusType ? { PublicationStatusType: opts.publicationStatusType } : {}),
     HasTopChild: Array.from(topLevelIds).map(opts.ctidFor),
   }
 

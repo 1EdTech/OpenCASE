@@ -2,6 +2,7 @@ import { type CaseVersion, type TenantId } from '../../../domain/case/value-obje
 import { logger } from '../../../infrastructure/logging/Logger'
 import { type FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 import { type LinkData } from '../../../domain/case/value-objects/LinkData'
+import { registryResourceUrl } from '../../../infrastructure/ctdlasn/publishState'
 
 export interface GetAllCFDocumentsQuery {
   tenantId?: TenantId  // Optional — when omitted, lists across ALL tenants (global catalog)
@@ -127,6 +128,19 @@ export class GetAllCFDocuments {
       if (docMeta.sourcePackageURI) doc.sourcePackageURI = docMeta.sourcePackageURI
       if (docMeta.isModifiedFromSource) doc.isModifiedFromSource = docMeta.isModifiedFromSource
       if (docMeta.archived) doc.archived = true
+      if (docMeta.publishedCtid && docMeta.publishedEnvironments?.length) {
+        doc.publish = {
+          ctid: docMeta.publishedCtid,
+          needsUpdate: Boolean(docMeta.publishNeedsUpdate),
+          environments: docMeta.publishedEnvironments.map((e) => ({
+            environment: e.environment,
+            resourceUrl: registryResourceUrl(e.environment, docMeta.publishedCtid!),
+            registryEnvelopeId: e.registryEnvelopeId,
+            publishedAt: e.publishedAt,
+            status: e.status,
+          })),
+        }
+      }
 
       // CASE v1.1-only fields: only include when not serving via v1p0
       if (!isV1p0) {

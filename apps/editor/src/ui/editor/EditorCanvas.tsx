@@ -38,9 +38,17 @@ type EditorCanvasProps = {
   onPreviewPublish?: (environment?: 'sandbox' | 'production') => Promise<{ request: unknown; format: { ok: boolean; status: number; body: unknown } }>
   /** Publish the saved framework to the Credential Registry (writes to the registry) */
   onPublish?: (environment?: 'sandbox' | 'production') => Promise<{ ctid: string; registryEnvelopeId?: string; environment: string; resourceUrl: string; isUpdate: boolean; messages: string[] }>
+  /** Remove the framework from the Credential Registry (delete or deprecate) */
+  onUnpublish?: (args: { environment?: 'sandbox' | 'production'; mode: 'delete' | 'deprecate' }) => Promise<{ mode: 'delete' | 'deprecate'; environment: string; ctid: string; publishLinkCleared?: boolean; messages: string[] }>
+  /** Current Credential Registry publish status for this framework. */
+  publishSummary?: {
+    ctid: string
+    needsUpdate: boolean
+    environments: Array<{ environment: 'sandbox' | 'production'; resourceUrl: string; registryEnvelopeId?: string; publishedAt?: string; status?: string }>
+  }
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onImportFromRegistry, onPreviewPublish, onPublish }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onImportFromRegistry, onPreviewPublish, onPublish, onUnpublish, publishSummary }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -1222,6 +1230,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onChangeNode={updateNodeData}
         onViewCFPackage={handleViewCFPackage}
         onPreviewPublish={onPreviewPublish && isPublishedToOpenCase && !isLocked ? () => setPublishPreviewOpen(true) : undefined}
+        publishSummary={publishSummary}
         isPublishedToOpenCase={isPublishedToOpenCase}
         availableLicenses={availableLicenses}
         cfItemTypes={cfItemTypes}
@@ -1353,6 +1362,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
           onClose={() => setPublishPreviewOpen(false)}
           onRun={(environment) => onPreviewPublish(environment)}
           onPublish={onPublish ? (environment) => onPublish(environment) : undefined}
+          onUnpublish={onUnpublish}
+          publishSummary={publishSummary}
         />
       ) : null}
 

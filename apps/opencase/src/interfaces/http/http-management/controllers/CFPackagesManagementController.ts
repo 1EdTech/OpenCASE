@@ -6,6 +6,7 @@ import { type ImportFrameworkFromRegistry } from '../../../../application/case/e
 import { type PreviewRegistryFramework } from '../../../../application/case/endpoints/PreviewRegistryFramework'
 import { type PreviewPublishToRegistry } from '../../../../application/case/endpoints/PreviewPublishToRegistry'
 import { type PublishFrameworkToRegistry } from '../../../../application/case/endpoints/PublishFrameworkToRegistry'
+import { type RemoveFrameworkFromRegistry } from '../../../../application/case/endpoints/RemoveFrameworkFromRegistry'
 import { type RegistryEnvironment } from '../../../../infrastructure/http/RegistryAssistantClient'
 import { type DeleteCFDocument } from '../../../../application/case/endpoints/DeleteCFDocument'
 import { type RestoreFramework } from '../../../../application/case/endpoints/RestoreFramework'
@@ -23,7 +24,8 @@ export class CFPackagesManagementController {
     private readonly restoreFrameworkUseCase: RestoreFramework,
     private readonly previewRegistryUseCase?: PreviewRegistryFramework,
     private readonly previewPublishUseCase?: PreviewPublishToRegistry,
-    private readonly publishUseCase?: PublishFrameworkToRegistry
+    private readonly publishUseCase?: PublishFrameworkToRegistry,
+    private readonly removeFromRegistryUseCase?: RemoveFrameworkFromRegistry
   ) {}
 
   list: RequestHandler<{ tenantId: string }> = async (req: Request, res: Response) => {
@@ -204,6 +206,29 @@ export class CFPackagesManagementController {
       return res.status(200).json(result)
     } catch (error: any) {
       return res.status(400).json({ error: 'publish_failed', message: error.message })
+    }
+  }
+
+  unpublish: RequestHandler<{ tenantId: string, docId: string }> = async (req: Request, res: Response) => {
+    if (!this.removeFromRegistryUseCase) {
+      return res.status(503).json({ error: 'Publishing not available' })
+    }
+    const tenantId = ((req as any).tenantId ?? getParam(req, 'tenantId')) as any
+    const docId = getParam(req, 'docId') as any
+    const caseVersion = getCaseVersion(req, { default: '1.1' })!
+    if (!docId) return res.status(400).json({ error: 'Missing docId' })
+
+    const envRaw = (req.query.environment ?? req.body?.environment) as string | undefined
+    const environment = envRaw === 'production' ? 'production' : envRaw === 'sandbox' ? 'sandbox' : undefined
+    const mode = (req.body?.mode === 'deprecate' ? 'deprecate' : 'delete') as 'delete' | 'deprecate'
+
+    try {
+      const result = await this.removeFromRegistryUseCase.execute({
+        tenantId, caseVersion, docId, environment: environment as RegistryEnvironment | undefined, mode,
+      })
+      return res.status(200).json(result)
+    } catch (error: any) {
+      return res.status(400).json({ error: 'unpublish_failed', message: error.message })
     }
   }
 

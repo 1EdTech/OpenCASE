@@ -2,7 +2,7 @@ import type { CFPackageRepository } from '../ports/CFPackageRepository'
 import type { CaseVersion, SourcedId, TenantId } from '../../../domain/case/value-objects/Identifiers'
 import type { RegistryAssistantClient, RegistryEnvironment } from '../../../infrastructure/http/RegistryAssistantClient'
 import { mapCaseToCompetencyFrameworkRequest } from '../../../infrastructure/ctdlasn/CaseToCompetencyFrameworkRequestMapper'
-import { buildPublishCtids, envelopeIdFor, applyPublishResult, extractEnvelopeId, registryResourceUrl } from '../../../infrastructure/ctdlasn/publishState'
+import { buildPublishCtids, envelopeIdFor, applyPublishResult, extractEnvelopeId, registryResourceUrl, frameworkContentHash } from '../../../infrastructure/ctdlasn/publishState'
 import { CFDocument } from '../../../domain/case/entities/CFDocument'
 import { CFItem } from '../../../domain/case/entities/CFItem'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
@@ -82,8 +82,10 @@ export class PublishFrameworkToRegistry {
     const registryEnvelopeId = extractEnvelopeId(result.body) ?? priorEnvelopeId
     const publishedAt = new Date().toISOString()
 
-    // Persist CTIDs + envelope back onto the framework as a new version.
-    const updated = applyPublishResult(caseJson, { ctidFor, environment, registryEnvelopeId, publishedAt })
+    // Persist CTIDs + envelope back onto the framework as a new version. Snapshot the
+    // content hash so a later edit can be detected as "changed since publish".
+    const contentHash = frameworkContentHash(caseJson)
+    const updated = applyPublishResult(caseJson, { ctidFor, environment, registryEnvelopeId, publishedAt, contentHash })
     const document = CFDocument.fromRaw(cmd.tenantId, cmd.caseVersion, updated.CFDocument)
     const docURI = document.toJSON().uri
     const items = updated.CFItems.map((i) => CFItem.fromRaw(cmd.tenantId, cmd.caseVersion, i, document.sourcedId, docURI))

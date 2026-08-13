@@ -808,6 +808,7 @@ export default function HomeScreen({
                         }}
                         sourcePackageURI={doc.sourcePackageURI}
                         isModifiedFromSource={doc.isModifiedFromSource}
+                        publish={doc.publish}
                         rightHint={isArchiving ? 'Archiving' : hint}
                         lastChanged={doc.lastChangeDateTime}
                         onClick={() => openRemote(doc.identifier)}

@@ -1,4 +1,4 @@
-import { PlusIcon, TrashIcon, CloudArrowDownIcon, ArchiveBoxArrowDownIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, TrashIcon, CloudArrowDownIcon, CloudArrowUpIcon, ArchiveBoxArrowDownIcon, ArrowUturnLeftIcon } from '@heroicons/react/24/solid'
 import type { ReactNode } from 'react'
 import type { CFDocument } from '@/domain/case/types'
 import { Button } from '@/ui/shared/components/ui/button'
@@ -74,6 +74,11 @@ type Props = {
   sourcePackageURI?: string
   /** True when an imported framework has been locally modified */
   isModifiedFromSource?: boolean
+  /** Credential Registry publish status — shows an "In Registry" badge when set */
+  publish?: {
+    needsUpdate: boolean
+    environments: Array<{ environment: string; resourceUrl: string; status?: string }>
+  }
 }
 
 export function FrameworkCard({
@@ -95,6 +100,7 @@ export function FrameworkCard({
   lastChanged,
   sourcePackageURI,
   isModifiedFromSource,
+  publish,
 }: Readonly<Props>) {
   const title = cfDocument.title ?? 'Untitled framework'
   const frameworkType = (cfDocument as { frameworkType?: string }).frameworkType
@@ -232,6 +238,24 @@ export function FrameworkCard({
                 {isModifiedFromSource ? 'Forked' : 'Imported'}
               </span>
             ) : null}
+            {publish && publish.environments.length ? (() => {
+              const allDeprecated = publish.environments.every((e) => e.status === 'Deprecated')
+              const label = publish.needsUpdate ? 'Registry: changed' : allDeprecated ? 'Registry: deprecated' : 'In Registry'
+              const cls = publish.needsUpdate
+                ? 'bg-amber-100 text-amber-800'
+                : allDeprecated
+                  ? 'bg-gray-100 text-gray-600'
+                  : 'bg-emerald-100 text-emerald-700'
+              const title = publish.needsUpdate
+                ? `Changed since publishing to ${publish.environments.map((e) => e.environment).join(', ')} — re-publish to update`
+                : `Published to ${publish.environments.map((e) => e.environment + (e.status ? ` (${e.status})` : '')).join(', ')}`
+              return (
+                <span className={cn('inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold', cls)} title={title}>
+                  <CloudArrowUpIcon className="h-3 w-3" />
+                  {label}
+                </span>
+              )
+            })() : null}
           </div>
 
           {relDate ? (

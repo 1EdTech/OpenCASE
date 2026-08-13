@@ -51,15 +51,24 @@ export class RegistryAssistantClient {
 
   /** Dry-run: validate + format without publishing. */
   async format (request: unknown, environment?: RegistryEnvironment): Promise<RegistryAssistantResult> {
-    return this.post('format', request, environment)
+    return this.send('format', 'POST', request, environment)
   }
 
   /** Publish (writes to the registry). */
   async publish (request: unknown, environment?: RegistryEnvironment): Promise<RegistryAssistantResult> {
-    return this.post('publish', request, environment)
+    return this.send('publish', 'POST', request, environment)
   }
 
-  private async post (action: 'format' | 'publish', request: unknown, environment?: RegistryEnvironment): Promise<RegistryAssistantResult> {
+  /**
+   * Delete a published resource by CTID. Registry data is meant to be permanent, so CE
+   * recommends deprecating over deleting for production; this is primarily for sandbox
+   * cleanup. Body: { CTID, PublishForOrganizationIdentifier }.
+   */
+  async delete (request: { CTID: string, PublishForOrganizationIdentifier: string, Registry?: string }, environment?: RegistryEnvironment): Promise<RegistryAssistantResult> {
+    return this.send('delete', 'DELETE', request, environment)
+  }
+
+  private async send (action: 'format' | 'publish' | 'delete', method: 'POST' | 'DELETE', request: unknown, environment?: RegistryEnvironment): Promise<RegistryAssistantResult> {
     if (!this.apiKey) {
       throw new Error('Registry Assistant API key is not configured (REGISTRY_ASSISTANT_API_KEY)')
     }
@@ -71,7 +80,7 @@ export class RegistryAssistantClient {
     try {
       logger.info({ url, environment: env, action }, 'Registry Assistant request')
       const response = await fetch(url, {
-        method: 'POST',
+        method,
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',

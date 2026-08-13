@@ -7,7 +7,7 @@ import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 import type { Framework } from '@/domain/framework/model/types'
 import { AuthProvider, useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
-import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
+import { CaseApiClient, type PublishSummary } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
 import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage } from '@/ui/editor/reactflow/mapping'
@@ -381,6 +381,19 @@ function AppInner() {
   // via on-the-fly downconversion, so a single v1p1 store is sufficient.
   const caseApiVersion: 'v1p0' | 'v1p1' = 'v1p1'
 
+  // Credential Registry publish status for the active framework (published envs, needs-update).
+  const [activePublishSummary, setActivePublishSummary] = useState<PublishSummary | undefined>(undefined)
+  const refreshPublishStatus = useCallback(async () => {
+    if (!tenantId || !activeFrameworkId) { setActivePublishSummary(undefined); return }
+    try {
+      const docs = await api.listCfDocuments({ caseVersion: caseApiVersion })
+      setActivePublishSummary(docs.find((d) => d.identifier === activeFrameworkId)?.publish)
+    } catch {
+      // non-fatal: status badge just won't show
+    }
+  }, [api, tenantId, activeFrameworkId, caseApiVersion])
+  useEffect(() => { void refreshPublishStatus() }, [refreshPublishStatus])
+
   // Handler to archive the active framework on the server
   // Must be defined before early returns (React hooks rules)
   const handleArchiveFramework = useCallback(async () => {
@@ -500,8 +513,16 @@ function AppInner() {
           return api.previewPublish({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, environment })
         } : undefined}
         onPublish={tenantId && activeFrameworkId ? async (environment) => {
-          return api.publish({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, environment })
+          const result = await api.publish({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, environment })
+          void refreshPublishStatus()
+          return result
         } : undefined}
+        onUnpublish={tenantId && activeFrameworkId ? async ({ environment, mode }) => {
+          const result = await api.unpublish({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, environment, mode })
+          void refreshPublishStatus()
+          return result
+        } : undefined}
+        publishSummary={activePublishSummary}
       />
     </EditorProvider>
   )

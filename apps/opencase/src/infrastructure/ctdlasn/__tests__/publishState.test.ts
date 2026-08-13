@@ -1,4 +1,4 @@
-import { buildPublishCtids, envelopeIdFor, applyPublishResult, carryForwardPublishState, extractEnvelopeId, registryResourceUrl } from '../publishState'
+import { buildPublishCtids, envelopeIdFor, applyPublishResult, carryForwardPublishState, clearPublishEnvironment, markPublishDeprecated, frameworkContentHash, extractEnvelopeId, registryResourceUrl } from '../publishState'
 
 const basePkg = () => ({
   CFDocument: { identifier: 'doc-1', title: 'FW' } as Record<string, any>,
@@ -92,6 +92,78 @@ describe('carryForwardPublishState', () => {
   it('returns the incoming save unchanged when there is no prior version', () => {
     const incoming = { CFDocument: { identifier: 'doc-1' }, CFItems: [{ identifier: 'item-1' }] }
     expect(carryForwardPublishState(incoming, null)).toBe(incoming)
+  })
+})
+
+describe('clearPublishEnvironment', () => {
+  it('drops the whole published block (incl. ctid) when the last environment is removed', () => {
+    const pkg = {
+      CFDocument: { identifier: 'doc-1', extensions: { 'ext:opencase': { published: { ctid: 'ce-fw', byEnvironment: { sandbox: { registryEnvelopeId: 'e1' } } } } } },
+      CFItems: [{ identifier: 'item-1', extensions: { 'ext:opencase': { published: { ctid: 'ce-i1' } } } }],
+    }
+    const cleared = clearPublishEnvironment(pkg, 'sandbox')
+    expect(cleared.publishRemoved).toBe(true)
+    expect((cleared.CFDocument.extensions as any)['ext:opencase'].published).toBeUndefined()
+    expect((cleared.CFItems[0].extensions as any)['ext:opencase'].published).toBeUndefined()
+    // A subsequent publish would mint fresh CTIDs.
+    expect(buildPublishCtids(cleared).frameworkCtid).not.toBe('ce-fw')
+  })
+
+  it('keeps the ctid and other environments when only one of several is removed', () => {
+    const pkg = {
+      CFDocument: { identifier: 'doc-1', extensions: { 'ext:opencase': { published: { ctid: 'ce-fw', byEnvironment: { sandbox: { registryEnvelopeId: 'e1' }, production: { registryEnvelopeId: 'e2' } } } } } },
+      CFItems: [],
+    }
+    const cleared = clearPublishEnvironment(pkg, 'sandbox')
+    expect(cleared.publishRemoved).toBe(false)
+    const pub = (cleared.CFDocument.extensions as any)['ext:opencase'].published
+    expect(pub.ctid).toBe('ce-fw')
+    expect(pub.byEnvironment.sandbox).toBeUndefined()
+    expect(pub.byEnvironment.production.registryEnvelopeId).toBe('e2')
+  })
+})
+
+describe('markPublishDeprecated', () => {
+  it('flags the environment Deprecated while keeping the CTID + envelope link', () => {
+    const pkg = {
+      CFDocument: { identifier: 'doc-1', extensions: { 'ext:opencase': { published: { ctid: 'ce-fw', byEnvironment: { sandbox: { registryEnvelopeId: 'e1' } } } } } },
+      CFItems: [],
+    }
+    const out = markPublishDeprecated(pkg, 'sandbox', '2026-08-13T00:00:00Z')
+    const env = (out.CFDocument.extensions as any)['ext:opencase'].published.byEnvironment.sandbox
+    expect(env.status).toBe('Deprecated')
+    expect(env.registryEnvelopeId).toBe('e1')
+    expect(envelopeIdFor(out, 'sandbox')).toBe('e1')
+  })
+})
+
+describe('frameworkContentHash', () => {
+  const base = () => ({
+    CFDocument: { identifier: 'doc-1', title: 'FW', lastChangeDateTime: '2026-01-01T00:00:00Z' },
+    CFItems: [{ identifier: 'item-1', fullStatement: 'A', lastChangeDateTime: '2026-01-01T00:00:00Z' }],
+    CFAssociations: [],
+  })
+
+  it('ignores timestamps and publish bookkeeping, but reflects content changes', () => {
+    const a = base()
+    const b = base()
+    b.CFDocument.lastChangeDateTime = '2027-09-09T00:00:00Z' // volatile → same hash
+    ;(b.CFDocument as any).extensions = { 'ext:opencase': { published: { ctid: 'ce-x' }, contentHash: 'whatever' } }
+    expect(frameworkContentHash(a)).toBe(frameworkContentHash(b))
+
+    const c = base()
+    c.CFItems.push({ identifier: 'item-2', fullStatement: 'B', lastChangeDateTime: '2026-01-01T00:00:00Z' }) // real change
+    expect(frameworkContentHash(c)).not.toBe(frameworkContentHash(a))
+
+    const d = base()
+    d.CFItems[0].fullStatement = 'A changed'
+    expect(frameworkContentHash(d)).not.toBe(frameworkContentHash(a))
+  })
+
+  it('is order-independent for items', () => {
+    const a = { CFDocument: { identifier: 'd' }, CFItems: [{ identifier: 'i1', fullStatement: 'x' }, { identifier: 'i2', fullStatement: 'y' }] }
+    const b = { CFDocument: { identifier: 'd' }, CFItems: [{ identifier: 'i2', fullStatement: 'y' }, { identifier: 'i1', fullStatement: 'x' }] }
+    expect(frameworkContentHash(a)).toBe(frameworkContentHash(b))
   })
 })
 

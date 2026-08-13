@@ -34,6 +34,22 @@ export type CfDocumentSummary = {
   isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
+  /** Credential Registry publish status (present once published). */
+  publish?: PublishSummary
+}
+
+export type PublishSummary = {
+  ctid: string
+  /** True when the framework content changed since it was last published. */
+  needsUpdate: boolean
+  environments: Array<{
+    environment: 'sandbox' | 'production'
+    resourceUrl: string
+    registryEnvelopeId?: string
+    publishedAt?: string
+    /** e.g. 'Deprecated' once the resource has been deprecated. */
+    status?: string
+  }>
 }
 
 export class CaseApiClient {
@@ -156,6 +172,32 @@ export class CaseApiClient {
       environment: res?.environment ?? params.environment ?? 'sandbox',
       resourceUrl: res?.resourceUrl ?? '',
       isUpdate: Boolean(res?.isUpdate),
+      messages: res?.messages ?? [],
+    }
+  }
+
+  /**
+   * Remove a published framework from the Credential Registry, either by hard-deleting
+   * the resource (mode: 'delete', clears the local publish link) or by deprecating it
+   * (mode: 'deprecate', keeps the link but marks the resource Deprecated).
+   */
+  async unpublish(params: {
+    tenantId: string
+    docId: string
+    caseVersion?: 'v1p0' | 'v1p1'
+    environment?: 'sandbox' | 'production'
+    mode: 'delete' | 'deprecate'
+  }): Promise<{ mode: 'delete' | 'deprecate'; environment: string; ctid: string; publishLinkCleared?: boolean; messages: string[] }> {
+    const v = params.caseVersion ?? 'v1p1'
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages/${encodeURIComponent(params.docId)}/unpublish`
+    const res = (await this._http.post(url, { mode: params.mode, ...(params.environment ? { environment: params.environment } : {}) })) as {
+      mode?: 'delete' | 'deprecate'; environment?: string; ctid?: string; publishLinkCleared?: boolean; messages?: string[]
+    }
+    return {
+      mode: res?.mode ?? params.mode,
+      environment: res?.environment ?? params.environment ?? 'sandbox',
+      ctid: res?.ctid ?? '',
+      publishLinkCleared: res?.publishLinkCleared,
       messages: res?.messages ?? [],
     }
   }

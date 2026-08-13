@@ -5,6 +5,7 @@
  * `ext:opencase.published`, so a re-publish reuses the same CTIDs and updates the
  * existing registry envelope instead of creating duplicates.
  */
+import { createHash } from 'node:crypto'
 import { generateCtid } from './ctid'
 
 const OPENCASE = 'ext:opencase'
@@ -51,27 +52,41 @@ export function envelopeIdFor(pkg: { CFDocument: Json }, environment: RegistryEn
   return typeof env?.registryEnvelopeId === 'string' ? env.registryEnvelopeId : undefined
 }
 
+function withOpencase(node: Json, mutate: (_ext: Json) => void): Json {
+  const extensions = { ...(node.extensions ?? {}) }
+  const ext = { ...(extensions[OPENCASE] && typeof extensions[OPENCASE] === 'object' ? extensions[OPENCASE] : {}) }
+  mutate(ext)
+  extensions[OPENCASE] = ext
+  return { ...node, extensions }
+}
+
 /** Merge publish results back into the package JSON: CTIDs on every node, envelope per environment on the document. */
 export function applyPublishResult(
   pkg: { CFDocument: Json; CFItems?: Json[] },
-  args: { ctidFor: (_id: string) => string; environment: RegistryEnvironment; registryEnvelopeId?: string; publishedAt: string },
+  args: {
+    ctidFor: (_id: string) => string
+    environment: RegistryEnvironment
+    registryEnvelopeId?: string
+    publishedAt: string
+    /** Snapshot of the content hash at publish time, used to detect changes since publish. */
+    contentHash?: string
+    /** Registry publication status for this environment (e.g. 'Deprecated'); omitted = Published. */
+    status?: string
+  },
 ): { CFDocument: Json; CFItems: Json[] } {
-  const withOpencase = (node: Json, mutate: (_ext: Json) => void): Json => {
-    const extensions = { ...(node.extensions ?? {}) }
-    const ext = { ...(extensions[OPENCASE] && typeof extensions[OPENCASE] === 'object' ? extensions[OPENCASE] : {}) }
-    mutate(ext)
-    extensions[OPENCASE] = ext
-    return { ...node, extensions }
-  }
-
   const CFDocument = withOpencase(pkg.CFDocument, (ext) => {
     const prev = ext.published && typeof ext.published === 'object' ? ext.published : {}
     ext.published = {
       ...prev,
       ctid: args.ctidFor(idOf(pkg.CFDocument)),
+      ...(args.contentHash ? { contentHash: args.contentHash } : {}),
       byEnvironment: {
         ...(prev.byEnvironment ?? {}),
-        [args.environment]: { registryEnvelopeId: args.registryEnvelopeId, publishedAt: args.publishedAt },
+        [args.environment]: {
+          registryEnvelopeId: args.registryEnvelopeId,
+          publishedAt: args.publishedAt,
+          ...(args.status ? { status: args.status } : {}),
+        },
       },
     }
   })
@@ -84,6 +99,106 @@ export function applyPublishResult(
   )
 
   return { CFDocument, CFItems }
+}
+
+/**
+ * Remove the publish link for one environment. When no environments remain, the whole
+ * `published` block is dropped (including the framework CTID) so a later re-publish
+ * mints fresh CTIDs — matching the "clear the publish link" delete behavior.
+ */
+export function clearPublishEnvironment(
+  pkg: { CFDocument: Json; CFItems?: Json[] },
+  environment: RegistryEnvironment,
+): { CFDocument: Json; CFItems: Json[]; publishRemoved: boolean } {
+  const current = opencaseExt(pkg.CFDocument).published
+  const byEnv = { ...(current?.byEnvironment ?? {}) }
+  delete byEnv[environment]
+  const publishRemoved = Object.keys(byEnv).length === 0
+
+  const CFDocument = withOpencase(pkg.CFDocument, (ext) => {
+    if (publishRemoved) delete ext.published
+    else ext.published = { ...ext.published, byEnvironment: byEnv }
+  })
+  const CFItems = publishRemoved
+    ? (pkg.CFItems ?? []).map((item) => withOpencase(item, (ext) => { delete ext.published }))
+    : (pkg.CFItems ?? [])
+
+  return { CFDocument, CFItems, publishRemoved }
+}
+
+/** Mark one environment's publication as Deprecated, keeping the CTID + envelope link intact. */
+export function markPublishDeprecated(
+  pkg: { CFDocument: Json; CFItems?: Json[] },
+  environment: RegistryEnvironment,
+  publishedAt: string,
+): { CFDocument: Json; CFItems: Json[] } {
+  const CFDocument = withOpencase(pkg.CFDocument, (ext) => {
+    const prev = ext.published && typeof ext.published === 'object' ? ext.published : {}
+    const env = prev.byEnvironment?.[environment] ?? {}
+    ext.published = {
+      ...prev,
+      byEnvironment: { ...(prev.byEnvironment ?? {}), [environment]: { ...env, status: 'Deprecated', publishedAt } },
+    }
+  })
+  return { CFDocument, CFItems: pkg.CFItems ?? [] }
+}
+
+/**
+ * Stable content fingerprint of a framework's publishable content, used to detect
+ * "changed since last publish". Excludes volatile fields (timestamps) and publish
+ * bookkeeping (`published`, `contentHash`) so an unchanged framework hashes the same
+ * before and after publishing.
+ */
+export function frameworkContentHash(pkg: { CFDocument: Json; CFItems?: Json[]; CFAssociations?: Json[] }): string {
+  const projection = {
+    CFDocument: stripForHash(pkg.CFDocument),
+    CFItems: [...(pkg.CFItems ?? [])].map(stripForHash).sort(byId),
+    CFAssociations: [...(pkg.CFAssociations ?? [])].map(stripForHash).sort(byId),
+  }
+  return createHash('sha256').update(stableStringify(projection)).digest('hex')
+}
+
+const VOLATILE_KEYS = new Set(['lastChangeDateTime'])
+
+function stripForHash(node: Json | undefined): Json {
+  if (!node || typeof node !== 'object') return {}
+  const out: Json = {}
+  for (const [k, v] of Object.entries(node)) {
+    if (VOLATILE_KEYS.has(k)) continue
+    if (k === 'extensions' && v && typeof v === 'object') {
+      const ext = { ...(v as Json) }
+      if (ext[OPENCASE] && typeof ext[OPENCASE] === 'object') {
+        const oc = { ...(ext[OPENCASE] as Json) }
+        delete oc.published
+        delete oc.contentHash
+        if (Object.keys(oc).length === 0) delete ext[OPENCASE]
+        else ext[OPENCASE] = oc
+      }
+      // Omit an empty extensions container so publish-only state doesn't change the hash.
+      if (Object.keys(ext).length > 0) out[k] = ext
+      continue
+    }
+    out[k] = v
+  }
+  return out
+}
+
+function byId(a: Json, b: Json): number {
+  return idOf(a).localeCompare(idOf(b))
+}
+
+function stableStringify(value: any): string {
+  const seen = new WeakSet<object>()
+  const normalize = (v: any): any => {
+    if (v === null || typeof v !== 'object') return v
+    if (Array.isArray(v)) return v.map(normalize)
+    if (seen.has(v)) return undefined
+    seen.add(v)
+    const out: any = {}
+    for (const k of Object.keys(v).sort()) out[k] = normalize(v[k])
+    return out
+  }
+  return JSON.stringify(normalize(value))
 }
 
 /**
