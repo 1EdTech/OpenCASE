@@ -1,10 +1,16 @@
-# Publish to Registry (Dry-Run) — Local Testing Guide
+# Publish to Registry — Local Testing Guide
 
-How to exercise the **dry-run** publish path: OpenCASE maps a stored CASE framework
-to a Registry Assistant request and POSTs it to the `/format` endpoint, which
-validates it and returns the CTDL it *would* store. **Nothing is published** and no
-CTIDs are persisted — this proves the mapping and surfaces Registry Assistant
-validation errors. (Real publish + CTID persistence are a later slice.)
+How to exercise both publish paths from OpenCASE to the Credential Registry via the
+Registry Assistant:
+
+- **Dry-run** (`/format`) — maps a stored CASE framework to a Registry Assistant
+  request and validates it. **Nothing is published** and no CTIDs are persisted. Use
+  this to prove the mapping and surface validation errors before writing.
+- **Publish** (`/publish`) — actually writes the framework to the registry. OpenCASE
+  mints (or reuses) a `ce-<uuid>` CTID for the framework and every competency, records
+  the returned **registry envelope id per environment**, and saves them back onto the
+  package. Because that identity is persisted, **re-publishing updates the same
+  registry resource instead of creating a duplicate.**
 
 ## Prerequisites
 - A **sandbox** Registry Assistant API key and your **publishing organization's CTID**
@@ -26,12 +32,16 @@ The container runs the compiled `dist`, so the new code needs a build:
 docker-compose up --build opencase
 ```
 
-## Option A — from the editor (easiest)
+---
+
+## Dry-run (validate, nothing written)
+
+### Option A — from the editor (easiest)
 1. Sign in and open a **saved** framework (one that's been published to OpenCASE)
    that you **authored or forked**. Imported-but-unforked frameworks are read-only
    and intentionally not publishable.
 2. Click the **framework node** to open the side panel, then **Export** →
-   **Preview publish to registry…**.
+   **Publish to registry…**.
 3. In the dialog, choose **sandbox** (default) or production, then **Run dry-run**.
    You'll see whether the Registry Assistant accepted the mapping, any validation
    **Messages**, and the exact request under "Request sent to Registry Assistant".
@@ -39,7 +49,7 @@ docker-compose up --build opencase
 The button uses your existing editor session — no manual token needed — and appears
 only for saved, editable frameworks.
 
-## Option B — via the API (scripting)
+### Option B — via the API (scripting)
 `/management` requires a bearer token, and password grants are disabled, so grab the
 token the editor is already using: sign in, open DevTools → **Network** → copy the
 `Authorization: Bearer <token>` from any `/management` or `/ims` request (tokens are
@@ -56,19 +66,94 @@ curl -X POST \
 Add `?environment=production` (or `-d '{"environment":"production"}'`) to dry-run
 against production instead of sandbox.
 
-## What you get back
+#### What the dry-run returns
 A `200` with:
 - **`request`** — the exact Registry Assistant payload OpenCASE would send:
   `CompetencyFramework` with a freshly minted `CTID`, `Name`, `Publisher` (your org
   CTID) and `HasTopChild`; `Competencies[]` with `CTID`, `CompetencyText`,
-  `IsChildOf`, and any `ExactAlignment` / `AlignTo` from your alignment associations.
+  `IsPartOf` / `IsTopChildOf` / `IsChildOf`, and any `ExactAlignment` / `AlignTo` from
+  your alignment associations.
 - **`format`** — the Registry Assistant response: `format.ok` is `true` when the
   mapping validates; `format.body.Messages` lists any problems (e.g. a missing
   `Description` or `Publisher`, which the Registry Assistant requires).
 
-### Common responses
+---
+
+## Publish (writes to the registry)
+
+> Sandbox is safe to publish to freely. **Production writes to the live registry** —
+> only publish there when you mean it.
+
+Publish operates on the **last saved version** of the framework (same as the dry-run),
+so save any pending edits first.
+
+### Option A — from the editor (recommended)
+1. Open the same dialog (**Export → Publish to registry…**) and pick the environment.
+2. **Run dry-run** first. The **Publish to \<environment\>** button appears only after a
+   dry-run *passes for the currently selected environment* — changing the environment
+   clears the result, so you always publish exactly what you validated.
+3. For **production**, tick the *"I understand this publishes to the live production
+   registry"* checkbox to enable the button.
+4. Click **Publish**. On success the dialog shows a result panel with:
+   - whether it was a **create** or an **update**,
+   - the **resource URL** on the registry (click through to view it), and
+   - the minted **CTID** and **registry envelope id**.
+
+**Verify the round-trip:** publish once (result says *Published*), then click **Run
+dry-run** again and **Publish** again — the second result should say **Updated** and
+point at the *same* resource URL. That confirms the persisted CTID + envelope are being
+reused rather than minting a duplicate.
+
+### Option B — via the API (scripting)
+Same token/docId/tenant as the dry-run above.
+
+```bash
+curl -X POST \
+  "http://localhost:3000/management/tenants/system/ims/case/v1p1/CFPackages/<docId>/publish" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{}'
+```
+Add `?environment=production` (or `-d '{"environment":"production"}'`) to publish to
+production instead of sandbox.
+
+#### What publish returns
+A `200` with:
+- **`ctid`** — the framework's CTID (minted on first publish, reused thereafter).
+- **`resourceUrl`** — where the framework lives on the registry, e.g.
+  `https://sandbox.credentialengineregistry.org/resources/ce-<uuid>`.
+- **`registryEnvelopeId`** — the envelope the Registry Assistant returned.
+- **`isUpdate`** — `false` on the first publish, `true` on subsequent ones for the
+  same environment.
+- **`environment`** and **`messages`** — the target and any Registry Assistant notes.
+
+On failure the backend returns `400 { "error": "publish_failed", "message": … }` with
+the Registry Assistant's reason.
+
+#### Where the persisted identity lives
+After a successful publish OpenCASE saves a **new version** of the package with, under
+the CFDocument and each CFItem's `ext:opencase` extension:
+```jsonc
+"published": {
+  "ctid": "ce-<uuid>",
+  "byEnvironment": {
+    "sandbox":    { "registryEnvelopeId": "…", "publishedAt": "…" },
+    "production": { "registryEnvelopeId": "…", "publishedAt": "…" }
+  }
+}
+```
+`ctid` is shared across environments; the envelope id is tracked **per environment**, so
+the same framework can be published independently to sandbox and production. Because the
+publish endpoint always reads the stored package, a re-publish reuses this identity even
+if the editor tab is stale.
+
+---
+
+## Common responses
 - **503 / 400 "Publishing not configured"** — `REGISTRY_ASSISTANT_API_KEY` or
   `REGISTRY_ASSISTANT_ORG_CTID` is unset; recheck `.env` and that you rebuilt.
 - **401** (Option B) — missing/expired bearer token; grab a fresh one.
-- **`format.ok: false`** — the mapping reached the Registry Assistant but it rejected
-  the content; read `format.body.Messages` for the specifics.
+- **`format.ok: false`** (dry-run) — the mapping reached the Registry Assistant but it
+  rejected the content; read `format.body.Messages` for the specifics.
+- **`400 publish_failed`** (publish) — the write was rejected; the `message` carries the
+  Registry Assistant's reason. Run a dry-run to see the detailed `Messages`.
