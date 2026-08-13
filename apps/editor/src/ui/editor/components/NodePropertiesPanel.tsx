@@ -674,7 +674,7 @@ export default memo(function NodePropertiesPanel({
                 </Button>
                 {onPreviewPublish ? (
                   <Button variant="secondary" onClick={onPreviewPublish} className="mt-2 w-full">
-                    Preview publish to registry…
+                    Publish to registry…
                   </Button>
                 ) : null}
               </SidebarSection>

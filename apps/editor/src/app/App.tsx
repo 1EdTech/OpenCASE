@@ -499,6 +499,9 @@ function AppInner() {
         onPreviewPublish={tenantId && activeFrameworkId ? async (environment) => {
           return api.previewPublish({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, environment })
         } : undefined}
+        onPublish={tenantId && activeFrameworkId ? async (environment) => {
+          return api.publish({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, environment })
+        } : undefined}
       />
     </EditorProvider>
   )

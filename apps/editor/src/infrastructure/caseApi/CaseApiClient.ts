@@ -133,6 +133,34 @@ export class CaseApiClient {
   }
 
   /**
+   * Publish a saved framework to the Credential Registry via the backend.
+   * Persists minted CTIDs + the registry envelope id so re-publish updates the
+   * same resource. Returns the published CTID, resource URL, and whether it was
+   * a create or an update.
+   */
+  async publish(params: {
+    tenantId: string
+    docId: string
+    caseVersion?: 'v1p0' | 'v1p1'
+    environment?: 'sandbox' | 'production'
+  }): Promise<{ ctid: string; registryEnvelopeId?: string; environment: string; resourceUrl: string; isUpdate: boolean; messages: string[] }> {
+    const v = params.caseVersion ?? 'v1p1'
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages/${encodeURIComponent(params.docId)}/publish`
+    const body = params.environment ? { environment: params.environment } : {}
+    const res = (await this._http.post(url, body)) as {
+      ctid?: string; registryEnvelopeId?: string; environment?: string; resourceUrl?: string; isUpdate?: boolean; messages?: string[]
+    }
+    return {
+      ctid: res?.ctid ?? '',
+      registryEnvelopeId: res?.registryEnvelopeId,
+      environment: res?.environment ?? params.environment ?? 'sandbox',
+      resourceUrl: res?.resourceUrl ?? '',
+      isUpdate: Boolean(res?.isUpdate),
+      messages: res?.messages ?? [],
+    }
+  }
+
+  /**
    * Delete (archive) or permanently delete a CFPackage on the server.
    * 
    * Uses the management endpoint: DELETE /management/tenants/{tenantId}/ims/case/{version}/CFPackages/{docId}

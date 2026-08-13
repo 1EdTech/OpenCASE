@@ -36,9 +36,11 @@ type EditorCanvasProps = {
   onImportFromRegistry?: (registryUrl: string) => Promise<{ frameworkTitle: string; items: Array<{ id: string; fullStatement: string; codedNotation?: string; ctdlUri: string; ctdlCtid: string }> }>
   /** Dry-run publish the saved framework to the Credential Registry (validation only) */
   onPreviewPublish?: (environment?: 'sandbox' | 'production') => Promise<{ request: unknown; format: { ok: boolean; status: number; body: unknown } }>
+  /** Publish the saved framework to the Credential Registry (writes to the registry) */
+  onPublish?: (environment?: 'sandbox' | 'production') => Promise<{ ctid: string; registryEnvelopeId?: string; environment: string; resourceUrl: string; isUpdate: boolean; messages: string[] }>
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onImportFromRegistry, onPreviewPublish }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onImportFromRegistry, onPreviewPublish, onPublish }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -1350,6 +1352,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
           open={publishPreviewOpen}
           onClose={() => setPublishPreviewOpen(false)}
           onRun={(environment) => onPreviewPublish(environment)}
+          onPublish={onPublish ? (environment) => onPublish(environment) : undefined}
         />
       ) : null}
 

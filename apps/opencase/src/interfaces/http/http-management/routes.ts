@@ -300,6 +300,15 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
     '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/:docId/preview-publish',
     withCaseVersion('1.1', deps.cfPackagesController.previewPublish as unknown as RequestHandler)
   )
+  // Publish to the Credential Registry (writes; persists CTIDs + envelope for updates)
+  app.post(
+    '/management/tenants/:tenantId/ims/case/v1p0/CFPackages/:docId/publish',
+    withCaseVersion('1.0', deps.cfPackagesController.publish as unknown as RequestHandler)
+  )
+  app.post(
+    '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/:docId/publish',
+    withCaseVersion('1.1', deps.cfPackagesController.publish as unknown as RequestHandler)
+  )
   // CASE entity management endpoints (explicit version in the path)
   app.put(
     '/management/tenants/:tenantId/ims/case/v1p0/CFDocuments/:id',

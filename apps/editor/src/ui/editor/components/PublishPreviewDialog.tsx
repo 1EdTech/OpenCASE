@@ -3,11 +3,14 @@ import { Button } from '@/ui/shared/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/ui/shared/components/ui/dialog'
 
 type PreviewResult = { request: unknown; format: { ok: boolean; status: number; body: unknown } }
+type PublishResult = { ctid: string; registryEnvelopeId?: string; environment: string; resourceUrl: string; isUpdate: boolean; messages: string[] }
+type Environment = 'sandbox' | 'production'
 
 type Props = {
   open: boolean
   onClose: () => void
-  onRun: (_environment: 'sandbox' | 'production') => Promise<PreviewResult>
+  onRun: (_environment: Environment) => Promise<PreviewResult>
+  onPublish?: (_environment: Environment) => Promise<PublishResult>
 }
 
 /** Extract human-readable validation messages from a Registry Assistant response body. */
@@ -18,18 +21,40 @@ function messagesOf(body: unknown): string[] {
   return []
 }
 
-export default function PublishPreviewDialog({ open, onClose, onRun }: Readonly<Props>) {
-  const [environment, setEnvironment] = useState<'sandbox' | 'production'>('sandbox')
+export default function PublishPreviewDialog({ open, onClose, onRun, onPublish }: Readonly<Props>) {
+  const [environment, setEnvironment] = useState<Environment>('sandbox')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<PreviewResult | null>(null)
+  // Which environment the current dry-run result was produced for (guards the Publish button).
+  const [validatedEnv, setValidatedEnv] = useState<Environment | null>(null)
+
+  const [confirmProd, setConfirmProd] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [publishError, setPublishError] = useState<string | null>(null)
+  const [published, setPublished] = useState<PublishResult | null>(null)
+
+  // Changing environment invalidates the prior dry-run and any publish outcome.
+  const changeEnv = (env: Environment) => {
+    setEnvironment(env)
+    setResult(null)
+    setValidatedEnv(null)
+    setError(null)
+    setPublished(null)
+    setPublishError(null)
+    setConfirmProd(false)
+  }
 
   const run = async () => {
     setLoading(true)
     setError(null)
     setResult(null)
+    setValidatedEnv(null)
+    setPublished(null)
+    setPublishError(null)
     try {
       setResult(await onRun(environment))
+      setValidatedEnv(environment)
     } catch (e: any) {
       setError(e?.message ?? 'Preview failed')
     } finally {
@@ -37,16 +62,34 @@ export default function PublishPreviewDialog({ open, onClose, onRun }: Readonly<
     }
   }
 
+  const publish = async () => {
+    if (!onPublish) return
+    setPublishing(true)
+    setPublishError(null)
+    setPublished(null)
+    try {
+      setPublished(await onPublish(environment))
+    } catch (e: any) {
+      setPublishError(e?.message ?? 'Publish failed')
+    } finally {
+      setPublishing(false)
+    }
+  }
+
   const messages = result ? messagesOf(result.format.body) : []
+  // Publish is offered only once the dry-run for the *currently selected* environment passed.
+  const canOfferPublish = Boolean(onPublish) && Boolean(result?.format.ok) && validatedEnv === environment && !published
+  const publishDisabled = publishing || (environment === 'production' && !confirmProd)
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Preview publish (dry-run)</DialogTitle>
+          <DialogTitle>Publish to the Credential Registry</DialogTitle>
           <DialogDescription>
-            Maps this framework to a Registry Assistant request and validates it via the
-            <code className="mx-1">/format</code> endpoint. Nothing is published.
+            Validate this framework with the Registry Assistant
+            <code className="mx-1">/format</code> endpoint (dry-run), then publish it to the
+            selected environment. Publishing reuses minted CTIDs so re-publishing updates the same resource.
           </DialogDescription>
         </DialogHeader>
 
@@ -54,18 +97,18 @@ export default function PublishPreviewDialog({ open, onClose, onRun }: Readonly<
           <span className="font-medium text-slate-700">Environment</span>
           {(['sandbox', 'production'] as const).map((env) => (
             <label key={env} className="inline-flex items-center gap-1.5">
-              <input type="radio" name="publish-env" value={env} checked={environment === env} onChange={() => setEnvironment(env)} className="h-4 w-4 text-violet-600 focus:ring-violet-500" />
+              <input type="radio" name="publish-env" value={env} checked={environment === env} onChange={() => changeEnv(env)} className="h-4 w-4 text-violet-600 focus:ring-violet-500" />
               <span className={env === 'production' ? 'font-semibold text-rose-700' : 'text-slate-700'}>{env}</span>
             </label>
           ))}
-          <Button size="sm" onClick={() => void run()} disabled={loading}>
+          <Button size="sm" variant="secondary" onClick={() => void run()} disabled={loading || publishing}>
             {loading ? 'Running…' : 'Run dry-run'}
           </Button>
         </div>
 
         {environment === 'production' ? (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-            Production validates against the live registry. This dry-run still publishes nothing, but double-check before a real publish.
+            Production writes to the <strong>live</strong> Credential Registry. Confirm the dry-run looks right before publishing.
           </div>
         ) : null}
 
@@ -95,8 +138,55 @@ export default function PublishPreviewDialog({ open, onClose, onRun }: Readonly<
           </div>
         ) : null}
 
+        {published ? (
+          <div className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+            <div className="text-sm font-semibold text-emerald-900">
+              {published.isUpdate ? 'Updated in the Credential Registry' : 'Published to the Credential Registry'} ({published.environment})
+            </div>
+            <dl className="space-y-1 text-sm text-emerald-900">
+              <div className="flex gap-2">
+                <dt className="font-medium">Resource</dt>
+                <dd className="min-w-0 break-all">
+                  <a href={published.resourceUrl} target="_blank" rel="noreferrer" className="text-emerald-700 underline">{published.resourceUrl}</a>
+                </dd>
+              </div>
+              <div className="flex gap-2">
+                <dt className="font-medium">CTID</dt>
+                <dd className="break-all">{published.ctid}</dd>
+              </div>
+              {published.registryEnvelopeId ? (
+                <div className="flex gap-2">
+                  <dt className="font-medium">Envelope</dt>
+                  <dd className="break-all">{published.registryEnvelopeId}</dd>
+                </div>
+              ) : null}
+            </dl>
+            {published.messages.length ? (
+              <ul className="list-disc space-y-1 pl-5 text-xs text-emerald-800">
+                {published.messages.map((m, i) => <li key={i}>{m}</li>)}
+              </ul>
+            ) : null}
+          </div>
+        ) : null}
+
+        {publishError ? (
+          <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800">{publishError}</div>
+        ) : null}
+
+        {canOfferPublish && environment === 'production' ? (
+          <label className="inline-flex items-center gap-2 text-sm text-rose-800">
+            <input type="checkbox" checked={confirmProd} onChange={(e) => setConfirmProd(e.target.checked)} className="h-4 w-4 text-rose-600 focus:ring-rose-500" />
+            I understand this publishes to the live production registry.
+          </label>
+        ) : null}
+
         <DialogFooter>
-          <Button variant="secondary" onClick={onClose}>Close</Button>
+          {canOfferPublish ? (
+            <Button onClick={() => void publish()} disabled={publishDisabled} className={environment === 'production' ? 'bg-rose-600 hover:bg-rose-700' : undefined}>
+              {publishing ? 'Publishing…' : `Publish to ${environment}`}
+            </Button>
+          ) : null}
+          <Button variant="secondary" onClick={onClose} disabled={publishing}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

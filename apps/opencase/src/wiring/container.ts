@@ -10,6 +10,7 @@ import { ImportFrameworkFromEndpoint } from '../application/case/endpoints/Impor
 import { ImportFrameworkFromRegistry } from '../application/case/endpoints/ImportFrameworkFromRegistry'
 import { PreviewRegistryFramework } from '../application/case/endpoints/PreviewRegistryFramework'
 import { PreviewPublishToRegistry } from '../application/case/endpoints/PreviewPublishToRegistry'
+import { PublishFrameworkToRegistry } from '../application/case/endpoints/PublishFrameworkToRegistry'
 import { RegistryAssistantClient } from '../infrastructure/http/RegistryAssistantClient'
 import { GetCFPackage } from '../application/case/endpoints/GetCFPackage'
 import { GetCFDocument } from '../application/case/endpoints/GetCFDocument'
@@ -272,6 +273,7 @@ export async function buildContainer(): Promise<Container> {
     timeout: config.registryAssistant.timeoutMs,
   })
   const previewPublish = new PreviewPublishToRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid)
+  const publishToRegistry = new PublishFrameworkToRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid, config.registryAssistant.environment)
   
   // Initialize CASE endpoints
   const getCFPackage = new GetCFPackage(pkgRepo, store)
@@ -392,7 +394,8 @@ export async function buildContainer(): Promise<Container> {
     deleteCFDocument,
     restoreFramework,
     previewFromRegistry,
-    previewPublish
+    previewPublish,
+    publishToRegistry
   )
   const tenantsManagementController = new TenantsManagementController(
     listTenants,
