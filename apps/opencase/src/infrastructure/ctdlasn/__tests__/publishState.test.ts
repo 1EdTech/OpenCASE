@@ -1,4 +1,4 @@
-import { buildPublishCtids, envelopeIdFor, applyPublishResult, extractEnvelopeId, registryResourceUrl } from '../publishState'
+import { buildPublishCtids, envelopeIdFor, applyPublishResult, carryForwardPublishState, extractEnvelopeId, registryResourceUrl } from '../publishState'
 
 const basePkg = () => ({
   CFDocument: { identifier: 'doc-1', title: 'FW' } as Record<string, any>,
@@ -55,6 +55,43 @@ describe('applyPublishResult', () => {
     const pub2 = (updated2.CFDocument.extensions as any)['ext:opencase'].published
     expect(pub2.byEnvironment.sandbox.registryEnvelopeId).toBe('env-1')   // preserved
     expect(pub2.byEnvironment.production.registryEnvelopeId).toBe('env-prod')
+  })
+})
+
+describe('carryForwardPublishState', () => {
+  const pub = (ctid: string, extra: Record<string, any> = {}) => ({ extensions: { 'ext:opencase': { published: { ctid, ...extra } } } })
+
+  it('copies the prior published block onto a save that dropped it (doc + items by id)', () => {
+    const prior = {
+      CFDocument: { identifier: 'doc-1', ...pub('ce-fw', { byEnvironment: { sandbox: { registryEnvelopeId: 'env-1' } } }) },
+      CFItems: [{ identifier: 'item-1', ...pub('ce-i1') }, { identifier: 'item-2', ...pub('ce-i2') }],
+    }
+    // Editor save: same nodes, no published block, plus a brand-new item.
+    const incoming = {
+      CFDocument: { identifier: 'doc-1', title: 'FW' },
+      CFItems: [{ identifier: 'item-1' }, { identifier: 'item-2' }, { identifier: 'item-3-new' }],
+    }
+    const merged = carryForwardPublishState(incoming, prior)
+
+    expect(buildPublishCtids(merged).frameworkCtid).toBe('ce-fw')
+    expect(envelopeIdFor(merged, 'sandbox')).toBe('env-1')
+    const ctids = merged.CFItems!.map((i) => (i.extensions as any)?.['ext:opencase']?.published?.ctid)
+    expect(ctids[0]).toBe('ce-i1')
+    expect(ctids[1]).toBe('ce-i2')
+    expect(ctids[2]).toBeUndefined() // new item keeps none → publish mints a fresh CTID
+    expect((merged.CFDocument as any).title).toBe('FW') // other fields preserved
+  })
+
+  it('never overwrites a published block the incoming save already carries', () => {
+    const prior = { CFDocument: { identifier: 'doc-1', ...pub('ce-old') }, CFItems: [] }
+    const incoming = { CFDocument: { identifier: 'doc-1', ...pub('ce-new') }, CFItems: [] }
+    const merged = carryForwardPublishState(incoming, prior)
+    expect((merged.CFDocument as any).extensions['ext:opencase'].published.ctid).toBe('ce-new')
+  })
+
+  it('returns the incoming save unchanged when there is no prior version', () => {
+    const incoming = { CFDocument: { identifier: 'doc-1' }, CFItems: [{ identifier: 'item-1' }] }
+    expect(carryForwardPublishState(incoming, null)).toBe(incoming)
   })
 })
 

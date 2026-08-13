@@ -7,6 +7,7 @@ import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { JsonSchemaValidator } from '../../../infrastructure/validation/JsonSchemaValidator'
 import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
+import { carryForwardPublishState } from '../../../infrastructure/ctdlasn/publishState'
 
 export interface CreateFrameworkCommand {
   tenantId: TenantId
@@ -174,13 +175,31 @@ export class CreateFramework {
       }
     }
 
+    // Load any existing stored version once — used both to carry forward server-managed
+    // state (publish identity) and for the idempotency check below.
+    const docIdForLoad = (cfDocPayload.sourcedId ?? cfDocPayload.identifier) as string | undefined
+    const existing = docIdForLoad
+      ? await this.pkgRepo.load(tenantId, caseVersion, docIdForLoad)
+      : null
+
+    // Preserve durable publish identity (minted CTIDs + registry envelope ids) that the
+    // editor doesn't round-trip, so a save between publishes can't wipe it and cause the
+    // next publish to duplicate the framework in the registry.
+    const prior = existing
+      ? { CFDocument: existing.document.toJSON() as any, CFItems: existing.items.map(i => i.toJSON() as any) }
+      : null
+    const merged = carryForwardPublishState(
+      { CFDocument: cfDocPayload, CFItems: payload.CFItems ?? [] },
+      prior,
+    )
+
     // Extract from CFPackage format and create domain entities
-    const document = CFDocument.fromRaw(tenantId, caseVersion, cfDocPayload)
+    const document = CFDocument.fromRaw(tenantId, caseVersion, merged.CFDocument)
     const docId = document.sourcedId
     const docJSON = document.toJSON()
     const docURI = docJSON.uri
-    
-    const items = (payload.CFItems ?? []).map(i =>
+
+    const items = (merged.CFItems ?? []).map(i =>
       CFItem.fromRaw(tenantId, caseVersion, i, docId, docURI)
     )
     const associations = (payload.CFAssociations ?? []).map(a =>
@@ -196,7 +215,6 @@ export class CreateFramework {
     // Idempotency: if this doc already exists and the resulting stored bundle would be identical,
     // don't create a new version.
     // Compare using CFPackage format (CFDocument, CFItems, etc.) to match validation format
-    const existing = await this.pkgRepo.load(tenantId, caseVersion, docId)
     if (existing) {
       const existingBundle = {
         CFDocument: existing.document.toJSON(),

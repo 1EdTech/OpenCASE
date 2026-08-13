@@ -86,6 +86,51 @@ export function applyPublishResult(
   return { CFDocument, CFItems }
 }
 
+/**
+ * Preserve durable publish identity across saves. The editor doesn't round-trip the
+ * server-written `ext:opencase.published` block, so a plain save would drop the minted
+ * CTIDs + envelope ids and the next publish would create a duplicate. This copies the
+ * prior version's `published` block onto the incoming save wherever the incoming lacks
+ * one — the document, and each item matched by identifier. Incoming values always win,
+ * so an explicit republish/clear still takes effect; newly added items (no prior match)
+ * are left untouched so publish mints fresh CTIDs for them.
+ */
+export function carryForwardPublishState(
+  incoming: { CFDocument: Json; CFItems?: Json[] },
+  prior: { CFDocument: Json; CFItems?: Json[] } | null | undefined,
+): { CFDocument: Json; CFItems?: Json[] } {
+  if (!prior) return incoming
+
+  const withPublished = (node: Json, published: Json): Json => {
+    const extensions = { ...(node.extensions ?? {}) }
+    const ext = { ...(extensions[OPENCASE] && typeof extensions[OPENCASE] === 'object' ? extensions[OPENCASE] : {}) }
+    ext.published = published
+    extensions[OPENCASE] = ext
+    return { ...node, extensions }
+  }
+
+  let CFDocument = incoming.CFDocument
+  const priorDocPublished = opencaseExt(prior.CFDocument).published
+  if (!opencaseExt(CFDocument).published && priorDocPublished) {
+    CFDocument = withPublished(CFDocument, priorDocPublished)
+  }
+
+  const priorItemPublished = new Map<string, Json>()
+  for (const item of prior.CFItems ?? []) {
+    const pub = opencaseExt(item).published
+    const id = idOf(item)
+    if (id && pub) priorItemPublished.set(id, pub)
+  }
+
+  const CFItems = (incoming.CFItems ?? []).map((item) => {
+    if (opencaseExt(item).published) return item
+    const pub = priorItemPublished.get(idOf(item))
+    return pub ? withPublished(item, pub) : item
+  })
+
+  return { ...incoming, CFDocument, CFItems }
+}
+
 /** Pull the registry envelope id out of a Registry Assistant publish response. */
 export function extractEnvelopeId(body: unknown): string | undefined {
   if (!body || typeof body !== 'object') return undefined
