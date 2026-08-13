@@ -1,7 +1,6 @@
 # Publish to Registry — Local Testing Guide
 
-How to exercise both publish paths from OpenCASE to the Credential Registry via the
-Registry Assistant:
+How to exercise the OpenCASE ↔ Credential Registry flows via the Registry Assistant:
 
 - **Dry-run** (`/format`) — maps a stored CASE framework to a Registry Assistant
   request and validates it. **Nothing is published** and no CTIDs are persisted. Use
@@ -11,6 +10,12 @@ Registry Assistant:
   the returned **registry envelope id per environment**, and saves them back onto the
   package. Because that identity is persisted, **re-publishing updates the same
   registry resource instead of creating a duplicate.**
+- **Status** — the library and editor show whether a framework is published, to which
+  environments, and whether it has **changed since publishing**. See
+  [Publish status in the UI](#publish-status-in-the-ui).
+- **Remove** (`/unpublish`) — **delete** the registry resource (clears the local publish
+  link) or **deprecate** it. See
+  [Remove from the registry](#remove-from-the-registry-delete-or-deprecate).
 
 ## Prerequisites
 - A **sandbox** Registry Assistant API key and your **publishing organization's CTID**
@@ -136,8 +141,9 @@ the CFDocument and each CFItem's `ext:opencase` extension:
 ```jsonc
 "published": {
   "ctid": "ce-<uuid>",
+  "contentHash": "<sha256 of the content at publish time>",
   "byEnvironment": {
-    "sandbox":    { "registryEnvelopeId": "…", "publishedAt": "…" },
+    "sandbox":    { "registryEnvelopeId": "…", "publishedAt": "…", "status": "Deprecated?" },
     "production": { "registryEnvelopeId": "…", "publishedAt": "…" }
   }
 }
@@ -145,7 +151,73 @@ the CFDocument and each CFItem's `ext:opencase` extension:
 `ctid` is shared across environments; the envelope id is tracked **per environment**, so
 the same framework can be published independently to sandbox and production. Because the
 publish endpoint always reads the stored package, a re-publish reuses this identity even
-if the editor tab is stale.
+if the editor tab is stale. The editor also doesn't round-trip this block, so on every
+save the backend carries it forward from the prior version (matching items by identifier)
+— an edit between publishes can't wipe the CTIDs, and a re-publish updates rather than
+duplicates.
+
+---
+
+## Publish status in the UI
+
+Once published, status shows up in two places, driven by the framework list metadata
+(`publish` summary: `ctid`, per-environment `resourceUrl` + `status`, and `needsUpdate`):
+
+- **Library cards (home):** a badge —
+  - **In Registry** (green) — published and unchanged since.
+  - **Registry: changed** (amber) — edited since the last publish; re-publish to update.
+  - **Registry: deprecated** (grey) — every published environment is deprecated.
+- **Framework side panel (editor):** a status block listing each environment with a
+  clickable resource link and, when changed, a "re-publish to update" hint. The publish
+  button label becomes **Manage registry publication…** once published.
+
+**How "changed since publish" is detected:** each save stores a content fingerprint
+(`ext:opencase.contentHash`) over the framework's publishable content — statements,
+structure, alignments — but **excluding** volatile fields (timestamps) and publish
+bookkeeping. Publishing snapshots that hash into `published.contentHash`. When the two
+differ, the framework is flagged changed. (A framework published *before* this feature
+has no snapshot to compare against, so it won't flag as changed until re-published once.)
+
+To test: publish a framework → card shows **In Registry** → add a statement and **save**
+→ card flips to **Registry: changed** → re-publish → back to **In Registry**, same
+resource URL.
+
+---
+
+## Remove from the registry (delete or deprecate)
+
+CE notes registry data is "meant to be permanent" and recommends **deprecating** over
+hard-deleting. OpenCASE offers both; delete is best for sandbox cleanup.
+
+- **Deprecate** — re-publishes the same resource with `PublicationStatusType: Deprecated`
+  (keeps the CTID + envelope link; the card badge shows *deprecated*).
+- **Delete** — hard-deletes the resource via the Registry Assistant delete endpoint and
+  **clears the local publish link**: the environment's record is removed, and when no
+  environments remain the whole `published` block (including the CTID) is dropped so a
+  later publish mints fresh CTIDs. Your local OpenCASE framework is kept either way.
+
+### Option A — from the editor (recommended)
+1. Open **Export → Manage registry publication…** and select the environment.
+2. In the **Currently in the registry** section, click **Deprecate** or **Delete…**
+   (Delete is behind an inline confirm; production is also behind the publish confirm).
+3. On success the dialog reports the outcome; the library badge and side-panel status
+   update on the next render.
+
+### Option B — via the API (scripting)
+Same token/docId/tenant as publish. `mode` is `delete` or `deprecate`.
+
+```bash
+curl -X POST \
+  "http://localhost:3000/management/tenants/system/ims/case/v1p1/CFPackages/<docId>/unpublish" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"mode":"delete","environment":"sandbox"}'
+```
+
+#### What unpublish returns
+A `200` with `mode`, `environment`, `ctid`, `messages`, and (for delete)
+`publishLinkCleared` — `true` when the last environment was removed and the framework is
+now fully unpublished locally. On failure: `400 { "error": "unpublish_failed", "message": … }`.
 
 ---
 
@@ -157,3 +229,6 @@ if the editor tab is stale.
   rejected the content; read `format.body.Messages` for the specifics.
 - **`400 publish_failed`** (publish) — the write was rejected; the `message` carries the
   Registry Assistant's reason. Run a dry-run to see the detailed `Messages`.
+- **`400 unpublish_failed`** — delete/deprecate was rejected. A common case is
+  *"Framework is not published to \<env\>"* when there's no publish link for that
+  environment; the `message` otherwise carries the Registry Assistant's reason.
