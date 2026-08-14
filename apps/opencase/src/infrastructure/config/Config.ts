@@ -48,6 +48,14 @@ export interface AppConfig {
   credentialRegistryBaseUrl: string;
 
   /**
+   * Public, resolvable base URL of THIS OpenCASE instance's CASE API (e.g.
+   * https://case.example.org). Used to absolutize the framework/item CASE URIs so they
+   * can be preserved as ceasn:identifier on publish. Unset (localhost/dev) = identifiers
+   * are omitted rather than publishing non-resolvable URIs.
+   */
+  casePublicBaseUrl?: string;
+
+  /**
    * Registry Assistant publishing config. Per-tenant secrets live in env for now
    * (future: fetched via a Keycloak sign-on event with the Registry). Defaults to
    * the sandbox environment; production is opt-in per publish request.
@@ -104,6 +112,8 @@ export function loadConfig(): AppConfig {
     smtpFrom: process.env.SMTP_FROM ?? 'noreply@opencase.local',
 
     credentialRegistryBaseUrl: process.env.CREDENTIAL_REGISTRY_BASE_URL ?? 'https://credentialengineregistry.org',
+
+    casePublicBaseUrl: process.env.OPENCASE_PUBLIC_BASE_URL,
 
     registryAssistant: {
       environment: (process.env.REGISTRY_ASSISTANT_ENVIRONMENT === 'production' ? 'production' : 'sandbox'),

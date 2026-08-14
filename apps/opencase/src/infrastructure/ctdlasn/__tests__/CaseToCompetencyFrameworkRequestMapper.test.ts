@@ -69,3 +69,43 @@ describe('mapCaseToCompetencyFrameworkRequest', () => {
     expect(child.IsTopChildOf).toBeUndefined()
   })
 })
+
+describe('CASE URI preservation (ceasn:source / ceasn:identifier)', () => {
+  const forked = {
+    CFDocument: {
+      identifier: 'doc-1', title: 'FW', language: 'en-US',
+      uri: '/ims/case/v1p1/CFDocuments/doc-1',
+      extensions: { 'ext:opencase': { derivedFrom: { uri: 'https://sandbox.credentialengineregistry.org/resources/ce-up', format: 'ctdl-asn' } } },
+    },
+    CFItems: [{ identifier: 'item-1', fullStatement: 'X', uri: '/ims/case/v1p1/CFItems/item-1' }],
+    CFAssociations: [],
+  }
+
+  it('absolutizes relative CASE URIs against casePublicBaseUrl and preserves them as Identifier', () => {
+    const r = mapCaseToCompetencyFrameworkRequest(forked, {
+      organizationCtid: 'ce-org', ctidFor: (id) => `ce-${id}`, casePublicBaseUrl: 'https://case.example.org/',
+    })
+    expect(r.CompetencyFramework.Identifier).toEqual(['https://case.example.org/ims/case/v1p1/CFDocuments/doc-1'])
+    expect(r.Competencies[0].Identifier).toEqual(['https://case.example.org/ims/case/v1p1/CFItems/item-1'])
+    // The upstream registry original (derivedFrom) is preserved as ceasn:source.
+    expect(r.CompetencyFramework.Source).toContain('https://sandbox.credentialengineregistry.org/resources/ce-up')
+  })
+
+  it('omits Identifier when no base URL is set and CASE URIs are relative, but keeps the absolute derivedFrom as Source', () => {
+    const r = mapCaseToCompetencyFrameworkRequest(forked, { organizationCtid: 'ce-org', ctidFor: (id) => `ce-${id}` })
+    expect(r.CompetencyFramework.Identifier).toBeUndefined()
+    expect(r.Competencies[0].Identifier).toBeUndefined()
+    expect(r.CompetencyFramework.Source).toEqual(['https://sandbox.credentialengineregistry.org/resources/ce-up'])
+  })
+
+  it('keeps already-absolute resolvable URIs and drops non-resolvable (localhost) ones', () => {
+    const pkg = {
+      CFDocument: { identifier: 'd', title: 'F', uri: 'http://localhost:3000/ims/case/v1p1/CFDocuments/d' },
+      CFItems: [{ identifier: 'i', fullStatement: 'x', uri: 'https://case.example.org/ims/case/v1p1/CFItems/i' }],
+      CFAssociations: [],
+    }
+    const r = mapCaseToCompetencyFrameworkRequest(pkg, { organizationCtid: 'ce-org', ctidFor: (id) => `ce-${id}` })
+    expect(r.CompetencyFramework.Identifier).toBeUndefined() // localhost → dropped
+    expect(r.Competencies[0].Identifier).toEqual(['https://case.example.org/ims/case/v1p1/CFItems/i'])
+  })
+})

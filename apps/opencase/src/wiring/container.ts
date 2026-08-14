@@ -273,9 +273,9 @@ export async function buildContainer(): Promise<Container> {
     apiKey: config.registryAssistant.apiKey,
     timeout: config.registryAssistant.timeoutMs,
   })
-  const previewPublish = new PreviewPublishToRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid)
-  const publishToRegistry = new PublishFrameworkToRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid, config.registryAssistant.environment)
-  const removeFromRegistry = new RemoveFrameworkFromRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid, config.registryAssistant.environment)
+  const previewPublish = new PreviewPublishToRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid, config.casePublicBaseUrl)
+  const publishToRegistry = new PublishFrameworkToRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid, config.registryAssistant.environment, config.casePublicBaseUrl)
+  const removeFromRegistry = new RemoveFrameworkFromRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid, config.registryAssistant.environment, config.casePublicBaseUrl)
   
   // Initialize CASE endpoints
   const getCFPackage = new GetCFPackage(pkgRepo, store)

@@ -15,7 +15,8 @@ export interface CompetencyFrameworkInput {
   InLanguage?: string[]
   Publisher?: string[]        // org CTIDs / URIs
   PublisherName?: string[]    // display names
-  Source?: string[]
+  Source?: string[]           // ceasn:source — original framework this is derived from
+  Identifier?: string[]       // ceasn:identifier — alternative URI(s) identifying this framework
   HasTopChild?: string[]      // CTIDs of top-level competencies
   PublicationStatusType?: string // e.g. 'Published' | 'Deprecated'
 }
@@ -29,6 +30,7 @@ export interface CompetencyInput {
   IsPartOf?: string           // framework CTID this competency belongs to (all competencies)
   IsTopChildOf?: string       // framework CTID, for top-level competencies
   IsChildOf?: string[]        // parent competency CTIDs (item → item only)
+  Identifier?: string[]       // ceasn:identifier — alternative URI(s) identifying this competency
   ExactAlignment?: string[]   // resource URIs (exactMatchOf)
   AlignTo?: string[]          // resource URIs (generic related alignment)
 }
@@ -58,9 +60,47 @@ export interface MapPublishOptions {
   registryEnvelopeId?: string
   /** Registry publication status for the framework (e.g. 'Deprecated' to deprecate on republish). */
   publicationStatusType?: string
+  /**
+   * Public, resolvable base URL of this OpenCASE instance's CASE API. When set, relative
+   * CASE URIs are absolutized against it and preserved as ceasn:identifier. When unset,
+   * only already-absolute, resolvable URIs are preserved (localhost/relative are skipped).
+   */
+  casePublicBaseUrl?: string
 }
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v : undefined)
+
+/** Read the ext:opencase extension object off a CASE node (document or item). */
+function opencaseExt (node: Record<string, any> | undefined): Record<string, any> {
+  const ext = node?.extensions?.['ext:opencase']
+  return ext && typeof ext === 'object' ? ext : {}
+}
+
+/**
+ * Return a resolvable, absolute http(s) URI for preservation as ceasn:identifier/source,
+ * or undefined. Relative CASE paths ("/ims/case/…") are absolutized against `base` when
+ * provided; non-http schemes (urn:), and non-resolvable hosts (localhost, *.local) are
+ * dropped so we never publish a dead identifier.
+ */
+function resolvableUri (raw: unknown, base?: string): string | undefined {
+  const s = str(raw)
+  if (!s) return undefined
+  let u = s
+  if (u.startsWith('/') && base) u = base.replace(/\/+$/, '') + u
+  if (!/^https?:\/\//i.test(u)) return undefined
+  try {
+    const host = new URL(u).hostname.toLowerCase()
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local')) return undefined
+    return u
+  } catch {
+    return undefined
+  }
+}
+
+/** Filter falsy, dedupe, preserve order. */
+function uniqStrings (values: Array<string | undefined>): string[] {
+  return Array.from(new Set(values.filter((v): v is string => Boolean(v))))
+}
 
 /** CASE association type → the Registry Assistant Competency alignment property it maps to. */
 function alignmentPropertyFor (associationType: string | undefined): 'ExactAlignment' | 'AlignTo' | null {
@@ -125,8 +165,17 @@ export function mapCaseToCompetencyFrameworkRequest (
   }
 
   const publisherName = str(doc.publisher)
-  const source = str(doc.officialSourceURL)
   const frameworkCtid = opts.ctidFor(docId)
+
+  // Preserve provenance: ceasn:source = the framework this was derived from (the upstream
+  // registry original for a forked import) plus any official source URL; ceasn:identifier =
+  // this framework's own resolvable OpenCASE CASE URI.
+  const docExt = opencaseExt(doc)
+  const sourceUris = uniqStrings([
+    resolvableUri((docExt.derivedFrom as any)?.uri, opts.casePublicBaseUrl),
+    resolvableUri(doc.officialSourceURL, opts.casePublicBaseUrl) ?? str(doc.officialSourceURL),
+  ])
+  const frameworkIdentifier = resolvableUri(doc.uri, opts.casePublicBaseUrl)
 
   const CompetencyFramework: CompetencyFrameworkInput = {
     CTID: frameworkCtid,
@@ -135,7 +184,8 @@ export function mapCaseToCompetencyFrameworkRequest (
     InLanguage: [language],
     Publisher: [opts.organizationCtid],
     ...(publisherName ? { PublisherName: [publisherName] } : {}),
-    ...(source ? { Source: [source] } : {}),
+    ...(sourceUris.length ? { Source: sourceUris } : {}),
+    ...(frameworkIdentifier ? { Identifier: [frameworkIdentifier] } : {}),
     ...(opts.publicationStatusType ? { PublicationStatusType: opts.publicationStatusType } : {}),
     HasTopChild: Array.from(topLevelIds).map(opts.ctidFor),
   }
@@ -146,6 +196,8 @@ export function mapCaseToCompetencyFrameworkRequest (
     const align = alignmentsByOrigin.get(id)
     const notes = str(item.notes)
     const isTopLevel = topLevelIds.has(id)
+    // ceasn:identifier — this competency's own resolvable OpenCASE CASE URI.
+    const identifierUri = resolvableUri(item.uri, opts.casePublicBaseUrl)
     return {
       CTID: opts.ctidFor(id),
       CompetencyText: str(item.fullStatement) ?? '',
@@ -153,6 +205,7 @@ export function mapCaseToCompetencyFrameworkRequest (
         ? { CompetencyLabel: str(item.alternativeLabel) ?? str(item.abbreviatedStatement) }
         : {}),
       ...(str(item.humanCodingScheme) ? { CodedNotation: str(item.humanCodingScheme) } : {}),
+      ...(identifierUri ? { Identifier: [identifierUri] } : {}),
       ...(notes ? { Comment: [notes] } : {}),
       // Every competency declares membership in the framework; top-level ones also
       // declare IsTopChildOf. Registry Assistant requires this relationship.

@@ -46,6 +46,7 @@ export class RemoveFrameworkFromRegistry {
     private readonly client: RegistryAssistantClient,
     private readonly organizationCtid?: string,
     private readonly defaultEnvironment: RegistryEnvironment = 'sandbox',
+    private readonly casePublicBaseUrl?: string,
   ) {}
 
   async execute (cmd: RemoveCommand): Promise<RemoveResult> {
@@ -96,6 +97,7 @@ export class RemoveFrameworkFromRegistry {
         ctidFor,
         registryEnvelopeId: envelopeId,
         publicationStatusType: 'Deprecated',
+        casePublicBaseUrl: this.casePublicBaseUrl,
       })
       const result = await this.client.publish(request, environment)
       logger.info({ docId: cmd.docId, environment, status: result.status, ok: result.ok, body: result.body }, 'Registry Assistant deprecate response')

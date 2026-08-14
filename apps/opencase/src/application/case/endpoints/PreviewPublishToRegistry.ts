@@ -30,6 +30,7 @@ export class PreviewPublishToRegistry {
     private readonly pkgRepo: CFPackageRepository,
     private readonly client: RegistryAssistantClient,
     private readonly organizationCtid?: string,
+    private readonly casePublicBaseUrl?: string,
   ) {}
 
   async execute (cmd: PreviewPublishCommand): Promise<PreviewPublishResult> {
@@ -62,6 +63,7 @@ export class PreviewPublishToRegistry {
     const request = mapCaseToCompetencyFrameworkRequest(caseJson, {
       organizationCtid: this.organizationCtid,
       ctidFor,
+      casePublicBaseUrl: this.casePublicBaseUrl,
     })
 
     logger.info(

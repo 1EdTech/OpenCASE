@@ -41,6 +41,7 @@ export class PublishFrameworkToRegistry {
     private readonly client: RegistryAssistantClient,
     private readonly organizationCtid?: string,
     private readonly defaultEnvironment: RegistryEnvironment = 'sandbox',
+    private readonly casePublicBaseUrl?: string,
   ) {}
 
   async execute (cmd: PublishCommand): Promise<PublishResult> {
@@ -65,6 +66,7 @@ export class PublishFrameworkToRegistry {
       organizationCtid: this.organizationCtid,
       ctidFor,
       registryEnvelopeId: priorEnvelopeId,
+      casePublicBaseUrl: this.casePublicBaseUrl,
     })
 
     logger.info(
