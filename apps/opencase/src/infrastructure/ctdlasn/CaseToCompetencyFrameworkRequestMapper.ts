@@ -31,8 +31,14 @@ export interface CompetencyInput {
   IsTopChildOf?: string       // framework CTID, for top-level competencies
   IsChildOf?: string[]        // parent competency CTIDs (item → item only)
   Identifier?: string[]       // ceasn:identifier — alternative URI(s) identifying this competency
-  ExactAlignment?: string[]   // resource URIs (exactMatchOf)
-  AlignTo?: string[]          // resource URIs (generic related alignment)
+  // Cross-framework alignments to registry resource URIs (ceasn:*Alignment):
+  ExactAlignment?: string[]        // exactMatchOf
+  AlignTo?: string[]               // isRelatedTo / isPeerOf (generic)
+  BroadAlignment?: string[]        // this competency is broader than the target
+  NarrowAlignment?: string[]       // this competency is narrower than the target (isChildOf/isPartOf)
+  MajorAlignment?: string[]
+  MinorAlignment?: string[]
+  PrerequisiteAlignment?: string[]
 }
 
 export interface CompetencyFrameworkRequestPayload {
@@ -41,6 +47,15 @@ export interface CompetencyFrameworkRequestPayload {
   RegistryEnvelopeId?: string
   CompetencyFramework: CompetencyFrameworkInput
   Competencies: CompetencyInput[]
+}
+
+/** A cross-framework association that has no clean CTDL-ASN alignment mapping (e.g. 'precedes'). */
+export interface UnmappedAssociation {
+  /** CTID of the origin competency in this framework. */
+  origin: string
+  associationType: string
+  /** The external registry resource the origin was associated to. */
+  destination: string
 }
 
 export interface CaseCfPackageJson {
@@ -66,6 +81,11 @@ export interface MapPublishOptions {
    * only already-absolute, resolvable URIs are preserved (localhost/relative are skipped).
    */
   casePublicBaseUrl?: string
+  /**
+   * Optional sink. Cross-framework associations with no CTDL-ASN alignment mapping
+   * (e.g. 'precedes') are pushed here so callers can surface them rather than drop silently.
+   */
+  unmapped?: UnmappedAssociation[]
 }
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v : undefined)
@@ -102,12 +122,26 @@ function uniqStrings (values: Array<string | undefined>): string[] {
   return Array.from(new Set(values.filter((v): v is string => Boolean(v))))
 }
 
-/** CASE association type → the Registry Assistant Competency alignment property it maps to. */
-function alignmentPropertyFor (associationType: string | undefined): 'ExactAlignment' | 'AlignTo' | null {
+/** Registry Assistant Competency alignment fields (each maps to a ceasn:*Alignment property). */
+type AlignmentField = 'ExactAlignment' | 'AlignTo' | 'BroadAlignment' | 'NarrowAlignment' | 'MajorAlignment' | 'MinorAlignment' | 'PrerequisiteAlignment'
+
+/**
+ * CASE associationType → the CTDL-ASN alignment property used when the target is a
+ * competency in ANOTHER framework. Targets confirmed against Credential Engine's DESM
+ * crosswalk. Direction of the hierarchical mapping (isChildOf/isPartOf → narrowAlignment)
+ * is pending CE confirmation. Returns null for types with no clean equivalent.
+ */
+function alignmentPropertyFor (associationType: string | undefined): AlignmentField | null {
   switch (associationType) {
     case 'exactMatchOf': return 'ExactAlignment'
     case 'isRelatedTo': return 'AlignTo'
-    default: return null // isChildOf/isPartOf are structural; others unmapped for now
+    case 'isPeerOf': return 'AlignTo'
+    // Hierarchical CASE relations pointing at ANOTHER framework's competency: the origin is
+    // a narrower/component competency than the (broader) external target → narrowAlignment.
+    case 'isChildOf': return 'NarrowAlignment'
+    case 'isPartOf': return 'NarrowAlignment'
+    // 'precedes' and any other type have no clean CTDL-ASN alignment → reported as unmapped.
+    default: return null
   }
 }
 
@@ -126,12 +160,14 @@ export function mapCaseToCompetencyFrameworkRequest (
   // Structural (isChildOf) relationships and cross-framework alignments.
   const childOfItemParents = new Map<string, Set<string>>() // childId -> parent item ids
   const topLevelIds = new Set<string>()
-  const alignmentsByOrigin = new Map<string, { exact: Set<string>; related: Set<string> }>()
+  const alignByOrigin = new Map<string, Map<AlignmentField, Set<string>>>() // originId -> field -> URIs
 
-  const ensureAlign = (id: string) => {
-    let a = alignmentsByOrigin.get(id)
-    if (!a) { a = { exact: new Set(), related: new Set() }; alignmentsByOrigin.set(id, a) }
-    return a
+  const addAlign = (originId: string, field: AlignmentField, uri: string) => {
+    let byField = alignByOrigin.get(originId)
+    if (!byField) { byField = new Map(); alignByOrigin.set(originId, byField) }
+    let uris = byField.get(field)
+    if (!uris) { uris = new Set(); byField.set(field, uris) }
+    uris.add(uri)
   }
 
   for (const a of associations) {
@@ -141,21 +177,24 @@ export function mapCaseToCompetencyFrameworkRequest (
     const destUri = str(a.destinationNodeURI?.uri)
     if (!originId) continue
 
+    const destIsLocalItem = Boolean(destId && itemIds.has(destId))
+
+    // Structural hierarchy: child/part of the framework itself, or of a local sibling item.
     if (type === 'isChildOf' || type === 'isPartOf') {
-      if (destId === docId) {
-        topLevelIds.add(originId) // child of the framework itself → top-level competency
-      } else if (destId && itemIds.has(destId)) {
+      if (destId === docId) { topLevelIds.add(originId); continue }
+      if (destIsLocalItem) {
         if (!childOfItemParents.has(originId)) childOfItemParents.set(originId, new Set())
-        childOfItemParents.get(originId)!.add(destId)
+        childOfItemParents.get(originId)!.add(destId!)
+        continue
       }
-      continue
+      // else: points at another framework's competency → fall through to alignment handling.
     }
 
-    // Cross-framework alignment (destination is an external/registry resource, not a local item)
-    const prop = alignmentPropertyFor(type)
-    if (prop && destUri && !(destId && itemIds.has(destId))) {
-      if (prop === 'ExactAlignment') ensureAlign(originId).exact.add(destUri)
-      else ensureAlign(originId).related.add(destUri)
+    // Cross-framework alignment: destination is an external (registry) resource.
+    if (destUri && !destIsLocalItem) {
+      const field = alignmentPropertyFor(type)
+      if (field) addAlign(originId, field, destUri)
+      else opts.unmapped?.push({ origin: opts.ctidFor(originId), associationType: type ?? '(none)', destination: destUri })
     }
   }
 
@@ -193,11 +232,13 @@ export function mapCaseToCompetencyFrameworkRequest (
   const Competencies: CompetencyInput[] = items.map((item) => {
     const id = str(item.identifier) ?? str(item.sourcedId) ?? ''
     const parents = childOfItemParents.get(id)
-    const align = alignmentsByOrigin.get(id)
     const notes = str(item.notes)
     const isTopLevel = topLevelIds.has(id)
     // ceasn:identifier — this competency's own resolvable OpenCASE CASE URI.
     const identifierUri = resolvableUri(item.uri, opts.casePublicBaseUrl)
+    // Cross-framework alignments, keyed by CTDL-ASN alignment field.
+    const alignmentFields: Partial<Record<AlignmentField, string[]>> = {}
+    for (const [field, uris] of alignByOrigin.get(id) ?? []) alignmentFields[field] = Array.from(uris)
     return {
       CTID: opts.ctidFor(id),
       CompetencyText: str(item.fullStatement) ?? '',
@@ -212,8 +253,7 @@ export function mapCaseToCompetencyFrameworkRequest (
       IsPartOf: frameworkCtid,
       ...(isTopLevel ? { IsTopChildOf: frameworkCtid } : {}),
       ...(parents && parents.size ? { IsChildOf: Array.from(parents).map(opts.ctidFor) } : {}),
-      ...(align && align.exact.size ? { ExactAlignment: Array.from(align.exact) } : {}),
-      ...(align && align.related.size ? { AlignTo: Array.from(align.related) } : {}),
+      ...alignmentFields,
     }
   })
 

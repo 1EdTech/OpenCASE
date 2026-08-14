@@ -1,7 +1,7 @@
 import type { CFPackageRepository } from '../ports/CFPackageRepository'
 import type { CaseVersion, SourcedId, TenantId } from '../../../domain/case/value-objects/Identifiers'
 import type { RegistryAssistantClient, RegistryEnvironment, RegistryAssistantResult } from '../../../infrastructure/http/RegistryAssistantClient'
-import { mapCaseToCompetencyFrameworkRequest, type CompetencyFrameworkRequestPayload } from '../../../infrastructure/ctdlasn/CaseToCompetencyFrameworkRequestMapper'
+import { mapCaseToCompetencyFrameworkRequest, type CompetencyFrameworkRequestPayload, type UnmappedAssociation } from '../../../infrastructure/ctdlasn/CaseToCompetencyFrameworkRequestMapper'
 import { generateCtid } from '../../../infrastructure/ctdlasn/ctid'
 import { logger } from '../../../infrastructure/logging/Logger'
 
@@ -18,6 +18,8 @@ export interface PreviewPublishResult {
   request: CompetencyFrameworkRequestPayload
   /** The Registry Assistant /format response (validation + formatted CTDL). */
   format: RegistryAssistantResult
+  /** Cross-framework associations that have no CTDL-ASN alignment mapping and are NOT published. */
+  unmappedAssociations: UnmappedAssociation[]
 }
 
 /**
@@ -60,17 +62,19 @@ export class PreviewPublishToRegistry {
       return c
     }
 
+    const unmappedAssociations: UnmappedAssociation[] = []
     const request = mapCaseToCompetencyFrameworkRequest(caseJson, {
       organizationCtid: this.organizationCtid,
       ctidFor,
       casePublicBaseUrl: this.casePublicBaseUrl,
+      unmapped: unmappedAssociations,
     })
 
     logger.info(
-      { docId: cmd.docId, environment: cmd.environment, competencies: request.Competencies.length },
+      { docId: cmd.docId, environment: cmd.environment, competencies: request.Competencies.length, unmapped: unmappedAssociations.length },
       'Previewing publish to Registry Assistant (dry-run /format)',
     )
     const format = await this.client.format(request, cmd.environment)
-    return { request, format }
+    return { request, format, unmappedAssociations }
   }
 }

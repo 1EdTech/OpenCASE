@@ -35,7 +35,7 @@ type EditorCanvasProps = {
   /** Fetch Registry competencies for canvas alignment (no library save) */
   onImportFromRegistry?: (registryUrl: string) => Promise<{ frameworkTitle: string; items: Array<{ id: string; fullStatement: string; codedNotation?: string; ctdlUri: string; ctdlCtid: string }> }>
   /** Dry-run publish the saved framework to the Credential Registry (validation only) */
-  onPreviewPublish?: (environment?: 'sandbox' | 'production') => Promise<{ request: unknown; format: { ok: boolean; status: number; body: unknown } }>
+  onPreviewPublish?: (environment?: 'sandbox' | 'production') => Promise<{ request: unknown; format: { ok: boolean; status: number; body: unknown }; unmappedAssociations?: Array<{ origin: string; associationType: string; destination: string }> }>
   /** Publish the saved framework to the Credential Registry (writes to the registry) */
   onPublish?: (environment?: 'sandbox' | 'production') => Promise<{ ctid: string; registryEnvelopeId?: string; environment: string; resourceUrl: string; isUpdate: boolean; messages: string[] }>
   /** Remove the framework from the Credential Registry (delete or deprecate) */

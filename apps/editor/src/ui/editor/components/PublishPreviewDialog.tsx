@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/ui/shared/components/ui/dialog'
 
-type PreviewResult = { request: unknown; format: { ok: boolean; status: number; body: unknown } }
+type UnmappedAssociation = { origin: string; associationType: string; destination: string }
+type PreviewResult = { request: unknown; format: { ok: boolean; status: number; body: unknown }; unmappedAssociations?: UnmappedAssociation[] }
 type PublishResult = { ctid: string; registryEnvelopeId?: string; environment: string; resourceUrl: string; isUpdate: boolean; messages: string[] }
 type UnpublishResult = { mode: 'delete' | 'deprecate'; environment: string; ctid: string; publishLinkCleared?: boolean; messages: string[] }
 type Environment = 'sandbox' | 'production'
@@ -158,6 +159,21 @@ export default function PublishPreviewDialog({ open, onClose, onRun, onPublish, 
                 <div className="mb-1 text-sm font-semibold text-amber-900">Messages</div>
                 <ul className="list-disc space-y-1 pl-5 text-sm text-amber-800">
                   {messages.map((m, i) => <li key={i}>{m}</li>)}
+                </ul>
+              </div>
+            ) : null}
+            {result.unmappedAssociations && result.unmappedAssociations.length ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                <div className="mb-1 text-sm font-semibold text-amber-900">
+                  {result.unmappedAssociations.length} association{result.unmappedAssociations.length === 1 ? '' : 's'} not published
+                </div>
+                <p className="mb-1 text-xs text-amber-800">
+                  These cross-framework relationships have no CTDL-ASN alignment mapping, so they won't appear in the registry:
+                </p>
+                <ul className="list-disc space-y-0.5 pl-5 text-xs text-amber-800">
+                  {result.unmappedAssociations.map((u, i) => (
+                    <li key={i}><code>{u.associationType}</code> → <span className="break-all">{u.destination}</span></li>
+                  ))}
                 </ul>
               </div>
             ) : null}

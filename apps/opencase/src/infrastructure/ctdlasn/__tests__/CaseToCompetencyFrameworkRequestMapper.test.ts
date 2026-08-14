@@ -70,6 +70,46 @@ describe('mapCaseToCompetencyFrameworkRequest', () => {
   })
 })
 
+describe('cross-framework association mapping', () => {
+  const REG = 'https://credentialengineregistry.org/resources/'
+  const unmapped: Array<{ origin: string; associationType: string; destination: string }> = []
+  const pkg = {
+    CFDocument: { identifier: 'doc-1', title: 'FW' },
+    CFItems: [{ identifier: 'i1', fullStatement: 'one' }, { identifier: 'i2', fullStatement: 'two' }],
+    CFAssociations: [
+      { associationType: 'isChildOf', originNodeURI: { identifier: 'i1' }, destinationNodeURI: { identifier: 'doc-1' } },
+      { associationType: 'isChildOf', originNodeURI: { identifier: 'i2' }, destinationNodeURI: { identifier: 'doc-1' } },
+      { associationType: 'isChildOf', originNodeURI: { identifier: 'i1' }, destinationNodeURI: { identifier: 'x', uri: REG + 'ce-ext1' } },
+      { associationType: 'isPartOf', originNodeURI: { identifier: 'i1' }, destinationNodeURI: { identifier: 'y', uri: REG + 'ce-ext2' } },
+      { associationType: 'isPeerOf', originNodeURI: { identifier: 'i2' }, destinationNodeURI: { identifier: 'z', uri: REG + 'ce-ext3' } },
+      { associationType: 'precedes', originNodeURI: { identifier: 'i2' }, destinationNodeURI: { identifier: 'w', uri: REG + 'ce-ext4' } },
+    ],
+  }
+  const req = mapCaseToCompetencyFrameworkRequest(pkg, { organizationCtid: 'ce-org', ctidFor: (id) => `ce-${id}`, unmapped })
+
+  it('maps external isChildOf/isPartOf to NarrowAlignment (not in-framework hierarchy)', () => {
+    const i1 = req.Competencies.find((c) => c.CTID === 'ce-i1')!
+    expect(i1.NarrowAlignment).toEqual([REG + 'ce-ext1', REG + 'ce-ext2'])
+    expect(i1.IsChildOf).toBeUndefined()
+  })
+
+  it('maps isPeerOf to AlignTo', () => {
+    const i2 = req.Competencies.find((c) => c.CTID === 'ce-i2')!
+    expect(i2.AlignTo).toEqual([REG + 'ce-ext3'])
+  })
+
+  it('reports precedes as unmapped instead of dropping it silently', () => {
+    expect(unmapped).toEqual([{ origin: 'ce-i2', associationType: 'precedes', destination: REG + 'ce-ext4' }])
+    const i2 = req.Competencies.find((c) => c.CTID === 'ce-i2')!
+    expect(JSON.stringify(i2)).not.toContain('ce-ext4') // target not smuggled into any field
+  })
+
+  it('still treats framework-level isChildOf as top-level structure', () => {
+    expect(req.CompetencyFramework.HasTopChild).toEqual(['ce-i1', 'ce-i2'])
+    expect(req.Competencies.every((c) => c.IsTopChildOf === 'ce-doc-1')).toBe(true)
+  })
+})
+
 describe('CASE URI preservation (ceasn:source / ceasn:identifier)', () => {
   const forked = {
     CFDocument: {

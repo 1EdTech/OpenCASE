@@ -137,14 +137,15 @@ export class CaseApiClient {
     docId: string
     caseVersion?: 'v1p0' | 'v1p1'
     environment?: 'sandbox' | 'production'
-  }): Promise<{ request: unknown; format: { ok: boolean; status: number; body: unknown } }> {
+  }): Promise<{ request: unknown; format: { ok: boolean; status: number; body: unknown }; unmappedAssociations: Array<{ origin: string; associationType: string; destination: string }> }> {
     const v = params.caseVersion ?? 'v1p1'
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages/${encodeURIComponent(params.docId)}/preview-publish`
     const body = params.environment ? { environment: params.environment } : {}
-    const res = (await this._http.post(url, body)) as { request?: unknown; format?: { ok: boolean; status: number; body: unknown } }
+    const res = (await this._http.post(url, body)) as { request?: unknown; format?: { ok: boolean; status: number; body: unknown }; unmappedAssociations?: Array<{ origin: string; associationType: string; destination: string }> }
     return {
       request: res?.request,
       format: res?.format ?? { ok: false, status: 0, body: null },
+      unmappedAssociations: res?.unmappedAssociations ?? [],
     }
   }
 

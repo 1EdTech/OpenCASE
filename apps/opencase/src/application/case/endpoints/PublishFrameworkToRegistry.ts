@@ -62,12 +62,17 @@ export class PublishFrameworkToRegistry {
     const priorEnvelopeId = envelopeIdFor(caseJson, environment)
     const isUpdate = Boolean(priorEnvelopeId)
 
+    const unmapped: Array<{ origin: string, associationType: string, destination: string }> = []
     const request = mapCaseToCompetencyFrameworkRequest(caseJson, {
       organizationCtid: this.organizationCtid,
       ctidFor,
       registryEnvelopeId: priorEnvelopeId,
       casePublicBaseUrl: this.casePublicBaseUrl,
+      unmapped,
     })
+    if (unmapped.length) {
+      logger.warn({ docId: cmd.docId, unmapped }, 'Publishing: some cross-framework associations have no CTDL-ASN mapping and are omitted')
+    }
 
     logger.info(
       { docId: cmd.docId, environment, isUpdate, frameworkCtid, competencies: request.Competencies.length },
