@@ -76,11 +76,32 @@ A `200` with:
 - **`request`** — the exact Registry Assistant payload OpenCASE would send:
   `CompetencyFramework` with a freshly minted `CTID`, `Name`, `Publisher` (your org
   CTID) and `HasTopChild`; `Competencies[]` with `CTID`, `CompetencyText`,
-  `IsPartOf` / `IsTopChildOf` / `IsChildOf`, and any `ExactAlignment` / `AlignTo` from
-  your alignment associations.
+  `IsPartOf` / `IsTopChildOf` / `IsChildOf`, and the cross-framework alignments
+  (`ExactAlignment`, `AlignTo`, `NarrowAlignment`, …) — see the mapping below.
 - **`format`** — the Registry Assistant response: `format.ok` is `true` when the
   mapping validates; `format.body.Messages` lists any problems (e.g. a missing
   `Description` or `Publisher`, which the Registry Assistant requires).
+- **`unmappedAssociations`** — cross-framework associations that have **no** CTDL-ASN
+  alignment mapping and are therefore **not** published (e.g. `precedes`). Each entry is
+  `{ origin, associationType, destination }`. In the editor these surface as an amber
+  *"N association(s) not published"* note; on a real publish they're written to the log.
+  This is your signal that an alignment you drew won't reach the registry.
+
+#### How CASE associations map to CTDL-ASN
+Structural `isChildOf` / `isPartOf` pointing at **the framework itself** (→ top level) or a
+**local sibling item** (→ `IsChildOf`) stay internal hierarchy. Associations pointing at a
+competency in **another framework** (a registry resource) become CTDL-ASN alignments:
+
+| CASE `associationType` (to an external competency) | Registry Assistant field → `ceasn:` |
+|---|---|
+| `exactMatchOf` | `ExactAlignment` → `ceasn:exactAlignment` |
+| `isRelatedTo`, `isPeerOf` | `AlignTo` |
+| `isChildOf`, `isPartOf` | `NarrowAlignment` → `ceasn:narrowAlignment` (origin is narrower than the broader external target) |
+| anything else (`precedes`, …) | *unmapped → reported in `unmappedAssociations`, not published* |
+
+> The `isChildOf`/`isPartOf` → `NarrowAlignment` **direction**, and whether `precedes`
+> belongs anywhere in CTDL-ASN, are provisional pending confirmation from Credential
+> Engine. Target properties were cross-checked against CE's DESM tool (Competence domain).
 
 ---
 
