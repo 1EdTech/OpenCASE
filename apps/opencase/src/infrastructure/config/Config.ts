@@ -68,8 +68,13 @@ export interface AppConfig {
     apiKey?: string;
     /** CTID of the publishing organization (PublishForOrganizationIdentifier). */
     organizationCtid?: string;
-    /** Request timeout in ms for Registry Assistant calls (format/publish). */
+    /** Request timeout in ms for synchronous Registry Assistant calls (format/publish). */
     timeoutMs: number;
+    /**
+     * Timeout in ms for background publish jobs. Runs server-side with no browser
+     * in the loop, so this can be far longer than `timeoutMs`.
+     */
+    jobTimeoutMs: number;
   };
 }
 
@@ -121,7 +126,13 @@ export function loadConfig(): AppConfig {
       productionBaseUrl: process.env.REGISTRY_ASSISTANT_PRODUCTION_BASE_URL ?? 'https://apps.credentialengine.org',
       apiKey: process.env.REGISTRY_ASSISTANT_API_KEY,
       organizationCtid: process.env.REGISTRY_ASSISTANT_ORG_CTID,
-      timeoutMs: Number(process.env.REGISTRY_ASSISTANT_TIMEOUT_MS ?? 60000),
+      // 4 min default — large frameworks routinely exceed 60s to validate/format;
+      // kept under the browser's ~5 min ceiling so OpenCASE returns a clean 504 first.
+      timeoutMs: Number(process.env.REGISTRY_ASSISTANT_TIMEOUT_MS ?? 240000),
+      // 45 min default — background jobs have no browser waiting. Sized from live
+      // sandbox data: an 809-competency framework's /format took ~30 min, so the
+      // window must clear that with headroom (frameworks past ~1200 need batching).
+      jobTimeoutMs: Number(process.env.REGISTRY_ASSISTANT_JOB_TIMEOUT_MS ?? 2700000),
     },
   };
 }

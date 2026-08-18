@@ -509,13 +509,27 @@ function AppInner() {
         onImportFromRegistry={tenantId ? async (registryUrl) => {
           return api.previewRegistryFramework({ tenantId, registryUrl })
         } : undefined}
-        onPreviewPublish={tenantId && activeFrameworkId ? async (environment) => {
-          return api.previewPublish({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, environment })
+        onPreviewPublish={tenantId && activeFrameworkId ? async (environment, onProgress) => {
+          // Async job: submit + poll (survives multi-minute registry work; no request timeout).
+          const job = await api.runPublishJob(
+            { tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, kind: 'preview', environment },
+            { onProgress },
+          )
+          if (job.status !== 'succeeded') throw new Error(job.error || `Dry-run ${job.status}`)
+          return job.result as { request: unknown; format: { ok: boolean; status: number; body: unknown }; unmappedAssociations?: Array<{ origin: string; associationType: string; destination: string }> }
         } : undefined}
-        onPublish={tenantId && activeFrameworkId ? async (environment) => {
-          const result = await api.publish({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, environment })
+        onPublish={tenantId && activeFrameworkId ? async (environment, onProgress) => {
+          const job = await api.runPublishJob(
+            { tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, kind: 'publish', environment },
+            { onProgress },
+          )
+          if (job.status !== 'succeeded') throw new Error(job.error || `Publish ${job.status}`)
           void refreshPublishStatus()
-          return result
+          return job.result as { ctid: string; registryEnvelopeId?: string; environment: string; resourceUrl: string; isUpdate: boolean; messages: string[] }
+        } : undefined}
+        onEstimate={tenantId && activeFrameworkId ? async () => {
+          const e = await api.getPublishEstimate({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion })
+          return { competencyCount: e.competencyCount, estimateMs: e.estimateMs, basis: e.basis, issues: e.issues }
         } : undefined}
         onUnpublish={tenantId && activeFrameworkId ? async ({ environment, mode }) => {
           const result = await api.unpublish({ tenantId, docId: activeFrameworkId, caseVersion: caseApiVersion, environment, mode })

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/ui/shared/components/ui/dialog'
 
@@ -12,14 +12,34 @@ type PublishSummary = {
   needsUpdate: boolean
   environments: Array<{ environment: Environment; resourceUrl: string; status?: string }>
 }
+type PublishJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'interrupted'
+type PublishProgress = {
+  kind: 'preview' | 'publish'
+  status: PublishJobStatus
+  elapsedMs: number
+  estimateMs?: number
+  competencyCount?: number
+}
+type ValidationIssue = { code: string; message: string; count?: number; samples?: string[] }
+type Estimate = { competencyCount: number; estimateMs: number; basis: 'measured' | 'default'; issues?: ValidationIssue[] }
 
 type Props = {
   open: boolean
   onClose: () => void
-  onRun: (_environment: Environment) => Promise<PreviewResult>
-  onPublish?: (_environment: Environment) => Promise<PublishResult>
+  onRun: (_environment: Environment, _onProgress?: (_p: PublishProgress) => void) => Promise<PreviewResult>
+  onPublish?: (_environment: Environment, _onProgress?: (_p: PublishProgress) => void) => Promise<PublishResult>
+  onEstimate?: (_environment: Environment) => Promise<Estimate>
   onUnpublish?: (_args: { environment?: Environment; mode: 'delete' | 'deprecate' }) => Promise<UnpublishResult>
   publishSummary?: PublishSummary
+}
+
+/** ms → compact "Ns" or "M:SS". */
+function formatDuration(ms: number): string {
+  const totalSec = Math.max(0, Math.round(ms / 1000))
+  if (totalSec < 60) return `${totalSec}s`
+  const m = Math.floor(totalSec / 60)
+  const s = totalSec % 60
+  return `${m}:${String(s).padStart(2, '0')}`
 }
 
 /** Extract human-readable validation messages from a Registry Assistant response body. */
@@ -30,7 +50,7 @@ function messagesOf(body: unknown): string[] {
   return []
 }
 
-export default function PublishPreviewDialog({ open, onClose, onRun, onPublish, onUnpublish, publishSummary }: Readonly<Props>) {
+export default function PublishPreviewDialog({ open, onClose, onRun, onPublish, onEstimate, onUnpublish, publishSummary }: Readonly<Props>) {
   const [environment, setEnvironment] = useState<Environment>('sandbox')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +62,36 @@ export default function PublishPreviewDialog({ open, onClose, onRun, onPublish, 
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [published, setPublished] = useState<PublishResult | null>(null)
+
+  // Up-front size/duration estimate + live progress while a job runs.
+  const [estimate, setEstimate] = useState<Estimate | null>(null)
+  const [progress, setProgress] = useState<PublishProgress | null>(null)
+  const [elapsedMs, setElapsedMs] = useState(0)
+  const active = loading || publishing
+
+  // Fetch the estimate when the dialog opens or the environment changes. onEstimate
+  // is read through a ref so a new closure each render doesn't retrigger the fetch.
+  const onEstimateRef = useRef(onEstimate)
+  useEffect(() => { onEstimateRef.current = onEstimate })
+  useEffect(() => {
+    if (!open) return
+    const fn = onEstimateRef.current
+    if (!fn) return
+    let cancelled = false
+    setEstimate(null)
+    void fn(environment).then((e) => { if (!cancelled) setEstimate(e) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [open, environment])
+
+  // Smooth local elapsed clock while a job is running (polls arrive every ~2s).
+  useEffect(() => {
+    if (!active) { setElapsedMs(0); return }
+    const start = Date.now()
+    const id = setInterval(() => setElapsedMs(Date.now() - start), 250)
+    return () => clearInterval(id)
+  }, [active])
+
+  const handleProgress = (p: PublishProgress) => setProgress(p)
 
   const [removing, setRemoving] = useState<'delete' | 'deprecate' | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
@@ -84,13 +134,15 @@ export default function PublishPreviewDialog({ open, onClose, onRun, onPublish, 
     setValidatedEnv(null)
     setPublished(null)
     setPublishError(null)
+    setProgress(null)
     try {
-      setResult(await onRun(environment))
+      setResult(await onRun(environment, handleProgress))
       setValidatedEnv(environment)
     } catch (e: any) {
       setError(e?.message ?? 'Preview failed')
     } finally {
       setLoading(false)
+      setProgress(null)
     }
   }
 
@@ -99,12 +151,14 @@ export default function PublishPreviewDialog({ open, onClose, onRun, onPublish, 
     setPublishing(true)
     setPublishError(null)
     setPublished(null)
+    setProgress(null)
     try {
-      setPublished(await onPublish(environment))
+      setPublished(await onPublish(environment, handleProgress))
     } catch (e: any) {
       setPublishError(e?.message ?? 'Publish failed')
     } finally {
       setPublishing(false)
+      setProgress(null)
     }
   }
 
@@ -113,6 +167,15 @@ export default function PublishPreviewDialog({ open, onClose, onRun, onPublish, 
   const canOfferPublish = Boolean(onPublish) && Boolean(result?.format.ok) && validatedEnv === environment && !published
   const publishDisabled = publishing || (environment === 'production' && !confirmProd)
   const envPublished = publishSummary?.environments.find((e) => e.environment === environment)
+
+  // Progress display: prefer the estimate carried on the job, fall back to the up-front one.
+  const estMs = progress?.estimateMs ?? estimate?.estimateMs
+  // Cap at 95% until the real result lands — the last stretch is honest uncertainty, not stall.
+  const pct = estMs && estMs > 0 ? Math.min(95, Math.round((elapsedMs / estMs) * 100)) : null
+  const activeKind = progress?.kind ?? (publishing ? 'publish' : 'preview')
+  const preflightIssues = estimate?.issues ?? []
+  const hasBlockingIssues = preflightIssues.length > 0
+  const showEstimate = !active && Boolean(estimate) && (estimate?.competencyCount ?? 0) > 0 && !hasBlockingIssues && !result && !published && !error
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -134,7 +197,7 @@ export default function PublishPreviewDialog({ open, onClose, onRun, onPublish, 
               <span className={env === 'production' ? 'font-semibold text-rose-700' : 'text-slate-700'}>{env}</span>
             </label>
           ))}
-          <Button size="sm" variant="secondary" onClick={() => void run()} disabled={loading || publishing}>
+          <Button size="sm" variant="secondary" onClick={() => void run()} disabled={loading || publishing || hasBlockingIssues}>
             {loading ? 'Running…' : 'Run dry-run'}
           </Button>
         </div>
@@ -142,6 +205,53 @@ export default function PublishPreviewDialog({ open, onClose, onRun, onPublish, 
         {environment === 'production' ? (
           <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
             Production writes to the <strong>live</strong> Credential Registry. Confirm the dry-run looks right before publishing.
+          </div>
+        ) : null}
+
+        {!active && hasBlockingIssues && !result && !published ? (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+            <div className="mb-1 font-semibold">This framework isn’t ready to publish</div>
+            <ul className="list-disc space-y-1 pl-5 text-sm">
+              {preflightIssues.map((issue) => (
+                <li key={issue.code}>
+                  {issue.message}
+                  {issue.samples && issue.samples.length ? (
+                    <span className="text-amber-700"> (e.g. {issue.samples.join(', ')}{issue.count && issue.count > issue.samples.length ? '…' : ''})</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1.5 text-xs text-amber-700">Fix these in the editor, then reopen this dialog. Caught before sending, so you don’t wait on the registry.</p>
+          </div>
+        ) : null}
+
+        {showEstimate ? (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            This framework has <strong>{estimate!.competencyCount.toLocaleString()}</strong> competenc{estimate!.competencyCount === 1 ? 'y' : 'ies'}.{' '}
+            Publishing usually takes about <strong>{formatDuration(estimate!.estimateMs)}</strong>
+            {estimate!.basis === 'default' ? ' (rough estimate — refines after a few runs)' : ''}.
+          </div>
+        ) : null}
+
+        {active ? (
+          <div className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2.5 text-sm text-violet-900">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="font-medium">
+                {activeKind === 'publish' ? 'Publishing' : 'Validating'}{progress?.status === 'queued' ? ' — queued…' : '…'}
+              </span>
+              <span className="tabular-nums text-violet-700">
+                {formatDuration(elapsedMs)}{estMs ? ` / ~${formatDuration(estMs)}` : ''}
+              </span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-violet-200">
+              <div
+                className={`h-full rounded-full bg-violet-600 transition-all duration-500 ${pct === null ? 'w-1/3 animate-pulse' : ''}`}
+                style={pct === null ? undefined : { width: `${pct}%` }}
+              />
+            </div>
+            <p className="mt-1.5 text-xs text-violet-700">
+              Large frameworks can take several minutes — you can keep this open while it finishes.
+            </p>
           </div>
         ) : null}
 

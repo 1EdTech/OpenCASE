@@ -25,6 +25,15 @@ import { useAuth } from '@/app/providers/AuthProvider'
 import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
 import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
 
+/** Progress snapshot reported while an async publish/preview job runs. */
+type PublishProgress = {
+  kind: 'preview' | 'publish'
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'interrupted'
+  elapsedMs: number
+  estimateMs?: number
+  competencyCount?: number
+}
+
 type EditorCanvasProps = {
   onBack?: () => void
   onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>) => Promise<void>
@@ -35,9 +44,11 @@ type EditorCanvasProps = {
   /** Fetch Registry competencies for canvas alignment (no library save) */
   onImportFromRegistry?: (registryUrl: string) => Promise<{ frameworkTitle: string; items: Array<{ id: string; fullStatement: string; codedNotation?: string; ctdlUri: string; ctdlCtid: string }> }>
   /** Dry-run publish the saved framework to the Credential Registry (validation only) */
-  onPreviewPublish?: (environment?: 'sandbox' | 'production') => Promise<{ request: unknown; format: { ok: boolean; status: number; body: unknown }; unmappedAssociations?: Array<{ origin: string; associationType: string; destination: string }> }>
+  onPreviewPublish?: (environment?: 'sandbox' | 'production', onProgress?: (p: PublishProgress) => void) => Promise<{ request: unknown; format: { ok: boolean; status: number; body: unknown }; unmappedAssociations?: Array<{ origin: string; associationType: string; destination: string }> }>
   /** Publish the saved framework to the Credential Registry (writes to the registry) */
-  onPublish?: (environment?: 'sandbox' | 'production') => Promise<{ ctid: string; registryEnvelopeId?: string; environment: string; resourceUrl: string; isUpdate: boolean; messages: string[] }>
+  onPublish?: (environment?: 'sandbox' | 'production', onProgress?: (p: PublishProgress) => void) => Promise<{ ctid: string; registryEnvelopeId?: string; environment: string; resourceUrl: string; isUpdate: boolean; messages: string[] }>
+  /** Size + duration estimate for the framework, shown before a (possibly long) publish. */
+  onEstimate?: (environment?: 'sandbox' | 'production') => Promise<{ competencyCount: number; estimateMs: number; basis: 'measured' | 'default'; issues?: Array<{ code: string; message: string; count?: number; samples?: string[] }> }>
   /** Remove the framework from the Credential Registry (delete or deprecate) */
   onUnpublish?: (args: { environment?: 'sandbox' | 'production'; mode: 'delete' | 'deprecate' }) => Promise<{ mode: 'delete' | 'deprecate'; environment: string; ctid: string; publishLinkCleared?: boolean; messages: string[] }>
   /** Current Credential Registry publish status for this framework. */
@@ -48,7 +59,7 @@ type EditorCanvasProps = {
   }
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onImportFromRegistry, onPreviewPublish, onPublish, onUnpublish, publishSummary }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onImportFromRegistry, onPreviewPublish, onPublish, onEstimate, onUnpublish, publishSummary }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -1360,8 +1371,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         <PublishPreviewDialog
           open={publishPreviewOpen}
           onClose={() => setPublishPreviewOpen(false)}
-          onRun={(environment) => onPreviewPublish(environment)}
-          onPublish={onPublish ? (environment) => onPublish(environment) : undefined}
+          onRun={(environment, onProgress) => onPreviewPublish(environment, onProgress)}
+          onPublish={onPublish ? (environment, onProgress) => onPublish(environment, onProgress) : undefined}
+          onEstimate={onEstimate ? (environment) => onEstimate(environment) : undefined}
           onUnpublish={onUnpublish}
           publishSummary={publishSummary}
         />

@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   # =============================================================================
   # Traefik - Reverse Proxy
@@ -100,6 +98,8 @@ services:
     environment:
       - CASE_DATA_DIR=${CASE_DATA_DIR:-/app/data}
       - PORT=8080
+      # Max request body size — CASE packages run to several MB (default 50mb).
+      - MAX_REQUEST_BODY_SIZE=${MAX_REQUEST_BODY_SIZE:-50mb}
       # Keycloak / OIDC configuration
       # External issuer URL — constructed from base variables (scheme://host:port/realms/realm)
       - OIDC_ISSUER_URL=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-:3000}/realms/${KEYCLOAK_REALM:-opencase}
@@ -133,7 +133,12 @@ services:
       - REGISTRY_ASSISTANT_PRODUCTION_BASE_URL=${REGISTRY_ASSISTANT_PRODUCTION_BASE_URL:-https://apps.credentialengine.org}
       - REGISTRY_ASSISTANT_API_KEY=${REGISTRY_ASSISTANT_API_KEY:-}
       - REGISTRY_ASSISTANT_ORG_CTID=${REGISTRY_ASSISTANT_ORG_CTID:-}
-      - REGISTRY_ASSISTANT_TIMEOUT_MS=${REGISTRY_ASSISTANT_TIMEOUT_MS:-60000}
+      # 4 min — large frameworks exceed 60s to validate/format; kept under the
+      # browser's ~5 min ceiling so OpenCASE returns a clean 504 first.
+      - REGISTRY_ASSISTANT_TIMEOUT_MS=${REGISTRY_ASSISTANT_TIMEOUT_MS:-240000}
+      # 45 min — background publish jobs run server-side (no browser waiting). Sized
+      # from live sandbox data: an 809-competency /format took ~30 min, so allow headroom.
+      - REGISTRY_ASSISTANT_JOB_TIMEOUT_MS=${REGISTRY_ASSISTANT_JOB_TIMEOUT_MS:-2700000}
     restart: on-failure
     volumes:
       - ./apps/opencase/data:/app/data

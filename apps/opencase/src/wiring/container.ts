@@ -13,6 +13,8 @@ import { PreviewPublishToRegistry } from '../application/case/endpoints/PreviewP
 import { PublishFrameworkToRegistry } from '../application/case/endpoints/PublishFrameworkToRegistry'
 import { RemoveFrameworkFromRegistry } from '../application/case/endpoints/RemoveFrameworkFromRegistry'
 import { RegistryAssistantClient } from '../infrastructure/http/RegistryAssistantClient'
+import { PublishJobRunner } from '../application/case/publish/PublishJobRunner'
+import { FilePublishJobStore } from '../infrastructure/publishjobs/FilePublishJobStore'
 import { GetCFPackage } from '../application/case/endpoints/GetCFPackage'
 import { GetCFDocument } from '../application/case/endpoints/GetCFDocument'
 import { GetAllCFDocuments } from '../application/case/endpoints/GetAllCFDocuments'
@@ -276,6 +278,21 @@ export async function buildContainer(): Promise<Container> {
   const previewPublish = new PreviewPublishToRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid, config.casePublicBaseUrl)
   const publishToRegistry = new PublishFrameworkToRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid, config.registryAssistant.environment, config.casePublicBaseUrl)
   const removeFromRegistry = new RemoveFrameworkFromRegistry(pkgRepo, registryAssistantClient, config.registryAssistant.organizationCtid, config.registryAssistant.environment, config.casePublicBaseUrl)
+
+  // Background publish jobs run server-side with no browser waiting, so they use a
+  // separate RA client with a much longer timeout. State persists under the data dir.
+  const registryAssistantJobClient = new RegistryAssistantClient({
+    environment: config.registryAssistant.environment,
+    sandboxBaseUrl: config.registryAssistant.sandboxBaseUrl,
+    productionBaseUrl: config.registryAssistant.productionBaseUrl,
+    apiKey: config.registryAssistant.apiKey,
+    timeout: config.registryAssistant.jobTimeoutMs,
+  })
+  const previewPublishJob = new PreviewPublishToRegistry(pkgRepo, registryAssistantJobClient, config.registryAssistant.organizationCtid, config.casePublicBaseUrl)
+  const publishToRegistryJob = new PublishFrameworkToRegistry(pkgRepo, registryAssistantJobClient, config.registryAssistant.organizationCtid, config.registryAssistant.environment, config.casePublicBaseUrl)
+  const publishJobStore = new FilePublishJobStore({ baseDataDir: config.caseDataDir })
+  await publishJobStore.init()
+  const publishJobRunner = new PublishJobRunner(pkgRepo, publishJobStore, previewPublishJob, publishToRegistryJob, config.registryAssistant.environment)
   
   // Initialize CASE endpoints
   const getCFPackage = new GetCFPackage(pkgRepo, store)
@@ -398,7 +415,8 @@ export async function buildContainer(): Promise<Container> {
     previewFromRegistry,
     previewPublish,
     publishToRegistry,
-    removeFromRegistry
+    removeFromRegistry,
+    publishJobRunner
   )
   const tenantsManagementController = new TenantsManagementController(
     listTenants,

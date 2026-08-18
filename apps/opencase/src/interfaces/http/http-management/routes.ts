@@ -309,6 +309,32 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
     '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/:docId/publish',
     withCaseVersion('1.1', deps.cfPackagesController.publish as unknown as RequestHandler)
   )
+  // Async publish/preview jobs — submit returns 202 + jobId; poll for status. Used
+  // for large frameworks that exceed the synchronous request ceiling.
+  app.get(
+    '/management/tenants/:tenantId/ims/case/v1p0/CFPackages/:docId/publish-estimate',
+    withCaseVersion('1.0', deps.cfPackagesController.publishEstimate as unknown as RequestHandler)
+  )
+  app.get(
+    '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/:docId/publish-estimate',
+    withCaseVersion('1.1', deps.cfPackagesController.publishEstimate as unknown as RequestHandler)
+  )
+  app.post(
+    '/management/tenants/:tenantId/ims/case/v1p0/CFPackages/:docId/publish-jobs',
+    withCaseVersion('1.0', deps.cfPackagesController.createPublishJob as unknown as RequestHandler)
+  )
+  app.post(
+    '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/:docId/publish-jobs',
+    withCaseVersion('1.1', deps.cfPackagesController.createPublishJob as unknown as RequestHandler)
+  )
+  app.get(
+    '/management/tenants/:tenantId/ims/case/v1p0/CFPackages/:docId/publish-jobs/:jobId',
+    withCaseVersion('1.0', deps.cfPackagesController.getPublishJob as unknown as RequestHandler)
+  )
+  app.get(
+    '/management/tenants/:tenantId/ims/case/v1p1/CFPackages/:docId/publish-jobs/:jobId',
+    withCaseVersion('1.1', deps.cfPackagesController.getPublishJob as unknown as RequestHandler)
+  )
   // Remove from the Credential Registry (delete or deprecate); clears the local publish link on delete
   app.post(
     '/management/tenants/:tenantId/ims/case/v1p0/CFPackages/:docId/unpublish',

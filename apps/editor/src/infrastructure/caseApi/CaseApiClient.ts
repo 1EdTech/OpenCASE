@@ -52,6 +52,54 @@ export type PublishSummary = {
   }>
 }
 
+export type PublishJobKind = 'preview' | 'publish'
+export type PublishJobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'interrupted'
+
+/** An async publish/preview job as returned by the backend. */
+export type PublishJob = {
+  id: string
+  kind: PublishJobKind
+  environment: 'sandbox' | 'production'
+  status: PublishJobStatus
+  competencyCount?: number
+  estimateMs?: number
+  createdAt?: string
+  startedAt?: string
+  finishedAt?: string
+  elapsedMs?: number
+  error?: string
+  result?: unknown
+}
+
+/** A pre-flight issue that would cause the Registry Assistant to reject the framework. */
+export type PublishValidationIssue = {
+  code: string
+  message: string
+  count?: number
+  samples?: string[]
+}
+
+/** Up-front size + duration estimate for a framework, plus pre-flight validation. */
+export type PublishEstimate = {
+  competencyCount: number
+  estimateMs: number
+  basis: 'measured' | 'default'
+  sampleCount: number
+  /** Blocking issues found before publishing (empty = passes local checks). */
+  issues: PublishValidationIssue[]
+}
+
+/** Progress snapshot passed to callers while a job runs. */
+export type PublishProgress = {
+  kind: PublishJobKind
+  status: PublishJobStatus
+  elapsedMs: number
+  estimateMs?: number
+  competencyCount?: number
+}
+
+const TERMINAL_STATUSES: PublishJobStatus[] = ['succeeded', 'failed', 'interrupted']
+
 export class CaseApiClient {
   constructor(private readonly _http: HttpClient) {}
 
@@ -175,6 +223,82 @@ export class CaseApiClient {
       isUpdate: Boolean(res?.isUpdate),
       messages: res?.messages ?? [],
     }
+  }
+
+  private publishBaseUrl(tenantId: string, docId: string, caseVersion?: 'v1p0' | 'v1p1'): string {
+    const v = caseVersion ?? 'v1p1'
+    return `/management/tenants/${encodeURIComponent(tenantId)}/ims/case/${v}/CFPackages/${encodeURIComponent(docId)}`
+  }
+
+  /** Up-front size + duration estimate, so the UI can set expectations before publishing. */
+  async getPublishEstimate(params: {
+    tenantId: string
+    docId: string
+    caseVersion?: 'v1p0' | 'v1p1'
+  }): Promise<PublishEstimate> {
+    const res = (await this._http.get(`${this.publishBaseUrl(params.tenantId, params.docId, params.caseVersion)}/publish-estimate`)) as Partial<PublishEstimate>
+    return {
+      competencyCount: res?.competencyCount ?? 0,
+      estimateMs: res?.estimateMs ?? 0,
+      basis: res?.basis === 'measured' ? 'measured' : 'default',
+      sampleCount: res?.sampleCount ?? 0,
+      issues: Array.isArray(res?.issues) ? res.issues : [],
+    }
+  }
+
+  /** Start an async preview/publish job. Returns immediately with the queued job. */
+  async createPublishJob(params: {
+    tenantId: string
+    docId: string
+    caseVersion?: 'v1p0' | 'v1p1'
+    kind: PublishJobKind
+    environment?: 'sandbox' | 'production'
+  }): Promise<PublishJob> {
+    const body = { kind: params.kind, ...(params.environment ? { environment: params.environment } : {}) }
+    return (await this._http.post(`${this.publishBaseUrl(params.tenantId, params.docId, params.caseVersion)}/publish-jobs`, body)) as PublishJob
+  }
+
+  /** Poll the status/result of a publish job. */
+  async getPublishJob(params: {
+    tenantId: string
+    docId: string
+    caseVersion?: 'v1p0' | 'v1p1'
+    jobId: string
+  }): Promise<PublishJob> {
+    return (await this._http.get(`${this.publishBaseUrl(params.tenantId, params.docId, params.caseVersion)}/publish-jobs/${encodeURIComponent(params.jobId)}`)) as PublishJob
+  }
+
+  /**
+   * Submit a publish/preview job and poll until it finishes, reporting progress
+   * along the way. Resolves with the terminal job (the caller inspects `status`).
+   * Decouples the caller from the browser's request timeout — each poll is a fast
+   * request even when the underlying registry work takes many minutes.
+   */
+  async runPublishJob(
+    params: {
+      tenantId: string
+      docId: string
+      caseVersion?: 'v1p0' | 'v1p1'
+      kind: PublishJobKind
+      environment?: 'sandbox' | 'production'
+    },
+    opts: { onProgress?: (_p: PublishProgress) => void; pollIntervalMs?: number; signal?: AbortSignal } = {},
+  ): Promise<PublishJob> {
+    const pollIntervalMs = opts.pollIntervalMs ?? 2000
+    let job = await this.createPublishJob(params)
+    const report = () => opts.onProgress?.({
+      kind: job.kind, status: job.status, elapsedMs: job.elapsedMs ?? 0, estimateMs: job.estimateMs, competencyCount: job.competencyCount,
+    })
+    report()
+
+    while (!TERMINAL_STATUSES.includes(job.status)) {
+      if (opts.signal?.aborted) return job
+      await new Promise((r) => setTimeout(r, pollIntervalMs))
+      if (opts.signal?.aborted) return job
+      job = await this.getPublishJob({ tenantId: params.tenantId, docId: params.docId, caseVersion: params.caseVersion, jobId: job.id })
+      report()
+    }
+    return job
   }
 
   /**

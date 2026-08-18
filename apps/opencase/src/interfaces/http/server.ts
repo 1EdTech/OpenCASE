@@ -18,8 +18,12 @@ export function createServer (container: Container): express.Express {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
   }))
 
-  app.use(express.json())
-  app.use(express.urlencoded({ extended: true }))
+  // CASE packages are whole-framework documents and routinely run to several MB
+  // (e.g. an 800-competency framework is ~3MB), far past body-parser's 100kb default.
+  // Env-tunable so deployments with very large frameworks can raise it further.
+  const bodyLimit = process.env.MAX_REQUEST_BODY_SIZE ?? '50mb'
+  app.use(express.json({ limit: bodyLimit }))
+  app.use(express.urlencoded({ extended: true, limit: bodyLimit }))
 
   // Service Discovery endpoints (no auth required - used for service discovery)
   app.get(

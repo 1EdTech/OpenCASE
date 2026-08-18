@@ -11,6 +11,13 @@ export type FetchHttpClientOptions = {
    * Return null to omit Authorization header.
    */
   getAccessToken?: () => Promise<string | null>
+  /**
+   * Per-request timeout in ms. Backstop only: kept above OpenCASE's own Registry
+   * Assistant timeout (default 240s) so the server returns a clean 504 first, but
+   * below the browser's ~5 min network ceiling so a hung request still surfaces a
+   * readable error instead of an opaque browser failure. Default 270000 (4.5 min).
+   */
+  timeoutMs?: number
 }
 
 export class HttpError extends Error {
@@ -40,6 +47,7 @@ async function readBody(res: Response): Promise<unknown> {
 }
 
 export function createFetchHttpClient(baseUrl: string, options: FetchHttpClientOptions = {}): HttpClient {
+  const timeoutMs = options.timeoutMs ?? 270000
   const doRequest = async (method: string, url: string, body?: unknown): Promise<unknown> => {
     const fullUrl = joinUrl(baseUrl, url)
     const token = options.getAccessToken ? await options.getAccessToken() : null
@@ -51,11 +59,28 @@ export function createFetchHttpClient(baseUrl: string, options: FetchHttpClientO
     if (token) headers.Authorization = `Bearer ${token}`
     if (body !== undefined) headers['Content-Type'] = 'application/json'
 
-    const res = await fetch(fullUrl, {
-      method,
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => { controller.abort() }, timeoutMs)
+    let res: Response
+    try {
+      res = await fetch(fullUrl, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: controller.signal,
+      })
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new HttpError(
+          `Request timed out after ${timeoutMs}ms — ${method} ${url}. Large frameworks can take several minutes; try again or contact an administrator if it persists.`,
+          504,
+          fullUrl,
+        )
+      }
+      throw err
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     const parsed = await readBody(res)
     if (!res.ok) {

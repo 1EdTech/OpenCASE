@@ -16,6 +16,10 @@ How to exercise the OpenCASE ↔ Credential Registry flows via the Registry Assi
 - **Remove** (`/unpublish`) — **delete** the registry resource (clears the local publish
   link) or **deprecate** it. See
   [Remove from the registry](#remove-from-the-registry-delete-or-deprecate).
+- **Large frameworks** — dry-run and publish also run as **async jobs** (submit →
+  poll) with an up-front size/time estimate and pre-flight validation, so
+  multi-minute registry work doesn't hit a request timeout. See
+  [Large frameworks & async publish jobs](#large-frameworks--async-publish-jobs).
 
 ## Prerequisites
 - A **sandbox** Registry Assistant API key and your **publishing organization's CTID**
@@ -32,9 +36,21 @@ REGISTRY_ASSISTANT_ORG_CTID=ce-<your org ctid>
 ```
 
 ## 2. Rebuild the backend
-The container runs the compiled `dist`, so the new code needs a build:
+The container runs the compiled `dist`, so the new code needs a build. Plain
+`docker-compose up --build opencase` can leave the **old** container running —
+force a fresh one (and rebuild the editor so the UI changes are live too):
 ```bash
-docker-compose up --build opencase
+docker-compose up -d --build --force-recreate opencase editor
+```
+
+### Optional tuning (all have sensible defaults)
+```
+# Synchronous RA calls (kept under the browser's ~5-min ceiling → clean 504)
+REGISTRY_ASSISTANT_TIMEOUT_MS=240000        # 4 min
+# Background publish JOBS (no browser waiting; sized for large frameworks)
+REGISTRY_ASSISTANT_JOB_TIMEOUT_MS=2700000   # 45 min
+# Max request body — CASE packages run to several MB
+MAX_REQUEST_BODY_SIZE=50mb
 ```
 
 ---
@@ -242,6 +258,67 @@ now fully unpublished locally. On failure: `400 { "error": "unpublish_failed", "
 
 ---
 
+## Large frameworks & async publish jobs
+
+Both dry-run and publish can run **asynchronously**: the editor submits a job and
+polls for status instead of holding one long HTTP request open. This exists because
+the Registry Assistant processes an entire framework in a single request, and that
+request scales with size — so large frameworks take minutes, well past what a
+synchronous browser request can survive.
+
+### Endpoints
+```
+GET  /management/tenants/:tenantId/ims/case/:v/CFPackages/:docId/publish-estimate
+POST /management/tenants/:tenantId/ims/case/:v/CFPackages/:docId/publish-jobs      # { kind: 'preview'|'publish', environment? } → 202 + job
+GET  /management/tenants/:tenantId/ims/case/:v/CFPackages/:docId/publish-jobs/:jobId
+```
+- **`publish-estimate`** → `{ competencyCount, estimateMs, basis, sampleCount, issues[] }`.
+  `basis` is `measured` once enough real runs exist, else a calibrated `default`.
+- **`publish-jobs`** (POST) → `202` with a job whose `status` starts `queued`.
+- **`publish-jobs/:jobId`** (GET) → the job; `status` is
+  `queued → running → succeeded | failed`, plus `interrupted` if the process
+  restarted mid-run (re-submit). While `running`, `elapsedMs` ticks live; on
+  `succeeded`, `result` holds the dry-run/publish payload.
+
+The editor's **Publish to registry…** dialog uses these automatically: it shows the
+competency count + estimated duration up front, a live elapsed/progress bar while the
+job runs, and any pre-flight issues.
+
+### Pre-flight validation
+Before a job starts, OpenCASE checks the fields the Registry Assistant *requires* —
+a framework **Description** and a **statement** on every competency — and **fails
+fast** with a clear message instead of spending minutes on a round-trip the registry
+would only reject. The dialog surfaces these and disables the buttons until fixed.
+(This is a cheap subset of RA's validation, not a replacement — a passing framework
+can still surface further `Messages` from `/format`.)
+
+### Timeouts, and why they're layered
+- **Editor fetch** has a ~4.5-min backstop (below the browser's ~5-min ceiling); the
+  async poll requests are each fast, so this only guards a stuck synchronous call.
+- **Synchronous** OpenCASE→RA calls use `REGISTRY_ASSISTANT_TIMEOUT_MS` (4 min) and
+  return a clean **504** on timeout.
+- **Background jobs** use `REGISTRY_ASSISTANT_JOB_TIMEOUT_MS` (45 min).
+- Node's built-in `fetch` (undici) has a hidden **300s `headersTimeout`** default that
+  would otherwise kill long requests; OpenCASE disables it with a custom dispatcher so
+  the timeouts above are the real ceiling.
+
+### Measured throughput (live sandbox, 2026)
+Calibrated against an 809-competency framework via dry-run `/format`:
+
+| Competencies | `/format` time |
+|---|---|
+| 25 | ~84s |
+| 50 | ~117s |
+| 100 | ~234s |
+| 150 | ~342s |
+| 809 | **~1789s (~30 min)** — completed, `ok:true` |
+
+≈ **25s fixed + ~2.2s per competency**. Practical guidance:
+- Frameworks up to ~1,200 competencies complete within the 45-min job window.
+- Beyond that, raise `REGISTRY_ASSISTANT_JOB_TIMEOUT_MS`, or (better) batch — but
+  note RA's competency-framework endpoint publishes the whole graph per request, so
+  true batching needs a Credential Engine bulk/incremental ingest path.
+
 ## Common responses
 - **503 / 400 "Publishing not configured"** — `REGISTRY_ASSISTANT_API_KEY` or
   `REGISTRY_ASSISTANT_ORG_CTID` is unset; recheck `.env` and that you rebuilt.
@@ -253,3 +330,14 @@ now fully unpublished locally. On failure: `400 { "error": "unpublish_failed", "
 - **`400 unpublish_failed`** — delete/deprecate was rejected. A common case is
   *"Framework is not published to \<env\>"* when there's no publish link for that
   environment; the `message` otherwise carries the Registry Assistant's reason.
+- **`413 PayloadTooLargeError`** — a multi-MB CASE package exceeded the request body
+  limit. Fixed by the 50 MB default; raise `MAX_REQUEST_BODY_SIZE` for anything larger.
+- **`504 registry_assistant_timeout`** — a *synchronous* RA call exceeded
+  `REGISTRY_ASSISTANT_TIMEOUT_MS`. Publish large frameworks via the async job instead
+  (the editor does this automatically).
+- **`400 "This framework isn't ready to publish…"`** — pre-flight validation caught a
+  missing framework description or competency statements before submitting; the
+  message lists what to fix.
+- **Job `status: failed`** — the background job ran but RA rejected it (or errored);
+  `error` carries the reason (undici causes like `UND_ERR_HEADERS_TIMEOUT` are surfaced).
+  **`interrupted`** means OpenCASE restarted mid-run — just re-submit.

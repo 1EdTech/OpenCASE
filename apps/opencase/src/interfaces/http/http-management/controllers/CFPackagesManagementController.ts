@@ -7,7 +7,9 @@ import { type PreviewRegistryFramework } from '../../../../application/case/endp
 import { type PreviewPublishToRegistry } from '../../../../application/case/endpoints/PreviewPublishToRegistry'
 import { type PublishFrameworkToRegistry } from '../../../../application/case/endpoints/PublishFrameworkToRegistry'
 import { type RemoveFrameworkFromRegistry } from '../../../../application/case/endpoints/RemoveFrameworkFromRegistry'
-import { type RegistryEnvironment } from '../../../../infrastructure/http/RegistryAssistantClient'
+import { type RegistryEnvironment, RegistryAssistantTimeoutError } from '../../../../infrastructure/http/RegistryAssistantClient'
+import { type PublishJobRunner } from '../../../../application/case/publish/PublishJobRunner'
+import { type PublishJobKind } from '../../../../application/case/publish/PublishJob'
 import { type DeleteCFDocument } from '../../../../application/case/endpoints/DeleteCFDocument'
 import { type RestoreFramework } from '../../../../application/case/endpoints/RestoreFramework'
 import { type ListFrameworks } from '../../../../application/case/endpoints/ListFrameworks'
@@ -25,7 +27,8 @@ export class CFPackagesManagementController {
     private readonly previewRegistryUseCase?: PreviewRegistryFramework,
     private readonly previewPublishUseCase?: PreviewPublishToRegistry,
     private readonly publishUseCase?: PublishFrameworkToRegistry,
-    private readonly removeFromRegistryUseCase?: RemoveFrameworkFromRegistry
+    private readonly removeFromRegistryUseCase?: RemoveFrameworkFromRegistry,
+    private readonly publishJobRunner?: PublishJobRunner
   ) {}
 
   list: RequestHandler<{ tenantId: string }> = async (req: Request, res: Response) => {
@@ -183,6 +186,12 @@ export class CFPackagesManagementController {
       })
       return res.status(200).json(result)
     } catch (error: any) {
+      if (error instanceof RegistryAssistantTimeoutError) {
+        return res.status(504).json({
+          error: 'registry_assistant_timeout',
+          message: `${error.message}. Large frameworks can exceed this; raise REGISTRY_ASSISTANT_TIMEOUT_MS and retry.`,
+        })
+      }
       return res.status(400).json({ error: 'preview_publish_failed', message: error.message })
     }
   }
@@ -205,7 +214,81 @@ export class CFPackagesManagementController {
       })
       return res.status(200).json(result)
     } catch (error: any) {
+      if (error instanceof RegistryAssistantTimeoutError) {
+        return res.status(504).json({
+          error: 'registry_assistant_timeout',
+          message: `${error.message}. Large frameworks can exceed this; raise REGISTRY_ASSISTANT_TIMEOUT_MS and retry.`,
+        })
+      }
       return res.status(400).json({ error: 'publish_failed', message: error.message })
+    }
+  }
+
+  /**
+   * Up-front size + duration estimate for a framework, so the UI can set
+   * expectations before a (possibly multi-minute) publish is started.
+   */
+  publishEstimate: RequestHandler<{ tenantId: string, docId: string }> = async (req: Request, res: Response) => {
+    if (!this.publishJobRunner) {
+      return res.status(503).json({ error: 'Publishing not available' })
+    }
+    const tenantId = ((req as any).tenantId ?? getParam(req, 'tenantId')) as any
+    const docId = getParam(req, 'docId') as any
+    const caseVersion = getCaseVersion(req, { default: '1.1' })!
+    if (!docId) return res.status(400).json({ error: 'Missing docId' })
+
+    try {
+      const { competencyCount, estimate, issues } = await this.publishJobRunner.estimate({ tenantId, caseVersion, docId })
+      return res.status(200).json({ competencyCount, ...estimate, issues })
+    } catch (error: any) {
+      return res.status(400).json({ error: 'publish_estimate_failed', message: error.message })
+    }
+  }
+
+  /**
+   * Start an async publish/preview job. Returns 202 + the job immediately; the
+   * Registry Assistant call runs in the background. Poll `getPublishJob` for status.
+   */
+  createPublishJob: RequestHandler<{ tenantId: string, docId: string }> = async (req: Request, res: Response) => {
+    if (!this.publishJobRunner) {
+      return res.status(503).json({ error: 'Publishing not available' })
+    }
+    const tenantId = ((req as any).tenantId ?? getParam(req, 'tenantId')) as any
+    const docId = getParam(req, 'docId') as any
+    const caseVersion = getCaseVersion(req, { default: '1.1' })!
+    if (!docId) return res.status(400).json({ error: 'Missing docId' })
+
+    const kindRaw = (req.body?.kind ?? 'preview') as string
+    if (kindRaw !== 'preview' && kindRaw !== 'publish') {
+      return res.status(400).json({ error: 'invalid_kind', message: "kind must be 'preview' or 'publish'" })
+    }
+    const envRaw = (req.query.environment ?? req.body?.environment) as string | undefined
+    const environment = envRaw === 'production' ? 'production' : envRaw === 'sandbox' ? 'sandbox' : undefined
+
+    try {
+      const job = await this.publishJobRunner.submit({
+        tenantId, caseVersion, docId, kind: kindRaw as PublishJobKind, environment: environment as RegistryEnvironment | undefined,
+      })
+      return res.status(202).json(job)
+    } catch (error: any) {
+      return res.status(400).json({ error: 'publish_job_failed', message: error.message })
+    }
+  }
+
+  /** Poll the status/result of a publish job. */
+  getPublishJob: RequestHandler<{ tenantId: string, docId: string, jobId: string }> = async (req: Request, res: Response) => {
+    if (!this.publishJobRunner) {
+      return res.status(503).json({ error: 'Publishing not available' })
+    }
+    const jobId = getParam(req, 'jobId') as any
+    if (!jobId) return res.status(400).json({ error: 'Missing jobId' })
+
+    try {
+      const job = await this.publishJobRunner.get(jobId)
+      if (!job) return res.status(404).json({ error: 'job_not_found' })
+      return res.status(200).json(job)
+    } catch (error: any) {
+      return res.status(400).json({ error: 'publish_job_lookup_failed', message: error.message })
     }
   }
 

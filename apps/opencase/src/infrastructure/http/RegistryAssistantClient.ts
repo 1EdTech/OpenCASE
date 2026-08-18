@@ -1,3 +1,4 @@
+import { Agent } from 'undici'
 import { logger } from '../logging/Logger'
 
 export type RegistryEnvironment = 'sandbox' | 'production'
@@ -18,6 +19,18 @@ export interface RegistryAssistantResult {
 }
 
 /**
+ * Thrown when a Registry Assistant call is aborted by the client-side timeout.
+ * The registry did not reject the request — we stopped waiting. Callers can map
+ * this to a 504 (Gateway Timeout) rather than a generic client error.
+ */
+export class RegistryAssistantTimeoutError extends Error {
+  constructor (public readonly timeoutMs: number) {
+    super(`Registry Assistant request timed out after ${timeoutMs}ms`)
+    this.name = 'RegistryAssistantTimeoutError'
+  }
+}
+
+/**
  * Thin client for the Credential Engine **Registry Assistant** competency-framework
  * endpoints. `format` is a dry-run that validates + returns the CTDL the registry
  * would store (publishes nothing); `publish` writes to the registry.
@@ -34,13 +47,21 @@ export class RegistryAssistantClient {
   private readonly productionBaseUrl: string
   private readonly apiKey?: string
   private readonly timeout: number
+  /**
+   * Custom fetch dispatcher. Node's built-in fetch (undici) defaults to a 300s
+   * `headersTimeout`/`bodyTimeout`, which would kill a large-framework request long
+   * before our own timeout — so we disable both here and let `timeout` +
+   * AbortController be the single, configurable ceiling.
+   */
+  private readonly dispatcher: Agent
 
   constructor (config: RegistryAssistantConfig = {}) {
     this.environment = config.environment ?? 'sandbox'
     this.sandboxBaseUrl = (config.sandboxBaseUrl ?? RegistryAssistantClient.DEFAULT_SANDBOX).replace(/\/+$/, '')
     this.productionBaseUrl = (config.productionBaseUrl ?? RegistryAssistantClient.DEFAULT_PRODUCTION).replace(/\/+$/, '')
     this.apiKey = config.apiKey
-    this.timeout = config.timeout ?? 60000
+    this.timeout = config.timeout ?? 240000
+    this.dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 })
   }
 
   hasApiKey (): boolean { return Boolean(this.apiKey) }
@@ -88,7 +109,9 @@ export class RegistryAssistantClient {
         },
         body: JSON.stringify(request),
         signal: controller.signal,
-      })
+        // `dispatcher` is an undici extension not present in the DOM fetch types.
+        dispatcher: this.dispatcher,
+      } as RequestInit & { dispatcher: Agent })
       clearTimeout(timeoutId)
 
       const text = await response.text()
@@ -104,9 +127,18 @@ export class RegistryAssistantClient {
     } catch (error: any) {
       clearTimeout(timeoutId)
       const timedOut = error?.name === 'AbortError'
-      const message = timedOut ? `Registry Assistant request timed out after ${this.timeout}ms` : (error?.message ?? String(error))
-      logger.error({ url, environment: env, action, timedOut, error: message }, 'Registry Assistant request failed')
-      throw timedOut ? new Error(message) : error
+      // fetch() surfaces network faults as a generic "fetch failed"; the real reason
+      // (e.g. the server dropping the connection) lives on error.cause. Surface it so
+      // logs and the job's error message explain what actually happened.
+      const cause = error?.cause
+      const causeCode = cause?.code ?? cause?.name
+      const causeText = cause ? ` (${[causeCode, cause?.message].filter(Boolean).join(': ')})` : ''
+      const message = timedOut
+        ? `Registry Assistant request timed out after ${this.timeout}ms`
+        : `${error?.message ?? String(error)}${causeText}`
+      logger.error({ url, environment: env, action, timedOut, error: message, causeCode }, 'Registry Assistant request failed')
+      if (timedOut) throw new RegistryAssistantTimeoutError(this.timeout)
+      throw new Error(message, error?.cause ? { cause: error.cause } : undefined)
     }
   }
 }
