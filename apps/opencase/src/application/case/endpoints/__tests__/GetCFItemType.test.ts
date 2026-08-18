@@ -14,7 +14,8 @@ describe('GetCFItemType', () => {
     } as any
 
     mockStore = {
-      getDefinitionById: jest.fn()
+      getDefinitionById: jest.fn(),
+      getTenantDefinitions: jest.fn()
     } as any
 
     getCFItemType = new GetCFItemType(mockRepository, mockStore)
@@ -34,7 +35,7 @@ describe('GetCFItemType', () => {
       expect(mockStore.getDefinitionById).toHaveBeenCalledWith(tenantId, caseVersion, 'CFItemTypes', itemTypeId)
     })
 
-    it('should return CFItemType when found', async () => {
+    it('should return a CFItemTypeSet containing just the item type when it has no children', async () => {
       const itemType = {
         identifier: itemTypeId,
         title: 'Test Item Type',
@@ -49,11 +50,28 @@ describe('GetCFItemType', () => {
         value: itemType,
         lastChangeDateTime: '2024-01-01T00:00:00.000Z'
       } as any)
+      mockStore.getTenantDefinitions.mockReturnValue({ CFItemTypes: [itemType] } as any)
 
       const result = await getCFItemType.execute({ tenantId, caseVersion, sourcedId: itemTypeId })
 
-      expect(result).toEqual(itemType)
+      expect(result).toEqual({ CFItemTypes: [itemType] })
       expect(mockStore.getDefinitionById).toHaveBeenCalledWith(tenantId, caseVersion, 'CFItemTypes', itemTypeId)
+    })
+
+    it('should include children determined by hierarchyCode, sorted', async () => {
+      const itemType = { identifier: itemTypeId, title: 'Parent', hierarchyCode: '01' }
+      const childB = { identifier: 'child-b', title: 'Child B', hierarchyCode: '01.02' }
+      const childA = { identifier: 'child-a', title: 'Child A', hierarchyCode: '01.01' }
+      const unrelated = { identifier: 'other', title: 'Unrelated', hierarchyCode: '02' }
+
+      mockStore.getDefinitionById.mockReturnValue({ docSourcedId: 'doc-123', value: itemType } as any)
+      mockStore.getTenantDefinitions.mockReturnValue({
+        CFItemTypes: [itemType, childB, childA, unrelated]
+      } as any)
+
+      const result = await getCFItemType.execute({ tenantId, caseVersion, sourcedId: itemTypeId })
+
+      expect(result).toEqual({ CFItemTypes: [itemType, childA, childB] })
     })
   })
 })
