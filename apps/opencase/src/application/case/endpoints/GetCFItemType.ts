@@ -18,7 +18,18 @@ export class GetCFItemType {
   async execute (query: GetCFItemTypeQuery) {
     const entry = this.store.getDefinitionById(query.tenantId, query.caseVersion, 'CFItemTypes', query.sourcedId)
     if (!entry) return null
-    return entry.value
+
+    // Per spec, the response is the CFItemType plus the set of children as
+    // determined by their place in the 'hierarchyCode' of the CFItemType.
+    const hierarchyCode = entry.value?.hierarchyCode as string | undefined
+    const allItemTypes = this.store.getTenantDefinitions(query.tenantId, query.caseVersion).CFItemTypes
+    const children = hierarchyCode
+      ? allItemTypes
+        .filter((t: any) => t.identifier !== entry.value.identifier && typeof t.hierarchyCode === 'string' && t.hierarchyCode.startsWith(`${hierarchyCode}.`))
+        .sort((a: any, b: any) => a.hierarchyCode.localeCompare(b.hierarchyCode))
+      : []
+
+    return { CFItemTypes: [entry.value, ...children] }
   }
 }
 
