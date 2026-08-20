@@ -60,6 +60,68 @@ describe('GetCFDocument', () => {
         })
       }))
     })
+
+    it('should include caseVersion for a CASE 1.1 document', async () => {
+      const document = CFDocument.create({
+        tenantId,
+        caseVersion: '1.1',
+        sourcedId: docId,
+        uri: `/ims/case/v1p1/CFDocuments/${docId}`,
+        creator: 'Test Creator',
+        title: 'Test Document',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      })
+
+      const pkg = new CFPackage({ document, items: [], associations: [], rubrics: [] })
+      mockRepository.load.mockResolvedValue(pkg)
+
+      const result = await getCFDocument.execute({ tenantId, caseVersion: '1.1', sourcedId: docId })
+
+      expect(result.caseVersion).toBe('1.1')
+    })
+
+    it('should not include caseVersion for a CASE 1.0 document', async () => {
+      const document = CFDocument.create({
+        tenantId,
+        caseVersion: '1.0',
+        sourcedId: docId,
+        uri: `/ims/case/v1p0/CFDocuments/${docId}`,
+        creator: 'Test Creator',
+        title: 'Test Document',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      })
+
+      const pkg = new CFPackage({ document, items: [], associations: [], rubrics: [] })
+      mockRepository.load.mockResolvedValue(pkg)
+
+      const result = await getCFDocument.execute({ tenantId, caseVersion: '1.0', sourcedId: docId })
+
+      expect(result.caseVersion).toBeUndefined()
+    })
+
+    it('should not include caseVersion when downconverting a stored 1.1 document to 1.0', async () => {
+      const document = CFDocument.create({
+        tenantId,
+        caseVersion: '1.1',
+        sourcedId: docId,
+        uri: `/ims/case/v1p1/CFDocuments/${docId}`,
+        creator: 'Test Creator',
+        title: 'Test Document',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      })
+
+      const pkg = new CFPackage({ document, items: [], associations: [], rubrics: [] })
+      mockRepository.load.mockResolvedValue(pkg)
+
+      const result = await getCFDocument.execute({
+        tenantId,
+        caseVersion: '1.0',
+        loadVersion: '1.1',
+        sourcedId: docId
+      })
+
+      expect(result.caseVersion).toBeUndefined()
+    })
   })
 })
 

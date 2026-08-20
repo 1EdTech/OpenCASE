@@ -130,7 +130,6 @@ describe('CFDocument', () => {
       expect(json.title).toBe('Test Document');
       expect(json.lastChangeDateTime).toBe('2024-01-01T12:30:45.000Z');
       expect(json.tenantId).toBeUndefined();
-      expect(json.caseVersion).toBeUndefined();
       expect(json.sourcedId).toBeUndefined();
     });
 
@@ -165,6 +164,98 @@ describe('CFDocument', () => {
       expect(json.adoptionStatus).toBe('adopted');
       expect(json.notes).toBe('Test notes');
       expect(json.extensions).toEqual({ custom: { key: 'value' } });
+    });
+
+    it('should include caseVersion when the document is CASE 1.1', () => {
+      const props = {
+        tenantId,
+        caseVersion: '1.1' as CaseVersion,
+        sourcedId: 'doc-123',
+        uri: '/ims/case/v1p1/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      };
+
+      const doc = CFDocument.create(props);
+      const json = doc.toJSON();
+
+      expect(json.caseVersion).toBe('1.1');
+    });
+
+    it('should not include caseVersion when the document is CASE 1.0', () => {
+      const props = {
+        tenantId,
+        caseVersion: '1.0' as CaseVersion,
+        sourcedId: 'doc-123',
+        uri: '/ims/case/v1p0/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      };
+
+      const doc = CFDocument.create(props);
+      const json = doc.toJSON();
+
+      expect(json.caseVersion).toBeUndefined();
+    });
+
+    it('should honor serializeAs override when downconverting a 1.1 document to 1.0', () => {
+      const props = {
+        tenantId,
+        caseVersion: '1.1' as CaseVersion,
+        sourcedId: 'doc-123',
+        uri: '/ims/case/v1p1/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        frameworkType: 'Competency',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      };
+
+      const doc = CFDocument.create(props);
+      const json = doc.toJSON('1.0');
+
+      expect(json.caseVersion).toBeUndefined();
+      expect(json.frameworkType).toBeUndefined();
+    });
+
+    it('should honor serializeAs override when serving a 1.0 document via v1p1', () => {
+      const props = {
+        tenantId,
+        caseVersion: '1.0' as CaseVersion,
+        sourcedId: 'doc-123',
+        uri: '/ims/case/v1p0/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      };
+
+      const doc = CFDocument.create(props);
+      const json = doc.toJSON('1.1');
+
+      expect(json.caseVersion).toBe('1.1');
+    });
+
+    it('should strip 1.1-only fields (frameworkType, subjectURI, extensions) for CASE 1.0', () => {
+      const props = {
+        tenantId,
+        caseVersion: '1.1' as CaseVersion,
+        sourcedId: 'doc-123',
+        uri: '/ims/case/v1p1/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        frameworkType: 'Competency',
+        subjectURI: [{ identifier: 'subj-1', uri: '/ims/case/v1p1/CFItems/subj-1', title: 'Subject' }],
+        extensions: { custom: { key: 'value' } },
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      };
+
+      const doc = CFDocument.create(props);
+      const json = doc.toJSON('1.0');
+
+      expect(json.frameworkType).toBeUndefined();
+      expect(json.subjectURI).toBeUndefined();
+      expect(json.extensions).toBeUndefined();
     });
   });
 });

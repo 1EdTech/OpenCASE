@@ -170,13 +170,15 @@ export class CFDocument {
       };
     }
 
-    // CASE 1.0 strictness: do not emit CASE 1.1-only fields
-    if (effectiveVersion === '1.0') {
+    // CASE 1.1: include caseVersion (spec best practice). CASE 1.0: strip 1.1-only fields.
+    if (effectiveVersion === '1.1') {
+      result.caseVersion = effectiveVersion
+    } else {
       delete result.frameworkType
       delete result.subjectURI
       delete result.extensions
     }
-    
+
     return result;
   }
 }
