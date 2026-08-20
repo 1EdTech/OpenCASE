@@ -312,12 +312,10 @@ export default memo(function NodePropertiesPanel({
                       <input id="node-fw-end-date" type="date" className={INPUT_CLS} value={cfDocument?.statusEndDate ?? ''} onChange={(e) => updateDocument({ statusEndDate: e.target.value || undefined })} />
                     </div>
                   </div>
-                  {cfDocument?.version ? (
-                    <div>
-                      <div className="text-sm font-medium text-slate-700">Version</div>
-                      <div className="mt-1 text-base text-slate-600">{cfDocument.version}</div>
-                    </div>
-                  ) : null}
+                  <div>
+                    <label className={LABEL_CLS} htmlFor="node-fw-version">Version</label>
+                    <input id="node-fw-version" className={INPUT_CLS} value={cfDocument?.version ?? ''} onChange={(e) => updateDocument({ version: e.target.value || undefined })} placeholder="e.g., 1.0" />
+                  </div>
                 </div>
               ) : (
                 /* ── Item fields — single column ── */

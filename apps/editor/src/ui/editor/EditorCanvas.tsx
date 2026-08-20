@@ -159,7 +159,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       const ctx = saveCtxRef.current
       const { framework, layout } = fromEditorGraph({ graph: { nodes: n, edges: e } })
       const cfPackage = frameworkToCfPackage({
-        framework, layout, incrementVersion: false,
+        framework, layout,
         caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
         cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
         cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
@@ -170,13 +170,13 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     }
   }, [isPublishedToOpenCase, onFetchCfPackage])
 
-  // Save: Generate CFPackage with version increment and POST to server
+  // Save: Generate CFPackage and POST to server
   const handleSave = useCallback(async () => {
     const { nodes: n, edges: e } = graphRef.current
     const ctx = saveCtxRef.current
     const { framework, layout } = fromEditorGraph({ graph: { nodes: n, edges: e } })
     const cfPackage = frameworkToCfPackage({
-      framework, layout, incrementVersion: true,
+      framework, layout,
       caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
       cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
       cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
