@@ -8,9 +8,6 @@ const nowIso = () => new Date().toISOString()
 /** OpenCASE extension namespace for editor-specific data */
 const OPENCASE_EXT_KEY = 'ext:opencase'
 
-/** Default version format: major.minor.build */
-const DEFAULT_VERSION = '1.0.0'
-
 /** UUID v4 pattern */
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -82,30 +79,6 @@ function makePackageUri(uuid: string): string {
   return `/ims/case/v1p1/CFPackages/${uuid}`
 }
 
-/**
- * Increment the build number of a version string (format: major.minor.build).
- * If the version doesn't match the expected format, returns the default version.
- */
-function incrementVersion(currentVersion?: string): string {
-  if (!currentVersion) return DEFAULT_VERSION
-  
-  const parts = currentVersion.split('.')
-  if (parts.length !== 3) {
-    // If current version exists but doesn't match format, try to preserve major.minor
-    if (parts.length === 2) {
-      return `${parts[0]}.${parts[1]}.0`
-    }
-    return DEFAULT_VERSION
-  }
-  
-  const build = Number.parseInt(parts[2], 10)
-  if (Number.isNaN(build)) {
-    return `${parts[0]}.${parts[1]}.0`
-  }
-  
-  return `${parts[0]}.${parts[1]}.${build + 1}`
-}
-
 type OpencaseExtension = {
   layout?: NodeLayout
   notes?: string
@@ -148,16 +121,11 @@ function frameworkToCfDocument(
   framework: Framework,
   caseVersion: CaseVersion,
   layout?: NodeLayout,
-  options?: { incrementVersion?: boolean; edgeType?: string }
+  options?: { edgeType?: string }
 ): CFDocument {
   const meta = framework.metadata
   const fwId = String(framework.id)
   const effectiveVersion = caseVersion === 'unknown' ? '1.1' : caseVersion
-  
-  // Handle version: either use current, increment, or set default
-  const documentVersion = options?.incrementVersion 
-    ? incrementVersion(meta.version)
-    : (meta.version ?? DEFAULT_VERSION)
 
   const docTitle = meta.title ?? 'Untitled Framework'
 
@@ -171,7 +139,7 @@ function frameworkToCfDocument(
     publisher: meta.publisher,
     notes: meta.notes,
     language: meta.language,
-    version: documentVersion,
+    version: meta.version,
     adoptionStatus: meta.adoptionStatus,
     frameworkType: meta.frameworkType,
     officialSourceURL: meta.officialSourceURL,
@@ -349,13 +317,11 @@ function associationToCfAssociation(
  * @param framework - The domain Framework (source of truth)
  * @param caseVersion - Target CASE version for serialization ('1.0' or '1.1')
  * @param layout - Optional layout state to store in extensions
- * @param incrementVersion - If true, increment the build number of the version (for saves)
  */
 export function frameworkToCfPackage(params: {
   framework: Framework
   caseVersion: CaseVersion
   layout?: LayoutState
-  incrementVersion?: boolean
   /** Edge rendering style to persist with this framework */
   edgeType?: string
   /** CFItemType definitions to include in CFDefinitions (from editor state) */
@@ -369,12 +335,12 @@ export function frameworkToCfPackage(params: {
   /** CFLicense definitions to include in CFDefinitions (from editor state) */
   cfLicenses?: CFLicense[]
 }): CFPackage {
-  const { framework, caseVersion, layout, incrementVersion, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses } = params
+  const { framework, caseVersion, layout, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses } = params
   const fwId = String(framework.id)
 
   // Build CFDocument
   const documentLayout = layout?.byNodeId?.[fwId]
-  const document = frameworkToCfDocument(framework, caseVersion, documentLayout, { incrementVersion, edgeType })
+  const document = frameworkToCfDocument(framework, caseVersion, documentLayout, { edgeType })
 
   // Build CFItems
   const itemIds = Array.from(framework.items.keys()).map(String)
@@ -783,5 +749,4 @@ export type FrameworkExportParams = {
   framework: Framework
   caseVersion: CaseVersion
   layout?: LayoutState
-  incrementVersion?: boolean
 }
