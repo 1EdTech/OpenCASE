@@ -100,6 +100,53 @@ describe('CFAssociation', () => {
       expect(assoc.toJSON().associationType).toBe('isChildOf');
       expect(assoc.toJSON().sequenceNumber).toBe(1);
     });
+
+    it('should rewrite originNodeURI/destinationNodeURI to the local host on import, even when the source supplied absolute foreign-host URLs (POR-730)', () => {
+      const raw = {
+        sourcedId: 'assoc-123',
+        uri: 'https://standards.example.org/ims/case/v1p0/CFAssociations/assoc-123',
+        associationType: 'isChildOf',
+        originNodeURI: {
+          title: 'Item 1',
+          identifier: 'item-1',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFItems/item-1'
+        },
+        destinationNodeURI: {
+          title: 'Item 2',
+          identifier: 'item-2',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFItems/item-2'
+        }
+      };
+
+      const assoc = CFAssociation.fromRaw(tenantId, caseVersion, raw);
+      const json = assoc.toJSON();
+
+      expect(json.uri).toBe('/ims/case/v1p1/CFAssociations/assoc-123');
+      expect(json.originNodeURI.uri).toBe('/ims/case/v1p1/CFItems/item-1');
+      expect(json.destinationNodeURI.uri).toBe('/ims/case/v1p1/CFItems/item-2');
+      // identifiers are preserved from the source
+      expect(json.originNodeURI.identifier).toBe('item-1');
+      expect(json.destinationNodeURI.identifier).toBe('item-2');
+    });
+
+    it('should rewrite CFAssociationGroupingURI to the local host on import', () => {
+      const raw = {
+        sourcedId: 'assoc-123',
+        originNode: 'item-1',
+        destinationNode: 'item-2',
+        associationType: 'isChildOf',
+        CFAssociationGroupingURI: {
+          title: 'Grouping',
+          identifier: 'c0c0c0c0-0000-4000-a000-000000000009',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFAssociationGroupings/c0c0c0c0-0000-4000-a000-000000000009'
+        }
+      };
+
+      const assoc = CFAssociation.fromRaw(tenantId, caseVersion, raw);
+      const json = assoc.toJSON();
+
+      expect(json.CFAssociationGroupingURI.uri).toBe('/ims/case/v1p1/CFAssociationGroupings/c0c0c0c0-0000-4000-a000-000000000009');
+    });
   });
 
   describe('toJSON', () => {

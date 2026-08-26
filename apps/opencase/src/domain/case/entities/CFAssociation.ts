@@ -45,45 +45,43 @@ export class CFAssociation {
       uri = this.generateURI(tenantId, caseVersion, identifier)
     }
     
-    // Transform originNodeURI - extract identifier from URN if present
+    // originNodeURI/destinationNodeURI always reference a CFItem (or CFDocument)
+    // within the SAME package being imported, so — like CFItem.CFDocumentURI —
+    // their uri is always regenerated to point at the local host, regardless of
+    // what URI shape (URN, absolute foreign-host URL, or relative path) the
+    // source supplied. Only the identifier is trusted from the source data.
     let originId = raw.originNodeURI?.identifier ?? raw.originNode ?? 'unknown'
-    let originUri = raw.originNodeURI?.uri
-    if (originUri && UrnCaseUriHelper.isUrnCaseUri(originUri)) {
-      const parsed = UrnCaseUriHelper.parseUrnCaseUri(originUri)
+    const originUriFromSource = raw.originNodeURI?.uri
+    if (originUriFromSource && UrnCaseUriHelper.isUrnCaseUri(originUriFromSource)) {
+      const parsed = UrnCaseUriHelper.parseUrnCaseUri(originUriFromSource)
       if (parsed) {
         originId = parsed.identifier || originId
-        originUri = UrnCaseUriHelper.urnCaseToRelativePath(originUri, caseVersion)
       }
-    } else {
-      originUri = originUri || this.generateItemURI(tenantId, caseVersion, originId)
     }
     const originNodeURI = {
       title: raw.originNodeURI?.title ?? String(originId),
       identifier: originId,
-      uri: originUri
+      uri: this.generateItemURI(tenantId, caseVersion, originId)
     }
-    
-    // Transform destinationNodeURI - extract identifier from URN if present
+
     let destinationId = raw.destinationNodeURI?.identifier ?? raw.destinationNode ?? 'unknown'
-    let destinationUri = raw.destinationNodeURI?.uri
-    if (destinationUri && UrnCaseUriHelper.isUrnCaseUri(destinationUri)) {
-      const parsed = UrnCaseUriHelper.parseUrnCaseUri(destinationUri)
+    const destinationUriFromSource = raw.destinationNodeURI?.uri
+    if (destinationUriFromSource && UrnCaseUriHelper.isUrnCaseUri(destinationUriFromSource)) {
+      const parsed = UrnCaseUriHelper.parseUrnCaseUri(destinationUriFromSource)
       if (parsed) {
         destinationId = parsed.identifier || destinationId
-        destinationUri = UrnCaseUriHelper.urnCaseToRelativePath(destinationUri, caseVersion)
       }
-    } else {
-      destinationUri = destinationUri || this.generateItemURI(tenantId, caseVersion, destinationId)
     }
     const destinationNodeURI = {
       title: raw.destinationNodeURI?.title ?? String(destinationId),
       identifier: destinationId,
-      uri: destinationUri
+      uri: this.generateItemURI(tenantId, caseVersion, destinationId)
     }
-    
-    // Transform CFAssociationGroupingURI if present
+
+    // CFAssociationGroupingURI references a per-tenant definition entity that
+    // OpenCASE serves itself, so it's rebased onto the local host too.
     // CFAssociationGroupingURI must use LinkURI format (UUID identifier required)
-    const CFAssociationGroupingURI = this.transformLinkData(raw.CFAssociationGroupingURI, caseVersion)
+    const CFAssociationGroupingURI = LinkDataHelper.rebaseLinkData(raw.CFAssociationGroupingURI, caseVersion, 'CFAssociationGroupings')
     if (CFAssociationGroupingURI) {
       LinkDataHelper.validateLinkURI(CFAssociationGroupingURI, 'CFAssociationGroupingURI')
     }
@@ -102,45 +100,6 @@ export class CFAssociation {
       notes: raw.notes,
       extensions: raw.extensions
     });
-  }
-
-  /**
-   * Transforms a LinkData object's URI if it's a URN, otherwise returns it unchanged
-   */
-  private static transformLinkData(linkData: any, caseVersion: CaseVersion): LinkData | undefined {
-    if (!linkData) return undefined
-    
-    // If it's already a LinkData object with a URI
-    if (typeof linkData === 'object' && linkData.uri) {
-      const transformedUri = UrnCaseUriHelper.transformUrnIfPresent(linkData.uri, caseVersion)
-      // If URI was a URN, also extract identifier from it
-      let identifier = linkData.identifier
-      if (linkData.uri && UrnCaseUriHelper.isUrnCaseUri(linkData.uri)) {
-        const parsed = UrnCaseUriHelper.parseUrnCaseUri(linkData.uri)
-        if (parsed) {
-          identifier = parsed.identifier || identifier
-        }
-      }
-      return {
-        ...linkData,
-        uri: transformedUri || linkData.uri,
-        identifier: identifier || linkData.identifier
-      }
-    }
-    
-    // If it's a string URI, transform it
-    if (typeof linkData === 'string') {
-      const transformedUri = UrnCaseUriHelper.transformUrnIfPresent(linkData, caseVersion)
-      const parsed = UrnCaseUriHelper.parseUrnCaseUri(linkData)
-      const identifier = parsed?.identifier || LinkDataHelper.extractIdFromURI(linkData)
-      return {
-        title: identifier || linkData,
-        identifier: identifier || linkData,
-        uri: transformedUri || linkData
-      }
-    }
-    
-    return linkData
   }
 
   private static generateURI(tenantId: TenantId, caseVersion: CaseVersion, identifier: string): string {

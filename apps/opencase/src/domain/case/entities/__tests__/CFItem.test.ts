@@ -102,6 +102,42 @@ describe('CFItem', () => {
       expect(item.toJSON().fullStatement).toBe('Test statement');
       expect(item.toJSON().humanCodingScheme).toBe('MATH.1');
     });
+
+    it('should rewrite CFItemTypeURI/conceptKeywordsURI/licenseURI/subjectURI to the local host on import (POR-730)', () => {
+      const raw = {
+        sourcedId: 'item-123',
+        fullStatement: 'Test statement',
+        CFItemType: 'Standard',
+        CFItemTypeURI: {
+          title: 'Standard',
+          identifier: 'c0c0c0c0-0000-4000-a000-000000000010',
+          uri: 'https://standards.example.org/uri/c0c0c0c0-0000-4000-a000-000000000010'
+        },
+        conceptKeywordsURI: {
+          title: 'Concept',
+          identifier: 'c0c0c0c0-0000-4000-a000-000000000011',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFConcepts/c0c0c0c0-0000-4000-a000-000000000011'
+        },
+        licenseURI: {
+          title: 'License',
+          identifier: 'c0c0c0c0-0000-4000-a000-000000000002',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFLicenses/c0c0c0c0-0000-4000-a000-000000000002'
+        },
+        subjectURI: [{
+          title: 'Subject',
+          identifier: 'c0c0c0c0-0000-4000-a000-000000000012',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFSubjects/c0c0c0c0-0000-4000-a000-000000000012'
+        }]
+      };
+
+      const item = CFItem.fromRaw(tenantId, caseVersion, raw, 'doc-123', '/ims/case/v1p1/CFDocuments/doc-123');
+      const json = item.toJSON();
+
+      expect(json.CFItemTypeURI.uri).toBe('/ims/case/v1p1/CFItemTypes/c0c0c0c0-0000-4000-a000-000000000010');
+      expect(json.conceptKeywordsURI.uri).toBe('/ims/case/v1p1/CFConcepts/c0c0c0c0-0000-4000-a000-000000000011');
+      expect(json.licenseURI.uri).toBe('/ims/case/v1p1/CFLicenses/c0c0c0c0-0000-4000-a000-000000000002');
+      expect(json.subjectURI[0].uri).toBe('/ims/case/v1p1/CFSubjects/c0c0c0c0-0000-4000-a000-000000000012');
+    });
   });
 
   describe('toJSON', () => {

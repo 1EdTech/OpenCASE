@@ -108,6 +108,36 @@ describe('CFDocument', () => {
 
       expect(json.lastChangeDateTime).toBe('2024-01-01T12:30:45.000Z');
     });
+
+    it('should rewrite licenseURI/CFPackageURI/subjectURI to the local host on import (POR-730)', () => {
+      const raw = {
+        sourcedId: 'doc-123',
+        title: 'Test Document',
+        lastChangeDateTime: '2024-01-01T00:00:00Z',
+        licenseURI: {
+          title: 'License',
+          identifier: 'c0c0c0c0-0000-4000-a000-000000000002',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFLicenses/c0c0c0c0-0000-4000-a000-000000000002'
+        },
+        CFPackageURI: {
+          title: 'Package',
+          identifier: 'doc-123',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFPackages/doc-123'
+        },
+        subjectURI: [{
+          title: 'Subject',
+          identifier: 'c0c0c0c0-0000-4000-a000-000000000012',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFSubjects/c0c0c0c0-0000-4000-a000-000000000012'
+        }]
+      };
+
+      const doc = CFDocument.fromRaw(tenantId, caseVersion, raw);
+      const json = doc.toJSON();
+
+      expect(json.licenseURI.uri).toBe('/ims/case/v1p1/CFLicenses/c0c0c0c0-0000-4000-a000-000000000002');
+      expect(json.CFPackageURI.uri).toBe('/ims/case/v1p1/CFPackages/doc-123');
+      expect(json.subjectURI[0].uri).toBe('/ims/case/v1p1/CFSubjects/c0c0c0c0-0000-4000-a000-000000000012');
+    });
   });
 
   describe('toJSON', () => {
