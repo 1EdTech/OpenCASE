@@ -17,6 +17,7 @@ import FloatingAddButton from '@/ui/editor/components/FloatingAddButton'
 import AddExternalFrameworkDialog from '@/ui/editor/components/AddExternalFrameworkDialog'
 import ViewCFPackageDialog from '@/ui/editor/components/ViewCFPackageDialog'
 import { useEditor } from '@/ui/editor/state/EditorContext'
+import { isFrameworkNode, getNodeSize } from '@/ui/editor/state/helpers/nodeGeometry'
 import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/types'
 import type { CFDocument, CFItem, CFPackage } from '@/domain/case/types'
 import { useAuth } from '@/app/providers/AuthProvider'
@@ -85,6 +86,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const reactFlowRef = useRef<ReactFlowInstance<CaseEditorNodeType> | null>(null)
   const [rfReady, setRfReady] = useState(false)
   const didInitialViewportRef = useRef(false)
+  const prevLayoutVersionRef = useRef<number | null>(null)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [externalFwDialogOpen, setExternalFwDialogOpen] = useState(false)
@@ -1015,6 +1017,44 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     [ensureNodeVisible, logSelectionDebug, selectedNodeIds.length, selectedEdgeIds.length],
   )
 
+  // Center on the framework's root node, at a fixed, comfortable zoom —
+  // regardless of framework size — so the user lands oriented on the root
+  // instead of a fit-to-everything view that can shrink the root to a speck
+  // in a large framework. Runs on the very first paint AND whenever the user
+  // switches layout mode (Hierarchy/Star "views"), since a layout switch
+  // moves every node and should re-orient the same way a fresh load does.
+  const centerOnRoot = useCallback(() => {
+    const instance = reactFlowRef.current
+    const wrap = reactFlowWrapRef.current
+    if (!instance || !wrap) return
+
+    const DEFAULT_ROOT_ZOOM = 1
+    const animate = didInitialViewportRef.current
+    const duration = animate ? 200 : 0
+
+    const center = () => {
+      const instance2 = reactFlowRef.current
+      if (!instance2) return
+      const root = instance2.getNodes().find(isFrameworkNode)
+      if (!root) return
+      const { w, h } = getNodeSize(root)
+      instance2.setCenter(root.position.x + w / 2, root.position.y + h / 2, {
+        zoom: DEFAULT_ROOT_ZOOM,
+        duration,
+      })
+      didInitialViewportRef.current = true
+    }
+
+    // Two rAFs to let React Flow apply any pending node measurements/positions.
+    const id = globalThis.requestAnimationFrame(() => center())
+    const id2 = globalThis.requestAnimationFrame(() => center())
+
+    return () => {
+      globalThis.cancelAnimationFrame(id)
+      globalThis.cancelAnimationFrame(id2)
+    }
+  }, [])
+
   const fitToContents = useCallback(() => {
     const instance = reactFlowRef.current
     const wrap = reactFlowWrapRef.current
@@ -1103,10 +1143,17 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     }
   }, [])
 
-  // Make the initial viewport leave room for the floating header so the top-most node isn't hidden behind it.
+  // First paint, and any explicit layout-mode switch (Hierarchy/Star "reset"),
+  // center on the root node. A layout switch moves every node, so it should
+  // re-orient the same way a fresh load does. Node-count-only changes (items
+  // added/removed without a layout switch) instead fall back to fitting the
+  // whole graph, leaving room for the floating header so the top-most node
+  // isn't hidden behind it.
   useEffect(() => {
     if (!rfReady) return
-    const cleanup = fitToContents()
+    const layoutChanged = prevLayoutVersionRef.current === null || prevLayoutVersionRef.current !== layoutVersion
+    prevLayoutVersionRef.current = layoutVersion
+    const cleanup = layoutChanged ? centerOnRoot() : fitToContents()
     const onResize = () => {
       fitToContents()
     }
@@ -1115,7 +1162,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       cleanup?.()
       globalThis.removeEventListener('resize', onResize)
     }
-  }, [rfReady, nodesWithCallbacks.length, layoutVersion, fitToContents])
+  }, [rfReady, nodesWithCallbacks.length, layoutVersion, fitToContents, centerOnRoot])
 
   return (
     <div className="relative h-screen w-screen">

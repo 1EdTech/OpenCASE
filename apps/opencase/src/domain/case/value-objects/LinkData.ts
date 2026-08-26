@@ -86,6 +86,43 @@ export class LinkDataHelper {
   static forItem(uri: string, identifier: string, title?: string): LinkData {
     return { title: title || identifier, identifier, uri }
   }
+
+  /**
+   * Rebases a LinkData reference (or raw string/object) onto the local host by
+   * unconditionally regenerating its `uri` as a relative CASE path for the given
+   * resource segment (e.g. 'CFItemTypes', 'CFLicenses', 'CFSubjects', 'CFConcepts',
+   * 'CFAssociationGroupings', 'CFPackages') — using whatever identifier can be
+   * recovered from the source data (explicit identifier, urn:case: URI, or the
+   * last path segment / UUID found in an ordinary URI).
+   *
+   * Used at import time so references to entities OpenCASE hosts locally by
+   * identifier (item types, licenses, subjects, concepts, association groupings,
+   * packages) always resolve against the new host instead of lingering on the
+   * source system's, regardless of what shape of URI the source supplied.
+   */
+  static rebaseLinkData(
+    linkData: string | LinkData | { uri?: string, identifier?: string, title?: string } | undefined,
+    caseVersion: CaseVersion,
+    resourceSegment: string
+  ): LinkData | undefined {
+    if (!linkData) return undefined
+
+    const raw = typeof linkData === 'string' ? { uri: linkData } : linkData
+
+    let identifier = raw.identifier
+    if (!identifier && raw.uri) {
+      const parsed = UrnCaseUriHelper.parseUrnCaseUri(raw.uri)
+      identifier = parsed?.identifier ?? this.extractIdFromURI(raw.uri)
+    }
+    if (!identifier) return undefined
+
+    const basePath = caseVersion === '1.1' ? '/ims/case/v1p1' : '/ims/case/v1p0'
+    return {
+      title: raw.title || identifier,
+      identifier,
+      uri: `${basePath}/${resourceSegment}/${identifier}`
+    }
+  }
 }
 
 /**
