@@ -135,8 +135,9 @@ export class CreateFramework {
       }
     }
 
-    // If the framework was previously imported (has sourcePackageURI in metadata),
-    // mark it as modified from source on subsequent saves from the editor.
+    // If the framework was previously imported as a mirror (has isModifiedFromSource
+    // in metadata, set at import time regardless of whether a source URL is known),
+    // mark it as modified from source — i.e. forked — on subsequent saves from the editor.
     let cfDocPayload = payload.CFDocument
     if (this.store) {
       const docId = (cfDocPayload.sourcedId ?? cfDocPayload.identifier) as string | undefined
@@ -144,7 +145,7 @@ export class CreateFramework {
         // Check both CASE versions for existing metadata
         const existingMeta = this.store.getDocumentMetadata(tenantId, caseVersion, docId)
           ?? this.store.getDocumentMetadata(tenantId, caseVersion === '1.0' ? '1.1' : '1.0', docId)
-        if (existingMeta?.sourcePackageURI) {
+        if (existingMeta?.isModifiedFromSource !== undefined) {
           const existingExt = cfDocPayload.extensions ?? {}
           const existingOpencase = (existingExt['ext:opencase'] && typeof existingExt['ext:opencase'] === 'object')
             ? existingExt['ext:opencase']
@@ -155,7 +156,7 @@ export class CreateFramework {
               ...existingExt,
               'ext:opencase': {
                 ...existingOpencase,
-                sourcePackageURI: existingMeta.sourcePackageURI,
+                ...(existingMeta.sourcePackageURI ? { sourcePackageURI: existingMeta.sourcePackageURI } : {}),
                 isModifiedFromSource: true,
               }
             }

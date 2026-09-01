@@ -23,13 +23,18 @@ export class CFRubric {
     return new CFRubric(props)
   }
 
-  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any): CFRubric {
+  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any, options?: { preserveUris?: boolean }): CFRubric {
     // Extract identifier from URN if present (priority over identifier/sourcedId)
     let identifier = raw.identifier || raw.sourcedId || raw.id
     let uri = raw.uri
-    
-    // If URI is a URN, extract identifier and transform URI
-    if (uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+
+    if (options?.preserveUris) {
+      // Mirrored framework: keep the source's identifiers and URIs exactly as supplied.
+      if (!identifier && uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+        identifier = UrnCaseUriHelper.parseUrnCaseUri(uri)?.identifier || identifier
+      }
+    } else if (uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+      // If URI is a URN, extract identifier and transform URI
       const parsed = UrnCaseUriHelper.parseUrnCaseUri(uri)
       if (parsed) {
         identifier = parsed.identifier || identifier

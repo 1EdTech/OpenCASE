@@ -41,13 +41,18 @@ export class CFItem {
     return new CFItem(props);
   }
 
-  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any, docId?: string, docURI?: string): CFItem {
+  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any, docId?: string, docURI?: string, options?: { preserveUris?: boolean }): CFItem {
     // Extract identifier from URN if present (priority over sourcedId/identifier)
     let identifier = raw.sourcedId || raw.identifier
     let uri = raw.uri
-    
-    // If URI is a URN, extract identifier and transform URI
-    if (uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+
+    if (options?.preserveUris) {
+      // Mirrored framework: keep the source's identifiers and URIs exactly as supplied.
+      if (!identifier && uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+        identifier = UrnCaseUriHelper.parseUrnCaseUri(uri)?.identifier || identifier
+      }
+    } else if (uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+      // If URI is a URN, extract identifier and transform URI
       const parsed = UrnCaseUriHelper.parseUrnCaseUri(uri)
       if (parsed) {
         identifier = parsed.identifier || identifier
@@ -57,46 +62,54 @@ export class CFItem {
       // If not a URN, generate URI based on identifier (existing behavior)
       uri = this.generateURI(tenantId, caseVersion, identifier)
     }
-    
-    // Transform CFDocumentURI if it's a URN
-    let docIdentifier = docId ?? raw.CFDocumentURI?.identifier ?? 'unknown'
-    let generatedDocUri: string
-    if (raw.CFDocumentURI?.uri && UrnCaseUriHelper.isUrnCaseUri(raw.CFDocumentURI.uri)) {
-      const parsed = UrnCaseUriHelper.parseUrnCaseUri(raw.CFDocumentURI.uri)
-      if (parsed) {
-        docIdentifier = parsed.identifier || docIdentifier
-        generatedDocUri = UrnCaseUriHelper.urnCaseToRelativePath(raw.CFDocumentURI.uri, caseVersion)
+
+    let CFDocumentURI: LinkData
+    if (options?.preserveUris && raw.CFDocumentURI) {
+      CFDocumentURI = raw.CFDocumentURI
+    } else {
+      // Transform CFDocumentURI if it's a URN
+      let docIdentifier = docId ?? raw.CFDocumentURI?.identifier ?? 'unknown'
+      let generatedDocUri: string
+      if (raw.CFDocumentURI?.uri && UrnCaseUriHelper.isUrnCaseUri(raw.CFDocumentURI.uri)) {
+        const parsed = UrnCaseUriHelper.parseUrnCaseUri(raw.CFDocumentURI.uri)
+        if (parsed) {
+          docIdentifier = parsed.identifier || docIdentifier
+          generatedDocUri = UrnCaseUriHelper.urnCaseToRelativePath(raw.CFDocumentURI.uri, caseVersion)
+        } else {
+          // Fallback if URN parsing fails
+          generatedDocUri = docURI ?? this.generateDocumentURI(tenantId, caseVersion, docIdentifier)
+        }
       } else {
-        // Fallback if URN parsing fails
         generatedDocUri = docURI ?? this.generateDocumentURI(tenantId, caseVersion, docIdentifier)
       }
-    } else {
-      generatedDocUri = docURI ?? this.generateDocumentURI(tenantId, caseVersion, docIdentifier)
+
+      CFDocumentURI = {
+        title: raw.CFDocumentURI?.title ?? 'Document',
+        identifier: docIdentifier,
+        uri: generatedDocUri
+      }
     }
-    
-    const CFDocumentURI = {
-      title: raw.CFDocumentURI?.title ?? 'Document',
-      identifier: docIdentifier,
-      uri: generatedDocUri
-    }
-    
+
     // Rebase reference URIs onto the local host — these point at per-tenant
     // definition entities (item types, concepts, licenses, subjects) that
     // OpenCASE serves itself, so they must resolve locally rather than to
-    // the source host.
-    const CFItemTypeURI = LinkDataHelper.rebaseLinkData(raw.CFItemTypeURI, caseVersion, 'CFItemTypes')
-    const conceptKeywordsURI = LinkDataHelper.rebaseLinkData(raw.conceptKeywordsURI, caseVersion, 'CFConcepts')
-    const licenseURI = LinkDataHelper.rebaseLinkData(raw.licenseURI, caseVersion, 'CFLicenses')
+    // the source host. Mirrored frameworks skip this and keep the source's
+    // reference URIs as-is.
+    const CFItemTypeURI = options?.preserveUris ? raw.CFItemTypeURI : LinkDataHelper.rebaseLinkData(raw.CFItemTypeURI, caseVersion, 'CFItemTypes')
+    const conceptKeywordsURI = options?.preserveUris ? raw.conceptKeywordsURI : LinkDataHelper.rebaseLinkData(raw.conceptKeywordsURI, caseVersion, 'CFConcepts')
+    const licenseURI = options?.preserveUris ? raw.licenseURI : LinkDataHelper.rebaseLinkData(raw.licenseURI, caseVersion, 'CFLicenses')
     // subjectURI must use LinkURI format (UUID identifier required)
-    const subjectURI = Array.isArray(raw.subjectURI)
-      ? raw.subjectURI.map((s: any) => {
-          const transformed = LinkDataHelper.rebaseLinkData(s, caseVersion, 'CFSubjects')
-          if (transformed) {
-            LinkDataHelper.validateLinkURI(transformed, 'CFItem.subjectURI')
-          }
-          return transformed
-        }).filter((s: any): s is LinkData => s !== undefined)
-      : undefined
+    const subjectURI = options?.preserveUris
+      ? raw.subjectURI
+      : Array.isArray(raw.subjectURI)
+        ? raw.subjectURI.map((s: any) => {
+            const transformed = LinkDataHelper.rebaseLinkData(s, caseVersion, 'CFSubjects')
+            if (transformed) {
+              LinkDataHelper.validateLinkURI(transformed, 'CFItem.subjectURI')
+            }
+            return transformed
+          }).filter((s: any): s is LinkData => s !== undefined)
+        : undefined
     
     return CFItem.create({
       tenantId,

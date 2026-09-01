@@ -92,6 +92,60 @@ describe('FileCFPackageRepository', () => {
       expect(result?.rubrics).toEqual([]);
     });
 
+    it('preserves a pristine mirror\'s original uri across reloads (isModifiedFromSource: false)', async () => {
+      const bundle = {
+        document: {
+          sourcedId: docId,
+          title: 'Test Document',
+          uri: 'https://source.example.org/ims/case/v1p1/CFDocuments/doc-123',
+          lastChangeDateTime: '2024-01-01T00:00:00Z',
+          extensions: {
+            'ext:opencase': {
+              sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
+              isModifiedFromSource: false
+            }
+          }
+        },
+        items: [
+          {
+            sourcedId: 'item-1',
+            uri: 'https://source.example.org/ims/case/v1p1/CFItems/item-1',
+            fullStatement: 'Statement 1'
+          }
+        ]
+      };
+
+      mockStore.loadDocumentBundle.mockResolvedValue(bundle);
+
+      const result = await repository.load(tenantId, version, docId);
+
+      expect(result?.document.toJSON().uri).toBe('https://source.example.org/ims/case/v1p1/CFDocuments/doc-123');
+      expect(result?.items[0].toJSON().uri).toBe('https://source.example.org/ims/case/v1p1/CFItems/item-1');
+    });
+
+    it('regenerates local uris for a forked framework (isModifiedFromSource: true)', async () => {
+      const bundle = {
+        document: {
+          sourcedId: docId,
+          title: 'Test Document',
+          uri: 'https://source.example.org/ims/case/v1p1/CFDocuments/doc-123',
+          lastChangeDateTime: '2024-01-01T00:00:00Z',
+          extensions: {
+            'ext:opencase': {
+              sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
+              isModifiedFromSource: true
+            }
+          }
+        }
+      };
+
+      mockStore.loadDocumentBundle.mockResolvedValue(bundle);
+
+      const result = await repository.load(tenantId, version, docId);
+
+      expect(result?.document.toJSON().uri).toBe(`/ims/case/v1p1/CFDocuments/${docId}`);
+    });
+
     it('should handle null/undefined items and associations', async () => {
       const bundle = {
         document: {

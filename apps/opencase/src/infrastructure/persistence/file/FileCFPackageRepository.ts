@@ -20,17 +20,23 @@ export class FileCFPackageRepository implements CFPackageRepository {
     const bundle = await this.store.loadDocumentBundle(tenantId, version, docId)
     if (!bundle) return null
 
-    const document = CFDocument.fromRaw(tenantId, version, bundle.document)
+    // A framework that is still a pristine mirror of its import source (never
+    // locally forked) keeps its original identifiers/URIs on every load — they're
+    // only regenerated once it's edited and marked as forked (a later task).
+    const opencaseExt = (bundle.document as { extensions?: Record<string, unknown> })?.extensions?.['ext:opencase'] as { isModifiedFromSource?: boolean } | undefined
+    const preserveUris = { preserveUris: opencaseExt?.isModifiedFromSource === false }
+
+    const document = CFDocument.fromRaw(tenantId, version, bundle.document, preserveUris)
     const docURI = document.toJSON().uri
 
     const items = (bundle.items ?? []).map((i: unknown) =>
-      CFItem.fromRaw(tenantId, version, i, docId, docURI)
+      CFItem.fromRaw(tenantId, version, i, docId, docURI, preserveUris)
     )
     const associations = (bundle.associations ?? []).map((a: unknown) =>
-      CFAssociation.fromRaw(tenantId, version, a)
+      CFAssociation.fromRaw(tenantId, version, a, preserveUris)
     )
     const rubrics = (bundle.rubrics ?? []).map((r: unknown) =>
-      CFRubric.fromRaw(tenantId, version, r)
+      CFRubric.fromRaw(tenantId, version, r, preserveUris)
     )
     const definitions = bundle.definitions ?? null
 

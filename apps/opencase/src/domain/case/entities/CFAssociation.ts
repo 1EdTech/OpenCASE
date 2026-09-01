@@ -28,13 +28,18 @@ export class CFAssociation {
     return new CFAssociation(props);
   }
 
-  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any): CFAssociation {
+  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any, options?: { preserveUris?: boolean }): CFAssociation {
     // Extract identifier from URN if present (priority over sourcedId/identifier)
     let identifier = raw.sourcedId || raw.identifier
     let uri = raw.uri
-    
-    // If URI is a URN, extract identifier and transform URI
-    if (uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+
+    if (options?.preserveUris) {
+      // Mirrored framework: keep the source's identifiers and URIs exactly as supplied.
+      if (!identifier && uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+        identifier = UrnCaseUriHelper.parseUrnCaseUri(uri)?.identifier || identifier
+      }
+    } else if (uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+      // If URI is a URN, extract identifier and transform URI
       const parsed = UrnCaseUriHelper.parseUrnCaseUri(uri)
       if (parsed) {
         identifier = parsed.identifier || identifier
@@ -44,45 +49,55 @@ export class CFAssociation {
       // If not a URN, generate URI based on identifier (existing behavior)
       uri = this.generateURI(tenantId, caseVersion, identifier)
     }
-    
-    // originNodeURI/destinationNodeURI always reference a CFItem (or CFDocument)
-    // within the SAME package being imported, so — like CFItem.CFDocumentURI —
-    // their uri is always regenerated to point at the local host, regardless of
-    // what URI shape (URN, absolute foreign-host URL, or relative path) the
-    // source supplied. Only the identifier is trusted from the source data.
-    let originId = raw.originNodeURI?.identifier ?? raw.originNode ?? 'unknown'
-    const originUriFromSource = raw.originNodeURI?.uri
-    if (originUriFromSource && UrnCaseUriHelper.isUrnCaseUri(originUriFromSource)) {
-      const parsed = UrnCaseUriHelper.parseUrnCaseUri(originUriFromSource)
-      if (parsed) {
-        originId = parsed.identifier || originId
-      }
-    }
-    const originNodeURI = {
-      title: raw.originNodeURI?.title ?? String(originId),
-      identifier: originId,
-      uri: this.generateItemURI(tenantId, caseVersion, originId)
-    }
 
-    let destinationId = raw.destinationNodeURI?.identifier ?? raw.destinationNode ?? 'unknown'
-    const destinationUriFromSource = raw.destinationNodeURI?.uri
-    if (destinationUriFromSource && UrnCaseUriHelper.isUrnCaseUri(destinationUriFromSource)) {
-      const parsed = UrnCaseUriHelper.parseUrnCaseUri(destinationUriFromSource)
-      if (parsed) {
-        destinationId = parsed.identifier || destinationId
+    let originNodeURI: LinkData
+    let destinationNodeURI: LinkData
+    if (options?.preserveUris && raw.originNodeURI && raw.destinationNodeURI) {
+      originNodeURI = raw.originNodeURI
+      destinationNodeURI = raw.destinationNodeURI
+    } else {
+      // originNodeURI/destinationNodeURI always reference a CFItem (or CFDocument)
+      // within the SAME package being imported, so — like CFItem.CFDocumentURI —
+      // their uri is always regenerated to point at the local host, regardless of
+      // what URI shape (URN, absolute foreign-host URL, or relative path) the
+      // source supplied. Only the identifier is trusted from the source data.
+      let originId = raw.originNodeURI?.identifier ?? raw.originNode ?? 'unknown'
+      const originUriFromSource = raw.originNodeURI?.uri
+      if (originUriFromSource && UrnCaseUriHelper.isUrnCaseUri(originUriFromSource)) {
+        const parsed = UrnCaseUriHelper.parseUrnCaseUri(originUriFromSource)
+        if (parsed) {
+          originId = parsed.identifier || originId
+        }
       }
-    }
-    const destinationNodeURI = {
-      title: raw.destinationNodeURI?.title ?? String(destinationId),
-      identifier: destinationId,
-      uri: this.generateItemURI(tenantId, caseVersion, destinationId)
+      originNodeURI = {
+        title: raw.originNodeURI?.title ?? String(originId),
+        identifier: originId,
+        uri: this.generateItemURI(tenantId, caseVersion, originId)
+      }
+
+      let destinationId = raw.destinationNodeURI?.identifier ?? raw.destinationNode ?? 'unknown'
+      const destinationUriFromSource = raw.destinationNodeURI?.uri
+      if (destinationUriFromSource && UrnCaseUriHelper.isUrnCaseUri(destinationUriFromSource)) {
+        const parsed = UrnCaseUriHelper.parseUrnCaseUri(destinationUriFromSource)
+        if (parsed) {
+          destinationId = parsed.identifier || destinationId
+        }
+      }
+      destinationNodeURI = {
+        title: raw.destinationNodeURI?.title ?? String(destinationId),
+        identifier: destinationId,
+        uri: this.generateItemURI(tenantId, caseVersion, destinationId)
+      }
     }
 
     // CFAssociationGroupingURI references a per-tenant definition entity that
-    // OpenCASE serves itself, so it's rebased onto the local host too.
+    // OpenCASE serves itself, so it's rebased onto the local host too — unless
+    // this is a mirrored framework, in which case it's kept as the source supplied it.
     // CFAssociationGroupingURI must use LinkURI format (UUID identifier required)
-    const CFAssociationGroupingURI = LinkDataHelper.rebaseLinkData(raw.CFAssociationGroupingURI, caseVersion, 'CFAssociationGroupings')
-    if (CFAssociationGroupingURI) {
+    const CFAssociationGroupingURI = options?.preserveUris
+      ? raw.CFAssociationGroupingURI
+      : LinkDataHelper.rebaseLinkData(raw.CFAssociationGroupingURI, caseVersion, 'CFAssociationGroupings')
+    if (CFAssociationGroupingURI && !options?.preserveUris) {
       LinkDataHelper.validateLinkURI(CFAssociationGroupingURI, 'CFAssociationGroupingURI')
     }
     

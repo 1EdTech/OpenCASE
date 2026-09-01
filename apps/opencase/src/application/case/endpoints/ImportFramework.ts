@@ -28,9 +28,10 @@ export interface ImportFrameworkResult {
 
 /**
  * Merge or create the `ext:opencase` extension on a CFDocument payload,
- * setting sourcePackageURI and marking it as a pristine import.
+ * marking it as a pristine mirror of the source. `endpointUrl` is only known
+ * when the framework was imported by URL (as opposed to a pasted JSON payload).
  */
-function injectSourceProvenance (docPayload: any, endpointUrl: string): any {
+function injectSourceProvenance (docPayload: any, endpointUrl?: string): any {
   const existing = docPayload.extensions ?? {}
   const existingOpencase = (existing['ext:opencase'] && typeof existing['ext:opencase'] === 'object')
     ? existing['ext:opencase']
@@ -42,7 +43,7 @@ function injectSourceProvenance (docPayload: any, endpointUrl: string): any {
       ...existing,
       'ext:opencase': {
         ...existingOpencase,
-        sourcePackageURI: endpointUrl,
+        ...(endpointUrl ? { sourcePackageURI: endpointUrl } : {}),
         isModifiedFromSource: false,
         importedAt: new Date().toISOString(),
       }
@@ -74,7 +75,11 @@ export class ImportFramework {
       }
     } else {
       logger.info({ tenantId, caseVersion }, 'Importing framework from provided JSON')
-      sourceCFPackage = normalizeCfPackageData(cfPackage)
+      const normalized = normalizeCfPackageData(cfPackage)
+      sourceCFPackage = {
+        ...normalized,
+        CFDocument: injectSourceProvenance(normalized.CFDocument)
+      }
     }
 
     // Use CFPackage format directly (matches API response format)
@@ -102,17 +107,20 @@ export class ImportFramework {
       }
     }
 
-    // Create domain entities from CFPackage format
-    const document = CFDocument.fromRaw(tenantId, caseVersion, payload.CFDocument)
+    // Create domain entities from CFPackage format. Mirrored imports preserve the
+    // source's identifiers/URIs as-is rather than rewriting them onto this instance —
+    // they're only regenerated once the framework is edited and forked (a later task).
+    const preserveUris = { preserveUris: true }
+    const document = CFDocument.fromRaw(tenantId, caseVersion, payload.CFDocument, preserveUris)
     const docId = document.sourcedId
     const docJSON = document.toJSON()
     const docURI = docJSON.uri
-    const items = (payload.CFItems ?? []).map(i => CFItem.fromRaw(tenantId, caseVersion, i, docId, docURI))
+    const items = (payload.CFItems ?? []).map(i => CFItem.fromRaw(tenantId, caseVersion, i, docId, docURI, preserveUris))
     const associations = (payload.CFAssociations ?? []).map(a =>
-      CFAssociation.fromRaw(tenantId, caseVersion, a)
+      CFAssociation.fromRaw(tenantId, caseVersion, a, preserveUris)
     )
     const rubrics = (payload.CFRubrics ?? []).map(r =>
-      CFRubric.fromRaw(tenantId, caseVersion, r)
+      CFRubric.fromRaw(tenantId, caseVersion, r, preserveUris)
     )
     const definitions = payload.CFDefinitions ?? null
 
