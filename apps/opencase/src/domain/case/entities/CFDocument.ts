@@ -39,13 +39,18 @@ export class CFDocument {
     return new CFDocument(props);
   }
 
-  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any): CFDocument {
+  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any, options?: { preserveUris?: boolean }): CFDocument {
     // Extract identifier from URN if present (priority over sourcedId/identifier)
     let identifier = raw.sourcedId || raw.identifier
     let uri = raw.uri
-    
-    // If URI is a URN, extract identifier and transform URI
-    if (uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+
+    if (options?.preserveUris) {
+      // Mirrored framework: keep the source's identifiers and URIs exactly as supplied.
+      if (!identifier && uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+        identifier = UrnCaseUriHelper.parseUrnCaseUri(uri)?.identifier || identifier
+      }
+    } else if (uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+      // If URI is a URN, extract identifier and transform URI
       const parsed = UrnCaseUriHelper.parseUrnCaseUri(uri)
       if (parsed) {
         identifier = parsed.identifier || identifier
@@ -55,22 +60,25 @@ export class CFDocument {
       // If not a URN, generate URI based on identifier (existing behavior)
       uri = this.generateURI(tenantId, caseVersion, identifier)
     }
-    
+
     // Rebase reference URIs onto the local host — these point at per-tenant
     // definition entities (licenses, packages, subjects) that OpenCASE serves
     // itself, so they must resolve locally rather than to the source host.
-    const licenseURI = LinkDataHelper.rebaseLinkData(raw.licenseURI, caseVersion, 'CFLicenses')
-    const CFPackageURI = LinkDataHelper.rebaseLinkData(raw.CFPackageURI, caseVersion, 'CFPackages')
+    // Mirrored frameworks skip this and keep the source's reference URIs as-is.
+    const licenseURI = options?.preserveUris ? raw.licenseURI : LinkDataHelper.rebaseLinkData(raw.licenseURI, caseVersion, 'CFLicenses')
+    const CFPackageURI = options?.preserveUris ? raw.CFPackageURI : LinkDataHelper.rebaseLinkData(raw.CFPackageURI, caseVersion, 'CFPackages')
     // subjectURI must use LinkURI format (UUID identifier required)
-    const subjectURI = Array.isArray(raw.subjectURI)
-      ? raw.subjectURI.map((s: any) => {
-          const transformed = LinkDataHelper.rebaseLinkData(s, caseVersion, 'CFSubjects')
-          if (transformed) {
-            LinkDataHelper.validateLinkURI(transformed, 'CFDocument.subjectURI')
-          }
-          return transformed
-        }).filter((s: any): s is LinkData => s !== undefined)
-      : undefined
+    const subjectURI = options?.preserveUris
+      ? raw.subjectURI
+      : Array.isArray(raw.subjectURI)
+        ? raw.subjectURI.map((s: any) => {
+            const transformed = LinkDataHelper.rebaseLinkData(s, caseVersion, 'CFSubjects')
+            if (transformed) {
+              LinkDataHelper.validateLinkURI(transformed, 'CFDocument.subjectURI')
+            }
+            return transformed
+          }).filter((s: any): s is LinkData => s !== undefined)
+        : undefined
     
     return CFDocument.create({
       tenantId,

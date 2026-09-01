@@ -70,9 +70,9 @@ type Props = {
   isUnsaved?: boolean
   /** ISO date string for the last change — shown in the card footer */
   lastChanged?: string
-  /** URL the framework was imported from — shows an "Imported" badge when set */
+  /** URL the framework was imported from, if known — shown in the Mirrored/Forked badge tooltip */
   sourcePackageURI?: string
-  /** True when an imported framework has been locally modified */
+  /** Set (true or false) once a framework has been imported/mirrored; true once it's been locally modified (forked) */
   isModifiedFromSource?: boolean
 }
 
@@ -218,7 +218,7 @@ export function FrameworkCard({
                 Unsaved
               </span>
             ) : null}
-            {sourcePackageURI ? (
+            {isModifiedFromSource !== undefined ? (
               <span
                 className={cn(
                   'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold',
@@ -226,10 +226,14 @@ export function FrameworkCard({
                     ? 'bg-violet-100 text-violet-700'
                     : 'bg-sky-100 text-sky-700',
                 )}
-                title={isModifiedFromSource ? `Imported from ${sourcePackageURI} (modified)` : `Imported from ${sourcePackageURI}`}
+                title={
+                  isModifiedFromSource
+                    ? sourcePackageURI ? `Forked — originally mirrored from ${sourcePackageURI}` : 'Forked — originally mirrored, now locally modified'
+                    : sourcePackageURI ? `Mirrored from ${sourcePackageURI}` : 'Mirrored — kept in sync with its imported source'
+                }
               >
                 <CloudArrowDownIcon className="h-3 w-3" />
-                {isModifiedFromSource ? 'Forked' : 'Imported'}
+                {isModifiedFromSource ? 'Forked' : 'Mirrored'}
               </span>
             ) : null}
           </div>

@@ -125,7 +125,11 @@ export class GetAllCFDocuments {
       if (docMeta.version) doc.version = docMeta.version
       if (docMeta.adoptionStatus) doc.adoptionStatus = docMeta.adoptionStatus
       if (docMeta.sourcePackageURI) doc.sourcePackageURI = docMeta.sourcePackageURI
-      if (docMeta.isModifiedFromSource) doc.isModifiedFromSource = docMeta.isModifiedFromSource
+      // isModifiedFromSource is set (true or false) on any mirrored/forked framework,
+      // even one imported without a known sourcePackageURI (e.g. pasted JSON) — so it
+      // must be surfaced even when false, since the frontend uses its presence to
+      // decide whether to show the Mirrored/Forked badge at all.
+      if (docMeta.isModifiedFromSource !== undefined) doc.isModifiedFromSource = docMeta.isModifiedFromSource
       if (docMeta.archived) doc.archived = true
 
       // CASE v1.1-only fields: only include when not serving via v1p0

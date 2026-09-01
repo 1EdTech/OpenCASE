@@ -28,9 +28,9 @@ export type CfDocumentSummary = {
   adoptionStatus?: string
   lastChangeDateTime?: string
   caseVersion?: string
-  /** URL the framework was imported from (set during import via backend). */
+  /** URL the framework was imported from, if known (set during import via backend). */
   sourcePackageURI?: string
-  /** True when an imported framework has been locally modified after import. */
+  /** Set (true or false) once a framework has been imported/mirrored; true once it's been locally modified (forked). */
   isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
