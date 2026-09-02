@@ -44,7 +44,7 @@ describe('GetCFConcept', () => {
       }
 
       mockStore.getDefinitionById.mockReturnValue({
-        docSourcedId: 'doc-123',
+        docStorageKey: 'doc-123',
         value: concept
       } as any)
       mockStore.getTenantDefinitions.mockReturnValue({ CFConcepts: [concept] } as any)
@@ -62,7 +62,7 @@ describe('GetCFConcept', () => {
       const unrelated = { identifier: 'other', title: 'Unrelated', hierarchyCode: '1.02' }
       const falsePrefixMatch = { identifier: 'not-a-child', title: 'Not a child', hierarchyCode: '1.010' }
 
-      mockStore.getDefinitionById.mockReturnValue({ docSourcedId: 'doc-123', value: concept } as any)
+      mockStore.getDefinitionById.mockReturnValue({ docStorageKey: 'doc-123', value: concept } as any)
       mockStore.getTenantDefinitions.mockReturnValue({
         CFConcepts: [concept, childB, childA, unrelated, falsePrefixMatch]
       } as any)

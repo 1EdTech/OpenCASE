@@ -64,6 +64,23 @@ describe('ImportFramework', () => {
       )
     })
 
+    it('mints a storage key independent of the document identifier — never inferred from the (possibly reused-later) sourcedId', async () => {
+      mockApiClient.fetchCFPackage.mockResolvedValue({
+        CFPackage: { CFDocument: cfDocument, CFItems: [], CFAssociations: [], CFRubrics: [] }
+      })
+
+      await importFramework.execute({
+        tenantId,
+        caseVersion,
+        endpointUrl: 'https://example.org/ims/case/v1p1/CFPackages/doc-123'
+      })
+
+      const storageKey = mockRepository.saveNewVersion.mock.calls[0][3]
+      expect(storageKey).toBeDefined()
+      expect(storageKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+      expect(storageKey).not.toBe('doc-123')
+    })
+
     it('imports from a directly provided CFPackage payload (v1.1 wrapped shape)', async () => {
       const result = await importFramework.execute({
         tenantId,

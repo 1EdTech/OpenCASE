@@ -5,6 +5,7 @@ import { CFItem } from '../../../domain/case/entities/CFItem'
 import { CFAssociation } from '../../../domain/case/entities/CFAssociation'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { JsonSchemaValidator } from '../../../infrastructure/validation/JsonSchemaValidator'
+import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export interface UpdateCFDocumentCommand {
   tenantId: TenantId
@@ -16,6 +17,7 @@ export interface UpdateCFDocumentCommand {
 export class UpdateCFDocument {
   constructor (
     private readonly pkgRepo: CFPackageRepository,
+    private readonly store: FileFrameworkStore,
     private readonly validator?: JsonSchemaValidator
   ) {}
 
@@ -33,8 +35,9 @@ export class UpdateCFDocument {
     }
 
     // Load existing package
-    const existingPkg = await this.pkgRepo.load(tenantId, caseVersion, sourcedId)
-    if (!existingPkg) {
+    const storageKey = this.store.resolveStorageKey(tenantId, caseVersion, sourcedId)
+    const existingPkg = storageKey ? await this.pkgRepo.load(tenantId, caseVersion, storageKey) : null
+    if (!existingPkg || !storageKey) {
       throw new Error(`CFDocument with sourcedId ${sourcedId} not found`)
     }
 
@@ -74,7 +77,7 @@ export class UpdateCFDocument {
       definitions
     })
 
-    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg)
+    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg, storageKey)
   }
 }
 

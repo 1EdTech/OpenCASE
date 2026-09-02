@@ -25,6 +25,13 @@ export type HomeFramework = {
    * @deprecated Use `framework` instead; graph should be derived via `toReactFlowGraph`
    */
   graph?: EditorGraph
+  /**
+   * Mirror/fork status, present only for frameworks that were ever imported.
+   * `isModifiedFromSource: false` = still a pristine mirror; `true` = forked.
+   * Extracted from the CFDocument's `ext:opencase` extension on every fetch —
+   * see `openRemoteFramework` in App.tsx.
+   */
+  mirrorStatus?: { isModifiedFromSource?: boolean; sourcePackageURI?: string }
 }
 
 const STORAGE_KEY = 'case-editor:frameworks:v1'
@@ -222,12 +229,16 @@ export function createNewFrameworkDraft(params: CreateFrameworkDraft): HomeFrame
  *
  * This is the preferred way to add new frameworks - start with the domain model.
  */
-export function createHomeFrameworkFromDomain(framework: Framework): HomeFramework {
+export function createHomeFrameworkFromDomain(
+  framework: Framework,
+  mirrorStatus?: { isModifiedFromSource?: boolean; sourcePackageURI?: string },
+): HomeFramework {
   const cfDocument = createCfDocumentFromFramework(framework)
   return {
     id: framework.id as unknown as string,
     framework,
     cfDocument,
     // No legacy graph - it will be derived from framework when needed
+    mirrorStatus,
   }
 }

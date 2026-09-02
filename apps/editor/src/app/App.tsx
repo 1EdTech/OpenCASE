@@ -301,8 +301,18 @@ function AppInner() {
           throw new Error('Failed to load framework from CASE package')
         }
 
+        // Extract mirror/fork status from the CFDocument's ext:opencase
+        // extension (always present in this response — the editor's HTTP
+        // client sends X-CASE-EDITOR, which asks the backend to include it).
+        const opencaseExt = (pkg.CFDocument?.extensions as Record<string, unknown> | undefined)?.['ext:opencase'] as
+          | { isModifiedFromSource?: boolean; sourcePackageURI?: string }
+          | undefined
+        const mirrorStatus = opencaseExt?.isModifiedFromSource !== undefined
+          ? { isModifiedFromSource: opencaseExt.isModifiedFromSource, sourcePackageURI: opencaseExt.sourcePackageURI }
+          : undefined
+
         // Create a HomeFramework entry from the domain Framework
-        const fw = createHomeFrameworkFromDomain(framework)
+        const fw = createHomeFrameworkFromDomain(framework, mirrorStatus)
 
         // Store the extracted layout
         if (layout) {
@@ -408,23 +418,64 @@ function AppInner() {
       if (!tenantId) {
         throw new Error('Not signed in to a tenant. Please sign in to save.')
       }
-      
+
       console.log('[App] Saving to server:', { tenantId, caseApiVersion })
-      
-      await api.saveCfPackage({
+
+      const result = await api.saveCfPackage({
         tenantId,
         cfPackage: openCasePackage,
         caseVersion: caseApiVersion,
       })
-      
+
       // Mark this framework as published to OpenCASE
       if (activeFrameworkId) {
         setPublishedFrameworkIds((prev) => new Set(prev).add(activeFrameworkId))
       }
-      
+
+      // A fork mints new identifiers server-side for the document AND every
+      // item/association in it — not just the document. Patching the local
+      // session by hand would mean re-deriving that whole remap ourselves and
+      // risk resubmitting stale, already-freed identifiers on the next save.
+      // Instead, treat this exactly like opening a freshly-saved framework:
+      // re-fetch the authoritative post-fork state from the server (reusing
+      // the same path a normal "open" uses), then drop the superseded
+      // pre-fork local record.
+      if (activeFrameworkId && result.docId && result.docId !== activeFrameworkId) {
+        const oldId = activeFrameworkId
+        await openRemoteFramework(result.docId)
+        setFrameworks((prev) => {
+          const next = prev.filter((f) => f.id !== oldId)
+          saveFrameworks(next)
+          return next
+        })
+        setPublishedFrameworkIds((prev) => {
+          const next = new Set(prev)
+          next.delete(oldId)
+          return next
+        })
+        setFrameworkLayouts((prev) => {
+          const { [oldId]: _dropped, ...rest } = prev
+          return rest
+        })
+        setFrameworkEdgeTypes((prev) => {
+          const { [oldId]: _dropped, ...rest } = prev
+          return rest
+        })
+      } else if (activeFrameworkId && result.isModifiedFromSource !== undefined) {
+        setFrameworks((prev) => {
+          const next = prev.map((f) =>
+            f.id === activeFrameworkId
+              ? { ...f, mirrorStatus: { isModifiedFromSource: result.isModifiedFromSource, sourcePackageURI: result.sourcePackageURI } }
+              : f
+          )
+          saveFrameworks(next)
+          return next
+        })
+      }
+
       console.log('[App] Saved successfully')
     },
-    [api, tenantId, caseApiVersion, activeFrameworkId],
+    [api, tenantId, caseApiVersion, activeFrameworkId, openRemoteFramework],
   )
 
   if (authCallbackState === 'processing') {
@@ -500,6 +551,7 @@ function AppInner() {
         isPublishedToOpenCase={activeFrameworkId ? publishedFrameworkIds.has(activeFrameworkId) : false}
         onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
         onFetchCfPackage={activeFrameworkId ? handleFetchCfPackage : undefined}
+        mirrorStatus={activeFramework.mirrorStatus}
       />
     </EditorProvider>
   )

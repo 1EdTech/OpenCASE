@@ -19,15 +19,15 @@ export class DeleteCFItem {
     const { tenantId, caseVersion, sourcedId } = cmd
 
     // Find which document this item belongs to
-    const docId = this.store.getDocumentIdForItem(tenantId, caseVersion, sourcedId)
-    if (!docId) {
+    const storageKey = this.store.getStorageKeyForItem(tenantId, caseVersion, sourcedId)
+    if (!storageKey) {
       throw new Error(`CFItem with sourcedId ${sourcedId} not found`)
     }
 
     // Load existing package
-    const existingPkg = await this.pkgRepo.load(tenantId, caseVersion, docId)
+    const existingPkg = await this.pkgRepo.load(tenantId, caseVersion, storageKey)
     if (!existingPkg) {
-      throw new Error(`CFPackage for document ${docId} not found`)
+      throw new Error(`CFPackage for CFItem ${sourcedId} not found`)
     }
 
     // Verify item exists
@@ -71,7 +71,7 @@ export class DeleteCFItem {
       definitions: existingPkg.definitions
     })
 
-    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg)
+    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg, storageKey)
   }
 }
 

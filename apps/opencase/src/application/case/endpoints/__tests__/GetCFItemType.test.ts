@@ -46,7 +46,7 @@ describe('GetCFItemType', () => {
       }
 
       mockStore.getDefinitionById.mockReturnValue({
-        docSourcedId: 'doc-123',
+        docStorageKey: 'doc-123',
         value: itemType,
         lastChangeDateTime: '2024-01-01T00:00:00.000Z'
       } as any)
@@ -64,7 +64,7 @@ describe('GetCFItemType', () => {
       const childA = { identifier: 'child-a', title: 'Child A', hierarchyCode: '01.01' }
       const unrelated = { identifier: 'other', title: 'Unrelated', hierarchyCode: '02' }
 
-      mockStore.getDefinitionById.mockReturnValue({ docSourcedId: 'doc-123', value: itemType } as any)
+      mockStore.getDefinitionById.mockReturnValue({ docStorageKey: 'doc-123', value: itemType } as any)
       mockStore.getTenantDefinitions.mockReturnValue({
         CFItemTypes: [itemType, childB, childA, unrelated]
       } as any)

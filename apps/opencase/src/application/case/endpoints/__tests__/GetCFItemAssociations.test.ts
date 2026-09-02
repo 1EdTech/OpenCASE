@@ -18,7 +18,7 @@ describe('GetCFItemAssociations', () => {
     } as any
 
     mockStore = {
-      getDocumentIdForItem: jest.fn(),
+      getStorageKeyForItem: jest.fn(),
       getAllDocuments: jest.fn()
     } as any
 
@@ -32,7 +32,7 @@ describe('GetCFItemAssociations', () => {
     const itemId = 'item-123'
 
     it('should return null when item is not found in index', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(null)
+      mockStore.getStorageKeyForItem.mockReturnValue(null)
 
       const result = await getCFItemAssociations.execute({ tenantId, caseVersion, sourcedId: itemId })
 
@@ -57,7 +57,7 @@ describe('GetCFItemAssociations', () => {
         rubrics: []
       })
 
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
       mockRepository.load.mockResolvedValue(pkg)
 
       const result = await getCFItemAssociations.execute({ tenantId, caseVersion, sourcedId: itemId })
@@ -118,7 +118,7 @@ describe('GetCFItemAssociations', () => {
         rubrics: []
       })
 
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
       mockRepository.load.mockResolvedValue(pkg)
 
       const result = await getCFItemAssociations.execute({ tenantId, caseVersion, sourcedId: itemId })

@@ -25,7 +25,9 @@ describe('GetCFPackage', () => {
         CFLicenses: [],
         CFItemTypes: [],
         CFAssociationGroupings: []
-      })
+      }),
+      // Identifier === storage key for these tests (no mirror/fork scenario).
+      resolveStorageKey: jest.fn((_t, _v, identifier) => identifier)
     } as any
 
     getCFPackage = new GetCFPackage(mockRepository, mockStore);

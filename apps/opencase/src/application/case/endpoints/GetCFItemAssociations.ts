@@ -24,11 +24,11 @@ export class GetCFItemAssociations {
     const storageVersion = query.loadVersion ?? query.caseVersion
 
     // Find which document contains this item
-    const docId = this.store.getDocumentIdForItem(query.tenantId, storageVersion, query.sourcedId)
-    if (!docId) return null
+    const storageKey = this.store.getStorageKeyForItem(query.tenantId, storageVersion, query.sourcedId)
+    if (!storageKey) return null
 
     // Load the package containing this item
-    const pkg = await this.pkgRepo.load(query.tenantId, storageVersion, docId)
+    const pkg = await this.pkgRepo.load(query.tenantId, storageVersion, storageKey)
     if (!pkg) return null
 
     // Verify the item exists

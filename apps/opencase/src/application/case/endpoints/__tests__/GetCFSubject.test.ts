@@ -44,7 +44,7 @@ describe('GetCFSubject', () => {
       }
 
       mockStore.getDefinitionById.mockReturnValue({
-        docSourcedId: 'doc-123',
+        docStorageKey: 'doc-123',
         value: subject
       } as any)
       mockStore.getTenantDefinitions.mockReturnValue({ CFSubjects: [subject] } as any)
@@ -61,7 +61,7 @@ describe('GetCFSubject', () => {
       const childA = { identifier: 'child-a', title: 'Child A', hierarchyCode: '1.01.01' }
       const unrelated = { identifier: 'other', title: 'Unrelated', hierarchyCode: '1.02' }
 
-      mockStore.getDefinitionById.mockReturnValue({ docSourcedId: 'doc-123', value: subject } as any)
+      mockStore.getDefinitionById.mockReturnValue({ docStorageKey: 'doc-123', value: subject } as any)
       mockStore.getTenantDefinitions.mockReturnValue({
         CFSubjects: [subject, childB, childA, unrelated]
       } as any)

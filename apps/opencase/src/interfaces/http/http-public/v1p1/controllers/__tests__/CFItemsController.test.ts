@@ -18,7 +18,7 @@ describe('CFItemsControllerV1p1', () => {
     } as any
 
     mockStore = {
-      resolveItemGlobal: jest.fn().mockReturnValue({ tenantId: 'test-tenant', version: '1.1', docSourcedId: 'doc-123' }),
+      resolveItemGlobal: jest.fn().mockReturnValue({ tenantId: 'test-tenant', version: '1.1', docStorageKey: 'doc-123' }),
       isDocumentPublic: jest.fn().mockReturnValue(true),
     }
     controller = new CFItemsControllerV1p1(mockGetCFItem, mockStore)

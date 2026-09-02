@@ -17,7 +17,7 @@ describe('GetCFAssociation', () => {
     } as any
 
     mockStore = {
-      getDocumentIdForAssociation: jest.fn(),
+      getStorageKeyForAssociation: jest.fn(),
       getAllDocuments: jest.fn()
     } as any
 
@@ -31,7 +31,7 @@ describe('GetCFAssociation', () => {
     const assocId = 'assoc-123'
 
     it('should return null when association is not found in index', async () => {
-      mockStore.getDocumentIdForAssociation.mockReturnValue(null)
+      mockStore.getStorageKeyForAssociation.mockReturnValue(null)
 
       const result = await getCFAssociation.execute({ tenantId, caseVersion, sourcedId: assocId })
 
@@ -40,7 +40,7 @@ describe('GetCFAssociation', () => {
     })
 
     it('should return null when package is not found', async () => {
-      mockStore.getDocumentIdForAssociation.mockReturnValue(docId)
+      mockStore.getStorageKeyForAssociation.mockReturnValue(docId)
       mockRepository.load.mockResolvedValue(null)
 
       const result = await getCFAssociation.execute({ tenantId, caseVersion, sourcedId: assocId })
@@ -66,7 +66,7 @@ describe('GetCFAssociation', () => {
         rubrics: []
       })
 
-      mockStore.getDocumentIdForAssociation.mockReturnValue(docId)
+      mockStore.getStorageKeyForAssociation.mockReturnValue(docId)
       mockRepository.load.mockResolvedValue(pkg)
 
       const result = await getCFAssociation.execute({ tenantId, caseVersion, sourcedId: assocId })
@@ -111,7 +111,7 @@ describe('GetCFAssociation', () => {
         rubrics: []
       })
 
-      mockStore.getDocumentIdForAssociation.mockReturnValue(docId)
+      mockStore.getStorageKeyForAssociation.mockReturnValue(docId)
       mockRepository.load.mockResolvedValue(pkg)
 
       const result = await getCFAssociation.execute({ tenantId, caseVersion, sourcedId: assocId })

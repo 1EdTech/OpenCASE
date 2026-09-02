@@ -35,15 +35,15 @@ export class UpdateCFItem {
     }
 
     // Find which document this item belongs to
-    const docId = this.store.getDocumentIdForItem(tenantId, caseVersion, sourcedId)
-    if (!docId) {
+    const storageKey = this.store.getStorageKeyForItem(tenantId, caseVersion, sourcedId)
+    if (!storageKey) {
       throw new Error(`CFItem with sourcedId ${sourcedId} not found`)
     }
 
     // Load existing package
-    const existingPkg = await this.pkgRepo.load(tenantId, caseVersion, docId)
+    const existingPkg = await this.pkgRepo.load(tenantId, caseVersion, storageKey)
     if (!existingPkg) {
-      throw new Error(`CFPackage for document ${docId} not found`)
+      throw new Error(`CFPackage for CFItem ${sourcedId} not found`)
     }
 
     // Ensure sourcedId matches
@@ -54,9 +54,13 @@ export class UpdateCFItem {
 
     const docJSON = existingPkg.document.toJSON()
     const docURI = docJSON.uri
+    // CFDocumentURI must reference the document's own current public
+    // identifier — never its storage key, which is an internal detail the
+    // document's identifier may differ from (e.g. after a fork).
+    const docIdentifier = existingPkg.document.sourcedId
 
     // Update the specific item
-    const updatedItem = CFItem.fromRaw(tenantId, caseVersion, payload, docId, docURI)
+    const updatedItem = CFItem.fromRaw(tenantId, caseVersion, payload, docIdentifier, docURI)
     
     // Replace the item in the items array
     const items = existingPkg.items.map(i => 
@@ -72,7 +76,7 @@ export class UpdateCFItem {
       definitions: existingPkg.definitions
     })
 
-    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg)
+    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg, storageKey)
   }
 }
 

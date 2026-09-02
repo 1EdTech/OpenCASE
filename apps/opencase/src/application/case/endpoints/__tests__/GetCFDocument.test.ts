@@ -1,10 +1,12 @@
 import { GetCFDocument } from '../GetCFDocument'
 import { CFPackageRepository } from '../../ports/CFPackageRepository'
+import { FileFrameworkStore } from '../../../../infrastructure/persistence/file/FileFrameworkStore'
 import { CFPackage } from '../../../../domain/case/entities/CFPackage'
 import { CFDocument } from '../../../../domain/case/entities/CFDocument'
 
 describe('GetCFDocument', () => {
   let mockRepository: jest.Mocked<CFPackageRepository>
+  let mockStore: jest.Mocked<FileFrameworkStore>
   let getCFDocument: GetCFDocument
 
   beforeEach(() => {
@@ -13,7 +15,12 @@ describe('GetCFDocument', () => {
       saveNewVersion: jest.fn()
     } as any
 
-    getCFDocument = new GetCFDocument(mockRepository)
+    // Identifier === storage key for these tests (no mirror/fork scenario).
+    mockStore = {
+      resolveStorageKey: jest.fn((_t, _v, identifier) => identifier)
+    } as any
+
+    getCFDocument = new GetCFDocument(mockRepository, mockStore)
   })
 
   describe('execute', () => {
