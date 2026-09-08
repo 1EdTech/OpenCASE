@@ -28,10 +28,11 @@ export class CFPackagesManagementController {
         return res.status(403).json({ error: 'Tenant mismatch - authenticated tenant does not match URL parameter' })
       }
 
-      // Extract includeArchived query parameter (default: false)
       const includeArchived = req.query.includeArchived === 'true'
+      const frameworkType = typeof req.query.frameworkType === 'string' ? req.query.frameworkType : undefined
+      const participantId = typeof req.query.participantId === 'string' ? req.query.participantId : undefined
 
-      const result = await this.listFrameworks.execute({ tenantId, caseVersion, includeArchived })
+      const result = await this.listFrameworks.execute({ tenantId, caseVersion, includeArchived, frameworkType, participantId })
       return res.status(200).json(result)
     } catch (error: any) {
       return res.status(400).json({ error: error.message || 'List failed' })

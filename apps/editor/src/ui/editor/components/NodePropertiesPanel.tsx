@@ -38,11 +38,13 @@ type Props = {
   ensureCfSubject?: (_title: string) => CFSubject | null
   cfConcepts?: CFConcept[]
   ensureCfConcept?: (_title: string) => CFConcept | null
+  hideColorBand?: boolean
 }
 
 export default memo(function NodePropertiesPanel({
   node, onClose, onChangeNode, onViewCFPackage, isPublishedToOpenCase, availableLicenses,
   cfItemTypes = [], ensureCfItemType, cfSubjects = [], ensureCfSubject, cfConcepts = [], ensureCfConcept,
+  hideColorBand = false,
 }: Readonly<Props>) {
   const [copied, setCopied] = useState<null | 'code' | 'uri' | 'opencase'>(null)
   const [conceptInput, setConceptInput] = useState('')
@@ -152,8 +154,8 @@ export default memo(function NodePropertiesPanel({
   return (
     <aside
       className={[
-        'fixed right-0 top-0 z-20 flex h-screen w-[min(460px,92vw)] flex-col border-l border-black/10 bg-slate-50 text-slate-900 shadow-[-16px_0_40px_rgba(0,0,0,0.18)] transition-transform duration-200 ease-out',
-        isOpen ? 'translate-x-0' : 'translate-x-full',
+        'fixed right-0 top-0 z-20 flex h-screen w-[min(460px,92vw)] flex-col border-l border-black/10 bg-slate-50 text-slate-900 transition-transform duration-200 ease-out',
+        isOpen ? 'translate-x-0 shadow-[-16px_0_40px_rgba(0,0,0,0.18)]' : 'translate-x-full',
       ].join(' ')}
       aria-label={isExternalFramework ? 'External framework details' : isFramework ? 'Framework details' : 'Item details'}
     >
@@ -345,7 +347,7 @@ export default memo(function NodePropertiesPanel({
                       className="w-full"
                     />
                   </div>
-                  <ColorBandPicker value={cfItem?.colorBand} onChange={(color) => updateItem({ colorBand: color ?? '' })} labelClassName={LABEL_CLS} />
+                  {!hideColorBand && <ColorBandPicker value={cfItem?.colorBand} onChange={(color) => updateItem({ colorBand: color ?? '' })} labelClassName={LABEL_CLS} />}
                   <div>
                     <label className={LABEL_CLS} htmlFor="node-subject">Subject(s)</label>
                     <TagComboboxInput

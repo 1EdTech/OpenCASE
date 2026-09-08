@@ -17,6 +17,7 @@ import type {
   ExternalFrameworkNodeData,
 } from '@/ui/editor/reactflow/types'
 import type { CFAssociationGrouping, CFDocument, CFItem, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
+import type { FrameworkEdgeRecord } from '@/domain/framework/treeDerivation'
 import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
 import type { EditorSettings } from '@/ui/editor/components/SettingsModal'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
@@ -94,6 +95,11 @@ type EditorContextValue = {
   deleteElements: (_params: { nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }) => void
   applyHierarchyLayout: () => void
   applyStarLayout: () => void
+  cfDocument: CFDocument | undefined
+  frameworkNodeId: string | null
+  cfItems: CFItem[]
+  frameworkEdges: FrameworkEdgeRecord[]
+  rootItemIds: string[]
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null)
@@ -407,14 +413,17 @@ export function EditorProvider({
   const applyHierarchyLayout = useCallback(() => {
     const { positions, edgeHandles } = computeHierarchyLayout(state.nodes, state.edges)
     dispatch({ type: 'layout/applyHierarchy', positions, edgeHandles })
-    updateSettings({ ...settings, edgeType: 'smoothstep' })
-  }, [state.nodes, state.edges, settings, updateSettings])
+    // Edge style here is a byproduct of the chosen layout/view, not a deliberate
+    // settings edit — set it directly so it doesn't dirty the document (matches
+    // position/handle changes from the same action, and 'star' below).
+    setSettings((prev) => ({ ...prev, edgeType: 'smoothstep' }))
+  }, [state.nodes, state.edges])
 
   const applyStarLayout = useCallback(() => {
     const { positions, edgeHandles } = computeStarLayout(state.nodes, state.edges)
     dispatch({ type: 'layout/applyHierarchy', positions, edgeHandles })
-    updateSettings({ ...settings, edgeType: 'default' })
-  }, [state.nodes, state.edges, settings, updateSettings])
+    setSettings((prev) => ({ ...prev, edgeType: 'default' }))
+  }, [state.nodes, state.edges])
 
   // ── CRUD callbacks ───────────────────────────────────────────────────
 
@@ -627,6 +636,44 @@ export function EditorProvider({
   }, [])
   const clearDirty = useCallback(() => dispatch({ type: 'dirty/clear' }), [])
 
+  // ── Domain accessors (memoized, always in sync with reducer state) ────
+
+  const cfDocument = useMemo(
+    () => state.nodes.find(isFrameworkNode)?.data.cfDocument,
+    [state.nodes],
+  )
+
+  const frameworkNodeId = useMemo(
+    () => state.nodes.find(isFrameworkNode)?.id ?? null,
+    [state.nodes],
+  )
+
+  const cfItems = useMemo(
+    () => state.nodes.filter(isItemNode).map((n) => n.data.cfItem),
+    [state.nodes],
+  )
+
+  const frameworkEdges = useMemo(
+    (): FrameworkEdgeRecord[] =>
+      state.edges
+        .filter((e) => !e.data?.isFrameworkRootConnection)
+        .map((e) => ({
+          parentId: e.source,
+          childId: e.target,
+          sequenceNumber: e.data?.sequenceNumber,
+        })),
+    [state.edges],
+  )
+
+  const rootItemIds = useMemo(
+    () =>
+      state.edges
+        .filter((e) => e.data?.isFrameworkRootConnection)
+        .sort((a, b) => (a.data?.sequenceNumber ?? Infinity) - (b.data?.sequenceNumber ?? Infinity))
+        .map((e) => e.target),
+    [state.edges],
+  )
+
   // ── Context value ────────────────────────────────────────────────────
 
   const value: EditorContextValue = useMemo(
@@ -682,6 +729,11 @@ export function EditorProvider({
       deleteElements,
       applyHierarchyLayout,
       applyStarLayout,
+      cfDocument,
+      frameworkNodeId,
+      cfItems,
+      frameworkEdges,
+      rootItemIds,
     }),
     [
       state.nodes, state.edges, selectedNodeIds, selectedEdgeIds,
@@ -698,6 +750,7 @@ export function EditorProvider({
       addChild, addDetachedItem, addExternalFramework,
       addItemDialog, setAddItemDraft, cancelAddItem, confirmAddItem,
       deleteElements, applyHierarchyLayout, applyStarLayout,
+      cfDocument, frameworkNodeId, cfItems, frameworkEdges, rootItemIds,
     ],
   )
 

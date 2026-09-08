@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentType } from 'react'
-import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon, ShareIcon } from '@heroicons/react/24/solid'
+import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon, ShareIcon, QueueListIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
 import type { CFAssociationGrouping } from '@/domain/case/types'
 
@@ -200,6 +200,8 @@ export default function CanvasHeader({
   onOpenSettings,
   onResetHierarchy,
   onResetStar,
+  onSwitchTreeView,
+  activeView = 'canvas',
   cfAssociationGroupings,
   activeGroupingFilter,
   onSetGroupingFilter,
@@ -228,6 +230,10 @@ export default function CanvasHeader({
   onResetHierarchy?: () => void
   /** Re-layout graph in star/radial topology mode */
   onResetStar?: () => void
+  /** Toggle between the tree panel view and canvas view */
+  onSwitchTreeView?: () => void
+  /** Currently active view mode */
+  activeView?: 'canvas' | 'tree'
   /** Association grouping definitions for filter dropdown */
   cfAssociationGroupings?: CFAssociationGrouping[]
   /** Currently active grouping filter (null = show all) */
@@ -376,6 +382,7 @@ export default function CanvasHeader({
                 { label: 'Settings', icon: Cog6ToothIcon, onClick: onOpenSettings },
                 { label: 'Hierarchy layout', icon: Bars3BottomLeftIcon, onClick: onResetHierarchy, disabled: !onResetHierarchy },
                 { label: 'Star layout', icon: SparklesIcon, onClick: onResetStar, disabled: !onResetStar },
+                { label: activeView === 'tree' ? '✓ Tree view' : 'Tree view', icon: QueueListIcon, onClick: onSwitchTreeView, disabled: !onSwitchTreeView },
                 'divider',
                 { label: 'Help', icon: QuestionMarkCircleIcon, onClick: () => {} },
               ]}

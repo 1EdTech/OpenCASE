@@ -604,7 +604,9 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
           data: { ...e.data, edgeType: h.edgeType, labelPosition: h.labelPosition },
         } as CaseEditorEdge
       })
-      return { ...state, nodes: nextNodes, edges: nextEdges, layoutVersion: state.layoutVersion + 1, dirty: true }
+      // Switching layout/view mode is not a data edit — position/handle recomputation
+      // alone must not require a save (mirrors 'layout/apply' below).
+      return { ...state, nodes: nextNodes, edges: nextEdges, layoutVersion: state.layoutVersion + 1 }
     }
     case 'graph/load': {
       return {

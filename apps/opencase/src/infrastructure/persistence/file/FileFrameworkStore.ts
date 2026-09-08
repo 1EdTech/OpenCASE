@@ -28,6 +28,8 @@ export interface DocumentMetadata {
   isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
+  /** Participant frameworks in an alignment document (extracted from ext:opencase.alignmentParticipants) */
+  alignmentParticipants?: Array<{ identifier?: string; uri: string }>
 }
 
 export interface DocumentVersionInfo {
@@ -175,6 +177,7 @@ export class FileFrameworkStore {
           sourcePackageURI: d.sourcePackageURI,
           isModifiedFromSource: d.isModifiedFromSource,
           archived: d.archived,
+          alignmentParticipants: d.alignmentParticipants,
         })
       }
     } catch {
@@ -439,6 +442,11 @@ export class FileFrameworkStore {
       }
     }
 
+    let alignmentParticipants: Array<{ identifier?: string; uri: string }> | undefined
+    if (extOpencase && typeof extOpencase === 'object' && Array.isArray((extOpencase as any).alignmentParticipants)) {
+      alignmentParticipants = (extOpencase as any).alignmentParticipants
+    }
+
     versionMap.set(storageKey, {
       sourcedId: currentIdentifier,
       title: doc.title as string,
@@ -454,6 +462,7 @@ export class FileFrameworkStore {
       licenseIdentifier,
       sourcePackageURI,
       isModifiedFromSource,
+      alignmentParticipants,
     })
   }
 
@@ -658,6 +667,7 @@ export class FileFrameworkStore {
       sourcePackageURI: meta.sourcePackageURI,
       isModifiedFromSource: meta.isModifiedFromSource,
       archived: meta.archived,
+      alignmentParticipants: meta.alignmentParticipants,
     }))
 
     await fs.writeFile(

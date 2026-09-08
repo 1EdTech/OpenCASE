@@ -142,8 +142,8 @@ export default memo(function EdgePropertiesPanel({ edge, nodes, onClose, onChang
   return (
     <aside
       className={[
-        'fixed right-0 top-0 z-20 flex h-screen w-[min(460px,92vw)] flex-col border-l border-black/10 bg-slate-50 text-slate-900 shadow-[-16px_0_40px_rgba(0,0,0,0.18)] transition-transform duration-200 ease-out',
-        isOpen ? 'translate-x-0' : 'translate-x-full',
+        'fixed right-0 top-0 z-20 flex h-screen w-[min(460px,92vw)] flex-col border-l border-black/10 bg-slate-50 text-slate-900 transition-transform duration-200 ease-out',
+        isOpen ? 'translate-x-0 shadow-[-16px_0_40px_rgba(0,0,0,0.18)]' : 'translate-x-full',
       ].join(' ')}
       aria-label="Association details"
     >
