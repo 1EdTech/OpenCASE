@@ -28,6 +28,8 @@ describe('DeleteCFDocument', () => {
       removeDefinitionsFromIndexForDocument: jest.fn(),
       setDocumentArchived: jest.fn(),
       isDocumentArchived: jest.fn().mockReturnValue(false),
+      // Identifier === storage key for these tests (no mirror/fork scenario).
+      resolveStorageKey: jest.fn((_t: unknown, _v: unknown, identifier: string) => identifier),
       writeIndexesToDisk: jest.fn().mockResolvedValue(undefined),
       getTenantVersionRootDir: jest.fn().mockReturnValue('/data/tenants/test-tenant/v1p1')
     } as any

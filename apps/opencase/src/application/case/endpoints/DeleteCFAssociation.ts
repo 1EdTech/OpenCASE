@@ -19,15 +19,15 @@ export class DeleteCFAssociation {
     const { tenantId, caseVersion, sourcedId } = cmd
 
     // Find which document this association belongs to
-    const docId = this.store.getDocumentIdForAssociation(tenantId, caseVersion, sourcedId)
-    if (!docId) {
+    const storageKey = this.store.getStorageKeyForAssociation(tenantId, caseVersion, sourcedId)
+    if (!storageKey) {
       throw new Error(`CFAssociation with sourcedId ${sourcedId} not found`)
     }
 
     // Load existing package
-    const existingPkg = await this.pkgRepo.load(tenantId, caseVersion, docId)
+    const existingPkg = await this.pkgRepo.load(tenantId, caseVersion, storageKey)
     if (!existingPkg) {
-      throw new Error(`CFPackage for document ${docId} not found`)
+      throw new Error(`CFPackage for CFAssociation ${sourcedId} not found`)
     }
 
     // Verify association exists
@@ -51,7 +51,7 @@ export class DeleteCFAssociation {
       definitions: existingPkg.definitions
     })
 
-    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg)
+    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg, storageKey)
   }
 }
 

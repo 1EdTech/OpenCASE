@@ -23,6 +23,10 @@ import type { CFDocument, CFItem, CFPackage } from '@/domain/case/types'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
 import { absolutizeCaseUris, frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
+import type { Framework } from '@/domain/framework/model/types'
+import { hasFrameworkDataChanged } from '@/domain/framework/hasFrameworkDataChanged'
+
+type MirrorStatus = { isModifiedFromSource?: boolean; sourcePackageURI?: string }
 
 type EditorCanvasProps = {
   onBack?: () => void
@@ -33,9 +37,11 @@ type EditorCanvasProps = {
   onArchiveFramework?: () => Promise<void>
   /** Fetch the published CFPackage from the server (returns CASE JSON with absolute URIs) */
   onFetchCfPackage?: () => Promise<CFPackage>
+  /** Mirror/fork status of the open framework, if it was ever imported */
+  mirrorStatus?: MirrorStatus
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onFetchCfPackage }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onFetchCfPackage, mirrorStatus }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -96,10 +102,22 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const [viewCaseLoading, setViewCaseLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [forkWarningOpen, setForkWarningOpen] = useState(false)
+
+  // Baseline Framework snapshot for fork-detection — captured once when this
+  // session's graph first loads, and refreshed after every successful save.
+  // Only ever needs to change mid-session for a fork itself, and once forked
+  // mirrorStatus.isModifiedFromSource flips true, permanently disabling the
+  // gate below — so a single per-mount baseline is sufficient.
+  const baselineFrameworkRef = useRef<Framework | null>(null)
+  if (baselineFrameworkRef.current === null) {
+    baselineFrameworkRef.current = fromEditorGraph({ graph: { nodes, edges: editorEdges } }).framework
+  }
+  const pendingSaveRef = useRef<{ openCasePackage: ReturnType<typeof toOpenCaseFormat>; framework: Framework } | null>(null)
 
   // Available licenses from context (loaded via App.tsx definitions pipeline)
   const availableLicenses = cfLicenses
-  
+
   // Track Shift key for selection cursor styling only (DOM class, no React state).
   const shiftHeldRef = useRef(false)
   const [shiftHeldForInteractions, setShiftHeldForInteractions] = useState(false)
@@ -172,7 +190,36 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     }
   }, [isPublishedToOpenCase, onFetchCfPackage])
 
-  // Save: Generate CFPackage and POST to server
+  // Actually perform the save (network call). Split out from `handleSave` so
+  // the fork-warning dialog can defer this until the user confirms.
+  const doSave = useCallback(async (openCasePackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework) => {
+    if (onSaveToServer) {
+      setSaveStatus('saving')
+      setSaveError(null)
+      try {
+        await onSaveToServer(openCasePackage)
+        baselineFrameworkRef.current = framework
+        setSaveStatus('success')
+        clearDirty()
+        setTimeout(() => setSaveStatus('idle'), 2000)
+      } catch (err) {
+        console.error('[Save] Failed to save to server:', err)
+        setSaveStatus('error')
+        setSaveError(err instanceof Error ? err.message : 'Failed to save')
+        // Don't open the CFPackage viewer here — it has nothing to show for a
+        // failed save and previously opened with stale/empty content, which
+        // just displayed a misleading "No CFPackage data" placeholder instead
+        // of the real error (shown via saveError, next to the Save button).
+      }
+    } else {
+      setCfPackageDialogOpen(true)
+    }
+  }, [onSaveToServer, clearDirty])
+
+  // Save: Generate CFPackage and POST to server — unless this framework is
+  // still a pristine mirror and the pending edits touch actual framework
+  // data (not just canvas layout), in which case warn first: saving will
+  // fork it into an independent local copy.
   const handleSave = useCallback(async () => {
     const { nodes: n, edges: e } = graphRef.current
     const ctx = saveCtxRef.current
@@ -186,24 +233,18 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     const openCasePackage = toOpenCaseFormat(cfPackage)
     console.log('[Save] Generated OpenCASE package:', openCasePackage)
 
-    if (onSaveToServer) {
-      setSaveStatus('saving')
-      setSaveError(null)
-      try {
-        await onSaveToServer(openCasePackage)
-        setSaveStatus('success')
-        clearDirty()
-        setTimeout(() => setSaveStatus('idle'), 2000)
-      } catch (err) {
-        console.error('[Save] Failed to save to server:', err)
-        setSaveStatus('error')
-        setSaveError(err instanceof Error ? err.message : 'Failed to save')
-        setCfPackageDialogOpen(true)
-      }
-    } else {
-      setCfPackageDialogOpen(true)
+    const willFork = mirrorStatus?.isModifiedFromSource === false &&
+      baselineFrameworkRef.current !== null &&
+      hasFrameworkDataChanged(baselineFrameworkRef.current, framework)
+
+    if (willFork) {
+      pendingSaveRef.current = { openCasePackage, framework }
+      setForkWarningOpen(true)
+      return
     }
-  }, [onSaveToServer, clearDirty])
+
+    await doSave(openCasePackage, framework)
+  }, [mirrorStatus, doSave])
 
   // Compute in-use groupings from actual edges (for filter dropdown)
   const inUseGroupings = useMemo(() => {
@@ -330,7 +371,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     edgesCacheRef.current = next
     return result
   }, [editorEdges, settings.edgeType, effectiveGroupingFilter])
-  
+
   // Validate connections - prevent framework-to-framework connections
   const nodesWithCallbacksRef = useRef(nodesWithCallbacks)
   nodesWithCallbacksRef.current = nodesWithCallbacks
@@ -338,35 +379,35 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const isValidConnection = useCallback((connection: Connection) => {
     const sourceNode = nodesWithCallbacksRef.current.find((n) => n.id === connection.source)
     const targetNode = nodesWithCallbacksRef.current.find((n) => n.id === connection.target)
-    
-    const isSourceFramework = 
-      sourceNode?.type === 'caseFrameworkNode' || 
+
+    const isSourceFramework =
+      sourceNode?.type === 'caseFrameworkNode' ||
       sourceNode?.type === 'externalFrameworkNode'
-    const isTargetFramework = 
-      targetNode?.type === 'caseFrameworkNode' || 
+    const isTargetFramework =
+      targetNode?.type === 'caseFrameworkNode' ||
       targetNode?.type === 'externalFrameworkNode'
-    
+
     if (isSourceFramework && isTargetFramework) {
       return false
     }
-    
+
     return true
   }, [])
-  
+
   // Handle edge reconnection - when user drags an edge endpoint to a new handle/node
   const onReconnectStart = useCallback(() => {
     edgeReconnectSuccessful.current = false
   }, [])
-  
+
   const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
     edgeReconnectSuccessful.current = true
-    
+
     // Use our dedicated reconnect action to update the edge in place
     const newSource = newConnection.source ?? oldEdge.source
     const newTarget = newConnection.target ?? oldEdge.target
     const newSourceHandle = newConnection.sourceHandle ?? undefined
     const newTargetHandle = newConnection.targetHandle ?? undefined
-    
+
     reconnectEdgeAction(
       oldEdge.id,
       newSource,
@@ -375,7 +416,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       newTargetHandle
     )
   }, [reconnectEdgeAction])
-  
+
   const onReconnectEnd = useCallback((_: unknown, _edge: Edge) => {
     // If reconnection wasn't successful (dropped in empty space), optionally remove the edge
     // For now, we'll keep the edge if reconnection fails (user just cancels)
@@ -776,23 +817,23 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     resolve: (allowDelete: boolean) => void
   }>(null)
   const [archiving, setArchiving] = useState(false)
-  
+
   // Helper function to get the center of the current viewport in flow coordinates
   const getViewportCenter = useCallback(() => {
     const instance = reactFlowRef.current
     const wrap = reactFlowWrapRef.current
     if (!instance || !wrap) return undefined
-    
+
     const viewport = instance.getViewport()
     const wrapRect = wrap.getBoundingClientRect()
-    
+
     // Convert screen center to flow coordinates
     const centerX = (wrapRect.width / 2 - viewport.x) / viewport.zoom
     const centerY = (wrapRect.height / 2 - viewport.y) / viewport.zoom
-    
+
     return { x: centerX, y: centerY }
   }, [])
-  
+
   // Keyboard shortcuts for adding items and external frameworks
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -805,11 +846,11 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       ) {
         return
       }
-      
+
       // Check for Cmd/Ctrl modifier
       const isMod = e.metaKey || e.ctrlKey
       if (!isMod) return
-      
+
       // Cmd/Ctrl + C: Add new item
       if (e.key.toLowerCase() === 'c') {
         e.preventDefault()
@@ -817,7 +858,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         addDetachedItem(viewportCenter)
         return
       }
-      
+
       // Cmd/Ctrl + F: Add external framework
       if (e.key.toLowerCase() === 'f') {
         e.preventDefault()
@@ -827,7 +868,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         return
       }
     }
-    
+
     globalThis.addEventListener('keydown', handleKeyDown)
     return () => globalThis.removeEventListener('keydown', handleKeyDown)
   }, [addDetachedItem, getViewportCenter])
@@ -1362,6 +1403,23 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onLeave={() => {
           setLeaveOpen(false)
           onBack?.()
+        }}
+      />
+
+      <ConfirmActionDialog
+        open={forkWarningOpen}
+        title="Fork this mirrored framework?"
+        description="You are making changes to a mirrored framework. Saving will turn this mirror into an independent local copy with new identifiers."
+        confirmLabel="Save & fork"
+        onCancel={() => {
+          setForkWarningOpen(false)
+          pendingSaveRef.current = null
+        }}
+        onConfirm={() => {
+          setForkWarningOpen(false)
+          const pending = pendingSaveRef.current
+          pendingSaveRef.current = null
+          if (pending) void doSave(pending.openCasePackage, pending.framework)
         }}
       />
 

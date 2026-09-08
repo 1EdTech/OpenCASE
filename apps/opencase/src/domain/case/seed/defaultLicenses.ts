@@ -145,11 +145,11 @@ import {
  * Build a definitions index object containing all default seed definitions,
  * ready to be written as `definitions.json`.
  */
-export function buildDefaultDefinitionsIndex(): Record<string, Record<string, { docSourcedId: string; value: any }>> {
-  const seed = (items: Array<{ identifier: string }>): Record<string, { docSourcedId: string; value: any }> => {
-    const map: Record<string, { docSourcedId: string; value: any }> = {}
+export function buildDefaultDefinitionsIndex(): Record<string, Record<string, { docStorageKey: string; value: any }>> {
+  const seed = (items: Array<{ identifier: string }>): Record<string, { docStorageKey: string; value: any }> => {
+    const map: Record<string, { docStorageKey: string; value: any }> = {}
     for (const item of items) {
-      map[item.identifier] = { docSourcedId: '__seed__', value: item }
+      map[item.identifier] = { docStorageKey: '__seed__', value: item }
     }
     return map
   }

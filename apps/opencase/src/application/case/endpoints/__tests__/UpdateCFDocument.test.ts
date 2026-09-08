@@ -1,5 +1,6 @@
 import { UpdateCFDocument } from '../UpdateCFDocument'
 import { CFPackageRepository } from '../../ports/CFPackageRepository'
+import { FileFrameworkStore } from '../../../../infrastructure/persistence/file/FileFrameworkStore'
 import { CFPackage } from '../../../../domain/case/entities/CFPackage'
 import { CFDocument } from '../../../../domain/case/entities/CFDocument'
 import { CFItem } from '../../../../domain/case/entities/CFItem'
@@ -8,6 +9,7 @@ import { CFRubric } from '../../../../domain/case/entities/CFRubric'
 
 describe('UpdateCFDocument', () => {
   let mockRepository: jest.Mocked<CFPackageRepository>
+  let mockStore: jest.Mocked<FileFrameworkStore>
   let updateCFDocument: UpdateCFDocument
 
   beforeEach(() => {
@@ -16,7 +18,12 @@ describe('UpdateCFDocument', () => {
       saveNewVersion: jest.fn().mockResolvedValue(undefined)
     } as any
 
-    updateCFDocument = new UpdateCFDocument(mockRepository)
+    // Identifier === storage key for these tests (no mirror/fork scenario).
+    mockStore = {
+      resolveStorageKey: jest.fn((_t, _v, identifier) => identifier)
+    } as any
+
+    updateCFDocument = new UpdateCFDocument(mockRepository, mockStore)
   })
 
   describe('execute', () => {

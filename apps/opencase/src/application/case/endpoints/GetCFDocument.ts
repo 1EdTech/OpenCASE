@@ -2,6 +2,7 @@ import { type CFPackageRepository } from '../ports/CFPackageRepository'
 import { type CaseVersion, type SourcedId, type TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { logger } from '../../../infrastructure/logging/Logger'
 import { type LinkData } from '../../../domain/case/value-objects/LinkData'
+import { type FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export interface GetCFDocumentQuery {
   tenantId: TenantId
@@ -12,14 +13,19 @@ export interface GetCFDocumentQuery {
 }
 
 export class GetCFDocument {
-  constructor (private readonly pkgRepo: CFPackageRepository) {}
+  constructor (
+    private readonly pkgRepo: CFPackageRepository,
+    private readonly store: FileFrameworkStore
+  ) {}
 
   async execute (query: GetCFDocumentQuery) {
     //logger.info({ query }, 'Executing GetCFDocument')
-    
+
     // Load the package — use loadVersion for storage access if provided
     const storageVersion = query.loadVersion ?? query.caseVersion
-    const pkg = await this.pkgRepo.load(query.tenantId, storageVersion, query.sourcedId)
+    const storageKey = this.store.resolveStorageKey(query.tenantId, storageVersion, query.sourcedId)
+    if (!storageKey) return null
+    const pkg = await this.pkgRepo.load(query.tenantId, storageVersion, storageKey)
     if (!pkg) return null
 
     // Note: Get by ID returns archived documents regardless - filtering only applies to list endpoints

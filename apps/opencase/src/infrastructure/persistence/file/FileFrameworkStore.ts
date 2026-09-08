@@ -37,15 +37,18 @@ export interface DocumentVersionInfo {
 }
 
 interface ItemIndexEntry {
-  docSourcedId: string
+  /** Storage key of the owning CFDocument — never its (mutable) public identifier. */
+  docStorageKey: string
 }
 
 interface AssocIndexEntry {
-  docSourcedId: string
+  /** Storage key of the owning CFDocument — never its (mutable) public identifier. */
+  docStorageKey: string
 }
 
 interface RubricIndexEntry {
-  docSourcedId: string
+  /** Storage key of the owning CFDocument — never its (mutable) public identifier. */
+  docStorageKey: string
 }
 
 type DefinitionCategory =
@@ -56,13 +59,22 @@ type DefinitionCategory =
   | 'CFAssociationGroupings'
 
 interface DefinitionIndexEntry {
-  docSourcedId: string
+  /** Storage key of the owning CFDocument — never its (mutable) public identifier. */
+  docStorageKey: string
   value: any
   lastChangeDateTime?: string
 }
 
 export class FileFrameworkStore {
   private readonly documents = new Map<TenantId, Map<CaseVersion, Map<string, DocumentMetadata>>>()
+  // Secondary index: a document's CURRENT public identifier -> the storage key
+  // (directory/index-key) it physically lives under. For every document that
+  // has never been forked these are the same value. A forked document keeps
+  // living under its original storage key while reporting a new identifier —
+  // see updateInMemoryDocumentIndex — so identifier-based lookups (the public
+  // CASE read API, and CreateFramework's "does this doc already exist" check)
+  // must resolve through this index rather than assuming identifier === key.
+  private readonly identifierToStorageKey = new Map<TenantId, Map<CaseVersion, Map<string, string>>>()
   private readonly documentVersions = new Map<TenantId, Map<CaseVersion, Map<string, DocumentVersionInfo[]>>>()
   private readonly itemsIndex = new Map<TenantId, Map<CaseVersion, Map<string, ItemIndexEntry>>>()
   private readonly assocIndex = new Map<TenantId, Map<CaseVersion, Map<string, AssocIndexEntry>>>()
@@ -110,6 +122,9 @@ export class FileFrameworkStore {
     const defsMap = await this.loadDefinitionsIndex(idxDir)
 
     this.setTenantVersionMap(this.documents, tenantId, version, docsMap)
+    const idMap = new Map<string, string>()
+    for (const [storageKey, meta] of docsMap) idMap.set(meta.sourcedId, storageKey)
+    this.setTenantVersionMap(this.identifierToStorageKey, tenantId, version, idMap)
     this.setTenantVersionMap(this.documentVersions, tenantId, version, versionsMap)
     this.setTenantVersionMap(this.itemsIndex, tenantId, version, itemsMap)
     this.setTenantVersionMap(this.assocIndex, tenantId, version, assocMap)
@@ -191,9 +206,9 @@ export class FileFrameworkStore {
     try {
       const raw = JSON.parse(
         await fs.readFile(path.join(idxDir, 'items.json'), 'utf8')
-      ) as Record<string, { docSourcedId: string }>
+      ) as Record<string, { docStorageKey: string }>
       for (const [itemId, v] of Object.entries(raw)) {
-        map.set(itemId, { docSourcedId: v.docSourcedId })
+        map.set(itemId, { docStorageKey: v.docStorageKey })
       }
     } catch {
       // ignore missing
@@ -206,9 +221,9 @@ export class FileFrameworkStore {
     try {
       const raw = JSON.parse(
         await fs.readFile(path.join(idxDir, 'associations.json'), 'utf8')
-      ) as Record<string, { docSourcedId: string }>
+      ) as Record<string, { docStorageKey: string }>
       for (const [assocId, v] of Object.entries(raw)) {
-        map.set(assocId, { docSourcedId: v.docSourcedId })
+        map.set(assocId, { docStorageKey: v.docStorageKey })
       }
     } catch {
       // ignore missing
@@ -221,9 +236,9 @@ export class FileFrameworkStore {
     try {
       const raw = JSON.parse(
         await fs.readFile(path.join(idxDir, 'rubrics.json'), 'utf8')
-      ) as Record<string, { docSourcedId: string }>
+      ) as Record<string, { docStorageKey: string }>
       for (const [rubricId, v] of Object.entries(raw)) {
-        map.set(rubricId, { docSourcedId: v.docSourcedId })
+        map.set(rubricId, { docStorageKey: v.docStorageKey })
       }
     } catch {
       // ignore missing
@@ -267,7 +282,7 @@ export class FileFrameworkStore {
       let added = 0
       for (const item of defaults) {
         if (!map.has(item.identifier)) {
-          map.set(item.identifier, { docSourcedId: '__seed__', value: item })
+          map.set(item.identifier, { docStorageKey: '__seed__', value: item })
           added++
         }
       }
@@ -285,13 +300,14 @@ export class FileFrameworkStore {
     return path.join(tenantDir, vDir)
   }
 
+  /** Direct lookup by storage key — never a public identifier. */
   async loadDocumentBundle (
     tenantId: TenantId,
     version: CaseVersion,
-    docId: string
+    storageKey: string
   ): Promise<{ document: any, items?: any[], associations?: any[], rubrics?: any[], definitions?: any } | null> {
-    logger.info({ tenantId, version, docId }, 'loadDocumentBundle')
-    const meta = this.documents.get(tenantId)?.get(version)?.get(docId)
+    logger.info({ tenantId, version, storageKey }, 'loadDocumentBundle')
+    const meta = this.documents.get(tenantId)?.get(version)?.get(storageKey)
     if (!meta) return null
     logger.info({ meta }, 'meta')
     const rootDir = this.getTenantVersionRootDir(tenantId, version)
@@ -303,17 +319,17 @@ export class FileFrameworkStore {
   async writeBundleFile (
     tenantId: TenantId,
     version: CaseVersion,
-    docId: string,
+    storageKey: string,
     bundle: any
   ): Promise<{ relativePath: string }> {
     const rootDir = this.getTenantVersionRootDir(tenantId, version)
-    const frameworksDir = path.join(rootDir, 'frameworks', docId)
+    const frameworksDir = path.join(rootDir, 'frameworks', storageKey)
     await fs.mkdir(frameworksDir, { recursive: true })
 
     const existing = await fs.readdir(frameworksDir).catch(() => [])
     const nextVersion = existing.length + 1
     const versionLabel = String(nextVersion).padStart(4, '0')
-    const fileName = `${docId}_v${versionLabel}.json`
+    const fileName = `${storageKey}_v${versionLabel}.json`
     const fullPath = path.join(frameworksDir, fileName)
     const relativePath = path.relative(rootDir, fullPath)
 
@@ -325,6 +341,7 @@ export class FileFrameworkStore {
   async updateIndexesForBundle (
     tenantId: TenantId,
     version: CaseVersion,
+    storageKey: string,
     bundle: {
       document: any
       items?: any[]
@@ -338,16 +355,15 @@ export class FileFrameworkStore {
     await fs.mkdir(idxDir, { recursive: true })
 
     const doc = bundle.document
-    const docId = (doc.sourcedId ?? doc.identifier) as string
     const lastChangeDateTime = new Date(doc.lastChangeDateTime as string | number | Date)
 
     // Update in-memory indexes
-    this.updateInMemoryDocumentIndex(tenantId, version, docId, doc, relativePath)
-    this.updateInMemoryDocumentVersionsIndex(tenantId, version, docId, relativePath, lastChangeDateTime, doc.version as string | undefined)
-    this.updateInMemoryItemsIndex(tenantId, version, bundle.items ?? [], docId)
-    this.updateInMemoryAssociationsIndex(tenantId, version, bundle.associations ?? [], docId)
-    this.updateInMemoryRubricsIndex(tenantId, version, (bundle as any).rubrics ?? [], docId)
-    this.updateInMemoryDefinitionsIndex(tenantId, version, (bundle as any).definitions, docId, lastChangeDateTime)
+    this.updateInMemoryDocumentIndex(tenantId, version, storageKey, doc, relativePath)
+    this.updateInMemoryDocumentVersionsIndex(tenantId, version, storageKey, relativePath, lastChangeDateTime, doc.version as string | undefined)
+    this.updateInMemoryItemsIndex(tenantId, version, bundle.items ?? [], storageKey)
+    this.updateInMemoryAssociationsIndex(tenantId, version, bundle.associations ?? [], storageKey)
+    this.updateInMemoryRubricsIndex(tenantId, version, (bundle as any).rubrics ?? [], storageKey)
+    this.updateInMemoryDefinitionsIndex(tenantId, version, (bundle as any).definitions, storageKey, lastChangeDateTime)
 
     // Write index files to disk
     await this.writeDocumentsIndex(idxDir, tenantId, version)
@@ -361,7 +377,7 @@ export class FileFrameworkStore {
   private updateInMemoryDocumentIndex (
     tenantId: TenantId,
     version: CaseVersion,
-    docId: string,
+    storageKey: string,
     doc: any,
     relativePath: string
   ): void {
@@ -375,6 +391,27 @@ export class FileFrameworkStore {
       versionMap = new Map()
       tenantMap.set(version, versionMap)
     }
+
+    const currentIdentifier = (doc.sourcedId ?? doc.identifier) as string
+
+    // Maintain the identifier -> storageKey secondary index. If this
+    // document's public identifier just changed (e.g. it was just forked),
+    // drop the stale mapping before adding the new one.
+    let idTenantMap = this.identifierToStorageKey.get(tenantId)
+    if (!idTenantMap) {
+      idTenantMap = new Map()
+      this.identifierToStorageKey.set(tenantId, idTenantMap)
+    }
+    let idVersionMap = idTenantMap.get(version)
+    if (!idVersionMap) {
+      idVersionMap = new Map()
+      idTenantMap.set(version, idVersionMap)
+    }
+    const previous = versionMap.get(storageKey)
+    if (previous && previous.sourcedId !== currentIdentifier) {
+      idVersionMap.delete(previous.sourcedId)
+    }
+    idVersionMap.set(currentIdentifier, storageKey)
 
     // Extract licenseIdentifier from licenseURI (LinkData object or legacy string)
     let licenseIdentifier: string | undefined
@@ -396,8 +433,8 @@ export class FileFrameworkStore {
       }
     }
 
-    versionMap.set(docId, {
-      sourcedId: docId,
+    versionMap.set(storageKey, {
+      sourcedId: currentIdentifier,
       title: doc.title as string,
       description: doc.description as string | undefined,
       creator: doc.creator as string | undefined,
@@ -417,7 +454,7 @@ export class FileFrameworkStore {
   private updateInMemoryDocumentVersionsIndex (
     tenantId: TenantId,
     version: CaseVersion,
-    docId: string,
+    storageKey: string,
     relativePath: string,
     lastChangeDateTime: Date,
     docVersion?: string
@@ -433,20 +470,20 @@ export class FileFrameworkStore {
       tenantMap.set(version, versionMap)
     }
 
-    const versions = versionMap.get(docId) ?? []
+    const versions = versionMap.get(storageKey) ?? []
     versions.push({
       file: relativePath,
       lastChangeDateTime,
       version: docVersion
     })
-    versionMap.set(docId, versions)
+    versionMap.set(storageKey, versions)
   }
 
   private updateInMemoryItemsIndex (
     tenantId: TenantId,
     version: CaseVersion,
     items: any[],
-    docId: string
+    storageKey: string
   ): void {
     let tenantMap = this.itemsIndex.get(tenantId)
     if (!tenantMap) {
@@ -461,13 +498,13 @@ export class FileFrameworkStore {
 
     // Clear existing items for this doc to avoid stale entries when a new version removes items.
     for (const [itemId, entry] of versionMap.entries()) {
-      if (entry.docSourcedId === docId) versionMap.delete(itemId)
+      if (entry.docStorageKey === storageKey) versionMap.delete(itemId)
     }
 
     for (const item of items) {
       const itemId = (item.sourcedId ?? item.identifier) as string | undefined
       if (itemId) {
-        versionMap.set(itemId, { docSourcedId: docId })
+        versionMap.set(itemId, { docStorageKey: storageKey })
       }
     }
   }
@@ -476,7 +513,7 @@ export class FileFrameworkStore {
     tenantId: TenantId,
     version: CaseVersion,
     associations: any[],
-    docId: string
+    storageKey: string
   ): void {
     let tenantMap = this.assocIndex.get(tenantId)
     if (!tenantMap) {
@@ -491,13 +528,13 @@ export class FileFrameworkStore {
 
     // Clear existing associations for this doc to avoid stale entries when a new version removes associations.
     for (const [assocId, entry] of versionMap.entries()) {
-      if (entry.docSourcedId === docId) versionMap.delete(assocId)
+      if (entry.docStorageKey === storageKey) versionMap.delete(assocId)
     }
 
     for (const assoc of associations) {
       const assocId = (assoc.sourcedId ?? assoc.identifier) as string | undefined
       if (assocId) {
-        versionMap.set(assocId, { docSourcedId: docId })
+        versionMap.set(assocId, { docStorageKey: storageKey })
       }
     }
   }
@@ -506,7 +543,7 @@ export class FileFrameworkStore {
     tenantId: TenantId,
     version: CaseVersion,
     rubrics: any[],
-    docId: string
+    storageKey: string
   ): void {
     let tenantMap = this.rubricsIndex.get(tenantId)
     if (!tenantMap) {
@@ -521,13 +558,13 @@ export class FileFrameworkStore {
 
     // Clear existing rubrics for this doc (new version may remove rubrics).
     for (const [rubricId, entry] of versionMap.entries()) {
-      if (entry.docSourcedId === docId) versionMap.delete(rubricId)
+      if (entry.docStorageKey === storageKey) versionMap.delete(rubricId)
     }
 
     for (const r of rubrics ?? []) {
       const rubricId = (r?.identifier ?? r?.id ?? r?.sourcedId) as string | undefined
       if (rubricId) {
-        versionMap.set(rubricId, { docSourcedId: docId })
+        versionMap.set(rubricId, { docStorageKey: storageKey })
       }
     }
   }
@@ -536,7 +573,7 @@ export class FileFrameworkStore {
     tenantId: TenantId,
     version: CaseVersion,
     definitions: any,
-    docId: string,
+    storageKey: string,
     lastChangeDateTime: Date
   ): void {
     if (!definitions) return
@@ -564,11 +601,17 @@ export class FileFrameworkStore {
         if (!id) continue
         // "Per-tenant defaults": if duplicates exist across docs, keep latest change as default.
         const existing = catMap.get(id)
-        const incoming: DefinitionIndexEntry = { docSourcedId: docId, value: v, lastChangeDateTime: lastChangeDateTime.toISOString() }
+        const incoming: DefinitionIndexEntry = { docStorageKey: storageKey, value: v, lastChangeDateTime: lastChangeDateTime.toISOString() }
         if (!existing) {
           catMap.set(id, incoming)
           continue
         }
+        // Seed defaults are the tenant's permanent baseline catalog, not owned by any
+        // document — never reassign ownership away from '__seed__', otherwise deleting
+        // a document whose own definitions happen to reuse a seed identifier (e.g. an
+        // imported framework from another OpenCASE instance seeded with the same
+        // defaults) would permanently erase that baseline entry.
+        if (existing.docStorageKey === '__seed__') continue
         const existingTs = existing.lastChangeDateTime ? Date.parse(existing.lastChangeDateTime) : 0
         const incomingTs = Date.parse(incoming.lastChangeDateTime!)
         if (incomingTs >= existingTs) {
@@ -649,9 +692,9 @@ export class FileFrameworkStore {
     const versionMap = this.itemsIndex.get(tenantId)?.get(version)
     if (!versionMap) return
 
-    const items: Record<string, { docSourcedId: string }> = {}
+    const items: Record<string, { docStorageKey: string }> = {}
     for (const [itemId, entry] of versionMap.entries()) {
-      items[itemId] = { docSourcedId: entry.docSourcedId }
+      items[itemId] = { docStorageKey: entry.docStorageKey }
     }
 
     await fs.writeFile(
@@ -669,9 +712,9 @@ export class FileFrameworkStore {
     const versionMap = this.assocIndex.get(tenantId)?.get(version)
     if (!versionMap) return
 
-    const associations: Record<string, { docSourcedId: string }> = {}
+    const associations: Record<string, { docStorageKey: string }> = {}
     for (const [assocId, entry] of versionMap.entries()) {
-      associations[assocId] = { docSourcedId: entry.docSourcedId }
+      associations[assocId] = { docStorageKey: entry.docStorageKey }
     }
 
     await fs.writeFile(
@@ -689,9 +732,9 @@ export class FileFrameworkStore {
     const versionMap = this.rubricsIndex.get(tenantId)?.get(version)
     if (!versionMap) return
 
-    const rubrics: Record<string, { docSourcedId: string }> = {}
+    const rubrics: Record<string, { docStorageKey: string }> = {}
     for (const [rubricId, entry] of versionMap.entries()) {
-      rubrics[rubricId] = { docSourcedId: entry.docSourcedId }
+      rubrics[rubricId] = { docStorageKey: entry.docStorageKey }
     }
 
     await fs.writeFile(
@@ -724,27 +767,38 @@ export class FileFrameworkStore {
     )
   }
 
-  // Helper methods for accessing indexes
-  getDocumentIdForItem (tenantId: TenantId, version: CaseVersion, itemId: string): string | null {
+  // ──────────────────────────────────────────────────────────────────────────
+  // Storage-key-based accessors. These are the store's internal vocabulary —
+  // every method below this point takes a STORAGE KEY, never a public
+  // identifier, and does no resolution. `resolveStorageKey` (and, across
+  // tenants, `resolveDocumentGlobal`) are the ONLY functions that translate a
+  // document's current public identifier into its storage key; call one of
+  // those once at the boundary (where an identifier first arrives from a
+  // request), then use the result everywhere else.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /** Storage key of the CFDocument that owns this item. */
+  getStorageKeyForItem (tenantId: TenantId, version: CaseVersion, itemId: string): string | null {
     const entry = this.itemsIndex.get(tenantId)?.get(version)?.get(itemId)
-    return entry?.docSourcedId ?? null
+    return entry?.docStorageKey ?? null
   }
 
-  getDocumentIdForAssociation (tenantId: TenantId, version: CaseVersion, assocId: string): string | null {
+  /** Storage key of the CFDocument that owns this association. */
+  getStorageKeyForAssociation (tenantId: TenantId, version: CaseVersion, assocId: string): string | null {
     const entry = this.assocIndex.get(tenantId)?.get(version)?.get(assocId)
-    return entry?.docSourcedId ?? null
+    return entry?.docStorageKey ?? null
   }
 
-  documentExists (tenantId: TenantId, version: CaseVersion, docId: string): boolean {
-    return Boolean(this.documents.get(tenantId)?.get(version)?.get(docId))
+  documentExists (tenantId: TenantId, version: CaseVersion, storageKey: string): boolean {
+    return Boolean(this.documents.get(tenantId)?.get(version)?.get(storageKey))
   }
 
   /**
    * Returns true if the framework has a license that allows unauthenticated access.
    * Frameworks with no license or a private license return false.
    */
-  isDocumentPublic (tenantId: TenantId, version: CaseVersion, docId: string): boolean {
-    const meta = this.documents.get(tenantId)?.get(version)?.get(docId)
+  isDocumentPublic (tenantId: TenantId, version: CaseVersion, storageKey: string): boolean {
+    const meta = this.getDocumentMetadata(tenantId, version, storageKey)
     if (!meta) return false
     return isPublicLicense(meta.licenseIdentifier)
   }
@@ -757,8 +811,19 @@ export class FileFrameworkStore {
     return Boolean(this.assocIndex.get(tenantId)?.get(version)?.get(assocId))
   }
 
-  getDocumentMetadata (tenantId: TenantId, version: CaseVersion, docId: string): DocumentMetadata | null {
-    return this.documents.get(tenantId)?.get(version)?.get(docId) ?? null
+  getDocumentMetadata (tenantId: TenantId, version: CaseVersion, storageKey: string): DocumentMetadata | null {
+    return this.documents.get(tenantId)?.get(version)?.get(storageKey) ?? null
+  }
+
+  /**
+   * Resolve a document's current public identifier to the storage key it
+   * physically lives under. The ONLY identifier -> storage-key translation
+   * point in the store. Returns null if no document currently reports this
+   * identifier — including if `identifier` happens to already be a storage
+   * key, which is never a valid input here.
+   */
+  resolveStorageKey (tenantId: TenantId, version: CaseVersion, identifier: string): string | null {
+    return this.identifierToStorageKey.get(tenantId)?.get(version)?.get(identifier) ?? null
   }
 
   getAllDocuments (tenantId: TenantId, version: CaseVersion): DocumentMetadata[] {
@@ -772,13 +837,18 @@ export class FileFrameworkStore {
   // ──────────────────────────────────────────────────────────────────────────
 
   /**
-   * Resolve a CFDocument by its globally-unique identifier across all tenants.
+   * Resolve a CFDocument by its globally-unique CURRENT identifier across all
+   * tenants (via the identifier -> storageKey secondary index, so a forked
+   * document's new identifier resolves correctly even though it still lives
+   * under its pre-fork storage key).
    */
-  resolveDocumentGlobal (docId: string): { tenantId: TenantId; version: CaseVersion; metadata: DocumentMetadata } | null {
-    for (const [tenantId, tenantMap] of this.documents) {
-      for (const [version, versionMap] of tenantMap) {
-        const meta = versionMap.get(docId)
-        if (meta) return { tenantId, version, metadata: meta }
+  resolveDocumentGlobal (identifier: string): { tenantId: TenantId; version: CaseVersion; metadata: DocumentMetadata; storageKey: string } | null {
+    for (const [tenantId, tenantMap] of this.identifierToStorageKey) {
+      for (const [version, idMap] of tenantMap) {
+        const storageKey = idMap.get(identifier)
+        if (!storageKey) continue
+        const meta = this.documents.get(tenantId)?.get(version)?.get(storageKey)
+        if (meta) return { tenantId, version, metadata: meta, storageKey }
       }
     }
     return null
@@ -787,11 +857,11 @@ export class FileFrameworkStore {
   /**
    * Resolve a CFItem by its globally-unique identifier across all tenants.
    */
-  resolveItemGlobal (itemId: string): { tenantId: TenantId; version: CaseVersion; docSourcedId: string } | null {
+  resolveItemGlobal (itemId: string): { tenantId: TenantId; version: CaseVersion; docStorageKey: string } | null {
     for (const [tenantId, tenantMap] of this.itemsIndex) {
       for (const [version, versionMap] of tenantMap) {
         const entry = versionMap.get(itemId)
-        if (entry) return { tenantId, version, docSourcedId: entry.docSourcedId }
+        if (entry) return { tenantId, version, docStorageKey: entry.docStorageKey }
       }
     }
     return null
@@ -800,11 +870,11 @@ export class FileFrameworkStore {
   /**
    * Resolve a CFAssociation by its globally-unique identifier across all tenants.
    */
-  resolveAssociationGlobal (assocId: string): { tenantId: TenantId; version: CaseVersion; docSourcedId: string } | null {
+  resolveAssociationGlobal (assocId: string): { tenantId: TenantId; version: CaseVersion; docStorageKey: string } | null {
     for (const [tenantId, tenantMap] of this.assocIndex) {
       for (const [version, versionMap] of tenantMap) {
         const entry = versionMap.get(assocId)
-        if (entry) return { tenantId, version, docSourcedId: entry.docSourcedId }
+        if (entry) return { tenantId, version, docStorageKey: entry.docStorageKey }
       }
     }
     return null
@@ -813,11 +883,11 @@ export class FileFrameworkStore {
   /**
    * Resolve a CFRubric by its globally-unique identifier across all tenants.
    */
-  resolveRubricGlobal (rubricId: string): { tenantId: TenantId; version: CaseVersion; docSourcedId: string } | null {
+  resolveRubricGlobal (rubricId: string): { tenantId: TenantId; version: CaseVersion; docStorageKey: string } | null {
     for (const [tenantId, tenantMap] of this.rubricsIndex) {
       for (const [version, versionMap] of tenantMap) {
         const entry = versionMap.get(rubricId)
-        if (entry) return { tenantId, version, docSourcedId: entry.docSourcedId }
+        if (entry) return { tenantId, version, docStorageKey: entry.docStorageKey }
       }
     }
     return null
@@ -862,16 +932,19 @@ export class FileFrameworkStore {
   }
 
   // Public methods for index management (used by management endpoints)
-  removeDocumentFromIndex (tenantId: TenantId, version: CaseVersion, docId: string): void {
-    const tenantMap = this.documents.get(tenantId)
-    const versionMap = tenantMap?.get(version)
+  removeDocumentFromIndex (tenantId: TenantId, version: CaseVersion, storageKey: string): void {
+    const versionMap = this.documents.get(tenantId)?.get(version)
+    const meta = versionMap?.get(storageKey)
     if (versionMap) {
-      versionMap.delete(docId)
+      versionMap.delete(storageKey)
+    }
+    if (meta) {
+      this.identifierToStorageKey.get(tenantId)?.get(version)?.delete(meta.sourcedId)
     }
 
     const versionsMap = this.documentVersions.get(tenantId)?.get(version)
     if (versionsMap) {
-      versionsMap.delete(docId)
+      versionsMap.delete(storageKey)
     }
   }
 
@@ -903,10 +976,10 @@ export class FileFrameworkStore {
    * Set or clear the server-level archived flag on a document.
    * This is independent of the CASE adoptionStatus field.
    */
-  setDocumentArchived (tenantId: TenantId, version: CaseVersion, docId: string, archived: boolean): void {
-    const meta = this.documents.get(tenantId)?.get(version)?.get(docId)
+  setDocumentArchived (tenantId: TenantId, version: CaseVersion, storageKey: string, archived: boolean): void {
+    const meta = this.documents.get(tenantId)?.get(version)?.get(storageKey)
     if (!meta) {
-      throw new Error(`Document ${docId} not found in index for tenant ${tenantId} version ${version}`)
+      throw new Error(`Document ${storageKey} not found in index for tenant ${tenantId} version ${version}`)
     }
     meta.archived = archived || undefined // omit false to keep index clean
   }
@@ -914,18 +987,18 @@ export class FileFrameworkStore {
   /**
    * Check whether a document is archived at the server level.
    */
-  isDocumentArchived (tenantId: TenantId, version: CaseVersion, docId: string): boolean {
-    const meta = this.documents.get(tenantId)?.get(version)?.get(docId)
+  isDocumentArchived (tenantId: TenantId, version: CaseVersion, storageKey: string): boolean {
+    const meta = this.getDocumentMetadata(tenantId, version, storageKey)
     return meta?.archived === true
   }
 
-  removeDefinitionsFromIndexForDocument (tenantId: TenantId, version: CaseVersion, docId: string): void {
+  removeDefinitionsFromIndexForDocument (tenantId: TenantId, version: CaseVersion, storageKey: string): void {
     const versionMap = this.definitionsIndex.get(tenantId)?.get(version)
     if (!versionMap) return
 
     for (const [, catMap] of versionMap.entries()) {
       for (const [id, entry] of catMap.entries()) {
-        if (entry.docSourcedId === docId) {
+        if (entry.docStorageKey === storageKey) {
           catMap.delete(id)
         }
       }
@@ -949,12 +1022,18 @@ export class FileFrameworkStore {
    * CASE IDs are globally unique, so no entity ID may collide with any other
    * entity across the entire service — not just within a single tenant.
    *
+   * `docIdentifier` is the document's public CASE identifier (checked for
+   * collisions against other documents/entities); `storageKey` is where this
+   * save is physically writing to (used only to decide whether an existing
+   * item/association id belongs to *this* document or a different one).
+   *
    * Note: definition IDs are intentionally reusable (per-tenant defaults) so they are not enforced here.
    */
   assertNoEntityIdReuse (
     tenantId: TenantId,
     version: CaseVersion,
-    docId: string,
+    docIdentifier: string,
+    storageKey: string,
     bundle: { document: any, items?: any[], associations?: any[], rubrics?: any[] }
   ): void {
     const ids = new Map<string, string>() // id -> kind
@@ -968,7 +1047,7 @@ export class FileFrameworkStore {
       ids.set(id, kind)
     }
 
-    add(docId, 'CFDocument')
+    add(docIdentifier, 'CFDocument')
     for (const it of bundle.items ?? []) add((it?.sourcedId ?? it?.identifier) as string | undefined, 'CFItem')
     for (const a of bundle.associations ?? []) add((a?.sourcedId ?? a?.identifier) as string | undefined, 'CFAssociation')
     for (const r of bundle.rubrics ?? []) {
@@ -1000,8 +1079,8 @@ export class FileFrameworkStore {
 
       if (kind === 'CFItem') {
         const existing = this.resolveItemGlobal(id)
-        if (existing && existing.docSourcedId !== docId) {
-          throw new Error(`CFItem id '${id}' is already used in a different framework (docId=${existing.docSourcedId}, tenant='${existing.tenantId}')`)
+        if (existing && existing.docStorageKey !== storageKey) {
+          throw new Error(`CFItem id '${id}' is already used in a different framework (tenant='${existing.tenantId}')`)
         }
         if (this.resolveAssociationGlobal(id)) throw new Error(`ID '${id}' is already used as a CFAssociation and cannot be reused for CFItem`)
         if (this.resolveRubricGlobal(id)) throw new Error(`ID '${id}' is already used as a CFRubric and cannot be reused for CFItem`)
@@ -1009,8 +1088,8 @@ export class FileFrameworkStore {
 
       if (kind === 'CFAssociation') {
         const existing = this.resolveAssociationGlobal(id)
-        if (existing && existing.docSourcedId !== docId) {
-          throw new Error(`CFAssociation id '${id}' is already used in a different framework (docId=${existing.docSourcedId}, tenant='${existing.tenantId}')`)
+        if (existing && existing.docStorageKey !== storageKey) {
+          throw new Error(`CFAssociation id '${id}' is already used in a different framework (tenant='${existing.tenantId}')`)
         }
         if (this.resolveItemGlobal(id)) throw new Error(`ID '${id}' is already used as a CFItem and cannot be reused for CFAssociation`)
         if (this.resolveRubricGlobal(id)) throw new Error(`ID '${id}' is already used as a CFRubric and cannot be reused for CFAssociation`)
@@ -1018,8 +1097,8 @@ export class FileFrameworkStore {
 
       if (kind === 'CFRubric') {
         const existing = this.resolveRubricGlobal(id)
-        if (existing && existing.docSourcedId !== docId) {
-          throw new Error(`CFRubric id '${id}' is already used in a different framework (docId=${existing.docSourcedId}, tenant='${existing.tenantId}')`)
+        if (existing && existing.docStorageKey !== storageKey) {
+          throw new Error(`CFRubric id '${id}' is already used in a different framework (tenant='${existing.tenantId}')`)
         }
         if (this.resolveItemGlobal(id)) throw new Error(`ID '${id}' is already used as a CFItem and cannot be reused for CFRubric`)
         if (this.resolveAssociationGlobal(id)) throw new Error(`ID '${id}' is already used as a CFAssociation and cannot be reused for CFRubric`)

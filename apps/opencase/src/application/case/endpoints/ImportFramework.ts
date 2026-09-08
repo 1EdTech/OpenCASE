@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { CFPackageRepository } from '../ports/CFPackageRepository'
 import { CaseApiClient } from '../../../infrastructure/http/CaseApiClient'
 import { normalizeCfPackageData, type CFPackageResponse } from '../cfPackageShape'
@@ -126,8 +127,14 @@ export class ImportFramework {
 
     const pkg = new CFPackage({ document, items, associations, rubrics, definitions })
 
-    // Save the framework
-    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, pkg)
+    // Every new document gets a storage key that's independent of any
+    // CASE identifier from the moment it's created — never inferred from
+    // the (possibly foreign, possibly reused-on-a-later-re-import)
+    // sourcedId. This is what lets a fork reassign the document's public
+    // identifier later without colliding with a future re-import of the
+    // same original source under its original identifier.
+    const storageKey = randomUUID()
+    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, pkg, storageKey)
 
     logger.info(
       { tenantId, caseVersion, docId: document.sourcedId, warnings: validationWarnings.length },

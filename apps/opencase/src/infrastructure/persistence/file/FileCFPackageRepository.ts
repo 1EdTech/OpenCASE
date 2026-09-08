@@ -11,18 +11,23 @@ import { logger } from '../../logging/Logger'
 export class FileCFPackageRepository implements CFPackageRepository {
   constructor (private readonly store: FileFrameworkStore) {}
 
+  /**
+   * `storageKey` — never a public identifier. Callers that only have a
+   * document's current identifier must resolve it first via
+   * `FileFrameworkStore.resolveStorageKey`/`resolveDocumentGlobal`.
+   */
   async load (
     tenantId: TenantId,
     version: CaseVersion,
-    docId: SourcedId
+    storageKey: SourcedId
   ): Promise<CFPackage | null> {
-    logger.info({ tenantId, version, docId }, 'Loading CFPackage')
-    const bundle = await this.store.loadDocumentBundle(tenantId, version, docId)
+    logger.info({ tenantId, version, storageKey }, 'Loading CFPackage')
+    const bundle = await this.store.loadDocumentBundle(tenantId, version, storageKey)
     if (!bundle) return null
 
     // A framework that is still a pristine mirror of its import source (never
     // locally forked) keeps its original identifiers/URIs on every load — they're
-    // only regenerated once it's edited and marked as forked (a later task).
+    // only regenerated once it's edited and marked as forked.
     const opencaseExt = (bundle.document as { extensions?: Record<string, unknown> })?.extensions?.['ext:opencase'] as { isModifiedFromSource?: boolean } | undefined
     const preserveUris = { preserveUris: opencaseExt?.isModifiedFromSource === false }
 
@@ -30,7 +35,7 @@ export class FileCFPackageRepository implements CFPackageRepository {
     const docURI = document.toJSON().uri
 
     const items = (bundle.items ?? []).map((i: unknown) =>
-      CFItem.fromRaw(tenantId, version, i, docId, docURI, preserveUris)
+      CFItem.fromRaw(tenantId, version, i, document.sourcedId, docURI, preserveUris)
     )
     const associations = (bundle.associations ?? []).map((a: unknown) =>
       CFAssociation.fromRaw(tenantId, version, a, preserveUris)
@@ -43,10 +48,19 @@ export class FileCFPackageRepository implements CFPackageRepository {
     return new CFPackage({ document, items, associations, rubrics, definitions })
   }
 
+  /**
+   * `storageKey` is required and is always the storage location to write to —
+   * never derived from `pkg.document.sourcedId` (which, after a fork, is a
+   * brand-new identifier the store has never seen and cannot resolve back to
+   * anything). Callers always know this value already: it's either the
+   * storage key an existing document already resolved to, or a freshly
+   * minted one for a document that doesn't exist yet.
+   */
   async saveNewVersion (
     tenantId: TenantId,
     version: CaseVersion,
-    pkg: CFPackage
+    pkg: CFPackage,
+    storageKey: string
   ): Promise<void> {
     const docId = pkg.document.sourcedId
     const bundle: { document: unknown, items: unknown[], associations: unknown[], rubrics: unknown[], definitions?: unknown } = {
@@ -61,11 +75,11 @@ export class FileCFPackageRepository implements CFPackageRepository {
     }
 
     // Guard against GUID reuse across different frameworks/entities before writing.
-    this.store.assertNoEntityIdReuse(tenantId, version, docId, bundle)
+    this.store.assertNoEntityIdReuse(tenantId, version, docId, storageKey, bundle)
 
-    const { relativePath } = await this.store.writeBundleFile(tenantId, version, docId, bundle)
+    const { relativePath } = await this.store.writeBundleFile(tenantId, version, storageKey, bundle)
 
     // Update indexes (both in-memory and on disk)
-    await this.store.updateIndexesForBundle(tenantId, version, bundle, relativePath)
+    await this.store.updateIndexesForBundle(tenantId, version, storageKey, bundle, relativePath)
   }
 }

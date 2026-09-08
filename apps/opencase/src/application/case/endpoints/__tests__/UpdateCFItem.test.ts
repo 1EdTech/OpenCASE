@@ -17,7 +17,7 @@ describe('UpdateCFItem', () => {
     } as any
 
     mockStore = {
-      getDocumentIdForItem: jest.fn()
+      getStorageKeyForItem: jest.fn()
     } as any
 
     updateCFItem = new UpdateCFItem(mockRepository, mockStore)
@@ -30,7 +30,7 @@ describe('UpdateCFItem', () => {
     const itemId = 'item-123'
 
     it('should update item successfully', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
 
       const existingDocument = CFDocument.create({
         tenantId,
@@ -84,7 +84,7 @@ describe('UpdateCFItem', () => {
         payload: updatedPayload
       })
 
-      expect(mockStore.getDocumentIdForItem).toHaveBeenCalledWith(tenantId, caseVersion, itemId)
+      expect(mockStore.getStorageKeyForItem).toHaveBeenCalledWith(tenantId, caseVersion, itemId)
       expect(mockRepository.load).toHaveBeenCalledWith(tenantId, caseVersion, docId)
       expect(mockRepository.saveNewVersion).toHaveBeenCalledTimes(1)
 
@@ -94,7 +94,7 @@ describe('UpdateCFItem', () => {
     })
 
     it('should throw error when item not found in index', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(null)
+      mockStore.getStorageKeyForItem.mockReturnValue(null)
 
       await expect(
         updateCFItem.execute({
@@ -107,7 +107,7 @@ describe('UpdateCFItem', () => {
     })
 
     it('should throw error when package not found', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
       mockRepository.load.mockResolvedValue(null)
 
       await expect(
@@ -117,11 +117,11 @@ describe('UpdateCFItem', () => {
           sourcedId: itemId,
           payload: { sourcedId: itemId, fullStatement: 'Test' }
         })
-      ).rejects.toThrow(`CFPackage for document ${docId} not found`)
+      ).rejects.toThrow(`CFPackage for CFItem ${itemId} not found`)
     })
 
     it('should throw error when sourcedId mismatch', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
 
       const existingDocument = CFDocument.create({
         tenantId,
@@ -153,7 +153,7 @@ describe('UpdateCFItem', () => {
     })
 
     it('should update only the specified item', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
 
       const existingDocument = CFDocument.create({
         tenantId,

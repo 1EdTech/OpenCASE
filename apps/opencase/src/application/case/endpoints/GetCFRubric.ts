@@ -21,9 +21,11 @@ export class GetCFRubric {
 
     // Search through all documents to find the rubric
     const documents = this.store.getAllDocuments(query.tenantId, query.caseVersion)
-    
+
     for (const docMeta of documents) {
-      const pkg = await this.pkgRepo.load(query.tenantId, query.caseVersion, docMeta.sourcedId)
+      const storageKey = this.store.resolveStorageKey(query.tenantId, query.caseVersion, docMeta.sourcedId)
+      if (!storageKey) continue
+      const pkg = await this.pkgRepo.load(query.tenantId, query.caseVersion, storageKey)
       if (!pkg) continue
 
       const rubric = pkg.rubrics.find((r: CFRubric) => {

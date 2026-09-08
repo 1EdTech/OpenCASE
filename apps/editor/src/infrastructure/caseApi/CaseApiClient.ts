@@ -92,20 +92,23 @@ export class CaseApiClient {
     tenantId: string
     cfPackage: unknown // OpenCaseCFPackage format
     caseVersion?: 'v1p0' | 'v1p1'
-  }): Promise<{ docId: string; version: string }> {
+  }): Promise<{ docId: string; version: string; forked?: boolean; isModifiedFromSource?: boolean; sourcePackageURI?: string }> {
     const v = params.caseVersion ?? 'v1p1'
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages`
-    
+
     const res = (await this._http.post(url, params.cfPackage)) as unknown
-    
+
     if (res && typeof res === 'object') {
-      const obj = res as { docId?: string; version?: string; identifier?: string }
+      const obj = res as { docId?: string; version?: string; identifier?: string; forked?: boolean; isModifiedFromSource?: boolean; sourcePackageURI?: string }
       return {
         docId: obj.docId ?? obj.identifier ?? '',
         version: obj.version ?? '',
+        forked: obj.forked,
+        isModifiedFromSource: obj.isModifiedFromSource,
+        sourcePackageURI: obj.sourcePackageURI,
       }
     }
-    
+
     throw new Error('Unexpected save response shape')
   }
 

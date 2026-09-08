@@ -15,7 +15,8 @@ describe('FileCFPackageRepository', () => {
       loadDocumentBundle: jest.fn(),
       assertNoEntityIdReuse: jest.fn(),
       writeBundleFile: jest.fn(),
-      updateIndexesForBundle: jest.fn().mockResolvedValue(undefined)
+      updateIndexesForBundle: jest.fn().mockResolvedValue(undefined),
+      resolveStorageKey: jest.fn().mockReturnValue(null)
     } as any;
 
     repository = new FileCFPackageRepository(mockStore);
@@ -232,7 +233,7 @@ describe('FileCFPackageRepository', () => {
       const relativePath = 'frameworks/doc-123/doc-123_v0001.json';
       mockStore.writeBundleFile.mockResolvedValue({ relativePath });
 
-      await repository.saveNewVersion(tenantId, version, pkg);
+      await repository.saveNewVersion(tenantId, version, pkg, 'doc-123');
 
       expect(mockStore.writeBundleFile).toHaveBeenCalledWith(
         tenantId,
@@ -248,6 +249,7 @@ describe('FileCFPackageRepository', () => {
       expect(mockStore.updateIndexesForBundle).toHaveBeenCalledWith(
         tenantId,
         version,
+        'doc-123',
         {
           document: document.toJSON(),
           items: [item.toJSON()],
@@ -279,7 +281,7 @@ describe('FileCFPackageRepository', () => {
       const relativePath = 'frameworks/doc-123/doc-123_v0001.json';
       mockStore.writeBundleFile.mockResolvedValue({ relativePath });
 
-      await repository.saveNewVersion(tenantId, version, pkg);
+      await repository.saveNewVersion(tenantId, version, pkg, 'doc-123');
 
       expect(mockStore.writeBundleFile).toHaveBeenCalledWith(
         tenantId,
@@ -295,6 +297,7 @@ describe('FileCFPackageRepository', () => {
       expect(mockStore.updateIndexesForBundle).toHaveBeenCalledWith(
         tenantId,
         version,
+        'doc-123',
         {
           document: document.toJSON(),
           items: [],
@@ -327,7 +330,7 @@ describe('FileCFPackageRepository', () => {
       mockStore.writeBundleFile.mockRejectedValue(error);
 
       await expect(
-        repository.saveNewVersion(tenantId, version, pkg)
+        repository.saveNewVersion(tenantId, version, pkg, 'doc-123')
       ).rejects.toThrow('File system error');
     });
   });
