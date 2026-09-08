@@ -153,7 +153,13 @@ export class FileFrameworkStore {
         await fs.readFile(path.join(idxDir, 'documents.json'), 'utf8')
       ) as any[]
       for (const d of raw) {
-        map.set(d.sourcedId as string, {
+        // `storageKey` was added once documents could be forked (identifier
+        // changes, storage key doesn't) — older index files predate the
+        // field, so fall back to `sourcedId` for those (correct for any
+        // document that has never been forked, which is all of them at that
+        // point in the file's history).
+        const storageKey = (d.storageKey ?? d.sourcedId) as string
+        map.set(storageKey, {
           sourcedId: d.sourcedId,
           title: d.title,
           description: d.description,
@@ -635,7 +641,8 @@ export class FileFrameworkStore {
     const versionMap = this.documents.get(tenantId)?.get(version)
     if (!versionMap) return
 
-    const documents = Array.from(versionMap.values()).map(meta => ({
+    const documents = Array.from(versionMap.entries()).map(([storageKey, meta]) => ({
+      storageKey,
       sourcedId: meta.sourcedId,
       title: meta.title,
       description: meta.description,
