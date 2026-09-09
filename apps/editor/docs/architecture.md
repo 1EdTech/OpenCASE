@@ -186,6 +186,22 @@ Implements the interfaces defined in `application/ports`:
 
 ---
 
+## Framework versioning (`CFDocument.version`)
+
+The `version` field on a framework's metadata (`CFDocument.version`, e.g. `"1.0"`, `"2024.1"`) is **author-controlled free text** — the editor never generates or mutates it.
+
+**Before:** `frameworkToCfPackage` auto-incremented a `major.minor.build` version on every save (`incrementVersion: true`), and defaulted unset versions to `1.0.0`. The `incrementVersion` flag threaded through `frameworkToCfDocument`, `frameworkToCfPackage`, and `FrameworkExportParams`, and the version field in `NodePropertiesPanel` was a read-only display (hidden entirely when unset).
+
+**Now:** `version` is a straight passthrough of `framework.metadata.version` — unset stays unset, and nothing increments it across saves. `NodePropertiesPanel` exposes it as a free-text input, same pattern as `title`/`creator`/`publisher`.
+
+**Why:** auto-incrementing build numbers on every save was arbitrary versioning the author never asked for and couldn't override — it didn't track anything meaningful (e.g. semantic changes, publish milestones), and a hidden default (`1.0.0`) masked the fact that no version had actually been assigned. Making it a plain authored field puts version semantics under the framework author's control, consistent with other metadata fields like title and publisher.
+
+Note this is distinct from the *storage* versioning the backend does on every save (`{docId}_v0001.json`, `_v0002.json`, ...) — see `apps/opencase/docs/DEVELOPER.md`. That's an internal, immutable revision history; `CFDocument.version` is the framework's own public-facing version label.
+
+See `apps/editor/src/application/framework/mappers/case/toCasePackage.ts` and its test file for the passthrough behavior.
+
+---
+
 ## Draft → Publish workflow
 
 * All edits happen in a **draft state**
