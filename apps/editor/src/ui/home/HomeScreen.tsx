@@ -399,7 +399,7 @@ export default function HomeScreen({
   const filteredServerFrameworks = useMemo(
     () =>
       serverFrameworks.filter((doc) => {
-        return matchesSearch(doc.title, doc.creator, doc.description) && matchesFilters(doc.adoptionStatus, doc.frameworkType)
+        return doc.frameworkType !== 'Alignment' && matchesSearch(doc.title, doc.creator, doc.description) && matchesFilters(doc.adoptionStatus, doc.frameworkType)
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [serverFrameworks, searchQuery, statusFilter, typeFilter],
@@ -409,7 +409,7 @@ export default function HomeScreen({
   const allFrameworkTypes = useMemo(() => {
     const types = new Set<string>()
     visibleDrafts.forEach((d) => { if (d.cfDocument.frameworkType) types.add(d.cfDocument.frameworkType) })
-    serverFrameworks.forEach((d) => { if (d.frameworkType) types.add(d.frameworkType) })
+    serverFrameworks.forEach((d) => { if (d.frameworkType && d.frameworkType !== 'Alignment') types.add(d.frameworkType) })
     return Array.from(types).sort((a, b) => a.localeCompare(b))
   }, [visibleDrafts, serverFrameworks])
 

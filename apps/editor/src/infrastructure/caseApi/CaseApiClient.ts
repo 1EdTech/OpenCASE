@@ -3,6 +3,15 @@ import type { HttpClient } from './http'
 
 export type OpenCaseCfPackageResponse = { CFPackage: CFPackage }
 
+export type AlignmentFrameworkSummary = {
+  sourcedId: string
+  title: string
+  caseVersion: string
+  frameworkType?: string
+  alignmentParticipants?: Array<{ identifier?: string; uri: string }>
+  lastChangeDateTime?: string
+}
+
 export type OpenCaseManagementCfPackageSummary = {
   sourcedId?: string
   identifier?: string
@@ -276,6 +285,27 @@ export class CaseApiClient {
       }
     }
 
+    return []
+  }
+
+  /**
+   * List alignment frameworks for a tenant that include a specific framework as a participant.
+   *
+   * Uses the management endpoint:
+   *   GET /management/tenants/{tenantId}/CFPackages?frameworkType=Alignment&participantId={participantId}
+   */
+  async listAlignmentFrameworks(params: {
+    tenantId: string
+    participantId: string
+  }): Promise<AlignmentFrameworkSummary[]> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/CFPackages?frameworkType=Alignment&participantId=${encodeURIComponent(params.participantId)}`
+    const res = (await this._http.get(url)) as unknown
+
+    if (res && typeof res === 'object' && 'frameworks' in res) {
+      const obj = res as { frameworks?: unknown }
+      if (Array.isArray(obj.frameworks)) return obj.frameworks as AlignmentFrameworkSummary[]
+    }
+    if (Array.isArray(res)) return res as AlignmentFrameworkSummary[]
     return []
   }
 

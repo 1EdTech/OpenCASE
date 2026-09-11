@@ -4,7 +4,14 @@ export type FrameworkStatus = 'Draft' | 'Published'
 
 export type ItemType = 'Standard' | 'LearningOutcome' | 'Competency' | 'Skill'
 
-export type AssociationType = 'isChildOf' | 'isPartOf' | 'isRelatedTo'
+export type AssociationType =
+  | 'isChildOf'
+  | 'isPartOf'
+  | 'isRelatedTo'
+  | 'isPeerOf'
+  | 'exactMatchOf'
+  | 'precedes'
+  | 'isReplacedBy'
 
 export type FrameworkMetadata = {
   title?: string
@@ -36,7 +43,26 @@ export type FrameworkMetadata = {
 }
 
 export type ItemMetadata = Record<string, unknown>
-export type AssociationMetadata = Record<string, unknown>
+
+export type AssociationMetadata = {
+  /** Original CASE association URI — preserved for round-trip fidelity */
+  caseUri?: string
+  /** Canonical URI of the origin (from) item — must be preserved verbatim for cross-framework associations */
+  originUri?: string
+  /** Canonical URI of the destination (to) item — must be preserved verbatim for cross-framework associations */
+  destinationUri?: string
+  sequenceNumber?: number
+  /** Edge handle position on the origin node — persists user-defined anchor points */
+  originHandle?: string
+  /** Edge handle position on the destination node — persists user-defined anchor points */
+  destinationHandle?: string
+  CFAssociationGroupingIdentifier?: string
+  CFAssociationGroupingTitle?: string
+  notes?: string
+  lastChangeDateTime?: string
+  extensions?: Record<string, unknown>
+  [key: string]: unknown
+}
 
 export type Item = {
   id: ItemId

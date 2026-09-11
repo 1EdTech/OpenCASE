@@ -106,7 +106,7 @@ describe('layout actions', () => {
     expect(next.dirty).toBe(false)
   })
 
-  it('layout/applyHierarchy updates positions, handles, and marks dirty', () => {
+  it('layout/applyHierarchy updates positions and handles but does NOT mark dirty (switching layout/view is not a data edit)', () => {
     const state = makeState()
     const edgeId = state.edges[0].id
 
@@ -131,7 +131,7 @@ describe('layout actions', () => {
     expect(edge?.sourceHandle).toBe('bottom')
     expect(edge?.targetHandle).toBe('left')
     expect(edge?.data?.edgeType).toBe('smoothstep')
-    expect(next.dirty).toBe(true)
+    expect(next.dirty).toBe(false)
     expect(next.layoutVersion).toBe(state.layoutVersion + 1)
   })
 })

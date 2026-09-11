@@ -16,10 +16,12 @@ import SettingsModal from '@/ui/editor/components/SettingsModal'
 import FloatingAddButton from '@/ui/editor/components/FloatingAddButton'
 import AddExternalFrameworkDialog from '@/ui/editor/components/AddExternalFrameworkDialog'
 import ViewCFPackageDialog from '@/ui/editor/components/ViewCFPackageDialog'
+import TreePanelView from '@/ui/editor/treePanel/TreePanelView'
 import { useEditor } from '@/ui/editor/state/EditorContext'
 import { isFrameworkNode, getNodeSize } from '@/ui/editor/state/helpers/nodeGeometry'
 import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/types'
 import type { CFDocument, CFItem, CFPackage } from '@/domain/case/types'
+import type { HomeFramework } from '@/ui/home/frameworkStore'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
 import { absolutizeCaseUris, frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
@@ -37,11 +39,26 @@ type EditorCanvasProps = {
   onArchiveFramework?: () => Promise<void>
   /** Fetch the published CFPackage from the server (returns CASE JSON with absolute URIs) */
   onFetchCfPackage?: () => Promise<CFPackage>
+  /** All locally-available frameworks — used to populate the crosswalk target selector in tree view */
+  availableFrameworks?: HomeFramework[]
+  /** Server-side framework summaries not yet loaded locally — shown in crosswalk target selector for auto-load */
+  serverFrameworks?: Array<{ id: string; title: string }>
+  /** Load a framework from the server into the local session (called when a server-only crosswalk target is selected) */
+  onLoadTargetFramework?: (id: string) => Promise<void>
+  /** Save a serialized alignment CFPackage to the server */
+  onSaveAlignments?: (cfPackage: unknown) => Promise<void>
+  /** Load existing alignment associations for a target framework pairing */
+  onLoadAlignmentsForTarget?: (targetId: string) => Promise<{
+    docId: string
+    associations: Array<{ id: string; fromItemId: string; toItemId: string; toFrameworkId: string; associationType: string; originUri: string; destinationUri: string }>
+  }>
+  /** Discover all frameworks that already have saved alignment docs with the given source framework */
+  onDiscoverAlignedTargets?: (sourceId: string) => Promise<Array<{ targetId: string; alignmentDocId: string }>>
   /** Mirror/fork status of the open framework, if it was ever imported */
   mirrorStatus?: MirrorStatus
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onFetchCfPackage, mirrorStatus }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -102,6 +119,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const [viewCaseLoading, setViewCaseLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [activeView, setActiveView] = useState<'canvas' | 'tree'>('tree')
   const [forkWarningOpen, setForkWarningOpen] = useState(false)
 
   // Baseline Framework snapshot for fork-detection — captured once when this
@@ -1236,14 +1254,30 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
             : undefined
         }
         onOpenSettings={() => setSettingsOpen(true)}
-        onResetHierarchy={applyHierarchyLayout}
-        onResetStar={applyStarLayout}
+        onResetHierarchy={() => { setActiveView('canvas'); applyHierarchyLayout() }}
+        onResetStar={() => { setActiveView('canvas'); applyStarLayout() }}
+        onSwitchTreeView={() => setActiveView(activeView === 'tree' ? 'canvas' : 'tree')}
+        activeView={activeView}
         cfAssociationGroupings={inUseGroupings}
         activeGroupingFilter={activeGroupingFilter}
         onSetGroupingFilter={setActiveGroupingFilter}
       />
 
-      <div ref={reactFlowWrapRef} className="h-full w-full" onPointerDownCapture={onCanvasPointerDownCapture}>
+      {activeView === 'tree' ? (
+        <div className="h-full w-full pt-16">
+          <TreePanelView
+            availableFrameworks={availableFrameworks}
+            serverFrameworks={serverFrameworks}
+            onLoadTargetFramework={onLoadTargetFramework}
+            isSourcePublished={isPublishedToOpenCase}
+            onSaveAlignments={onSaveAlignments}
+            onLoadAlignmentsForTarget={onLoadAlignmentsForTarget}
+            onDiscoverAlignedTargets={onDiscoverAlignedTargets}
+          />
+        </div>
+      ) : null}
+
+      <div ref={reactFlowWrapRef} className={activeView === 'tree' ? 'hidden' : 'h-full w-full'} onPointerDownCapture={onCanvasPointerDownCapture}>
         <ReactFlow<CaseEditorNodeType>
           nodes={nodesWithCallbacks}
           edges={edgesWithType}
@@ -1305,6 +1339,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         node={selectedNode}
         onClose={clearSelection}
         onChangeNode={updateNodeData}
+        hideColorBand={activeView === 'tree'}
         onViewCFPackage={handleViewCFPackage}
         isPublishedToOpenCase={isPublishedToOpenCase}
         availableLicenses={availableLicenses}

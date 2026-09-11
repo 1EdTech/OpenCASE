@@ -7,7 +7,7 @@ import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 import type { Framework } from '@/domain/framework/model/types'
 import { AuthProvider, useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
-import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
+import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
 import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage } from '@/ui/editor/reactflow/mapping'
@@ -74,6 +74,9 @@ function AppInner() {
   // Track which framework IDs have been published to OpenCASE
   // (either loaded from the server or successfully saved)
   const [publishedFrameworkIds, setPublishedFrameworkIds] = useState<Set<string>>(new Set())
+
+  // Server-side framework list — populated from GET /ims/case/v1p1/CFDocuments on auth
+  const [serverCfDocuments, setServerCfDocuments] = useState<CfDocumentSummary[]>([])
 
   /** Merge CFDefinitions from a loaded CFPackage into the tenant state (additive, no overwrites) */
   const mergeCfDefinitions = useCallback((pkg: unknown) => {
@@ -210,6 +213,19 @@ function AppInner() {
     return () => { cancelled = true }
   }, [authStatus, tenantId, api])
 
+  // Fetch server framework list so tree-view crosswalk selector can show all tenant frameworks.
+  useEffect(() => {
+    if (authStatus !== 'authenticated') return
+    let cancelled = false
+    api.listCfDocuments({ caseVersion: 'v1p1' }).then((docs) => {
+      if (cancelled) return
+      setServerCfDocuments(docs)
+    }).catch((err) => {
+      console.warn('[App] Failed to load server framework list:', err)
+    })
+    return () => { cancelled = true }
+  }, [authStatus, api])
+
   const activeFramework = useMemo(() => {
     if (!activeFrameworkId) return null
     return frameworks.find((f) => f.id === activeFrameworkId) ?? null
@@ -219,6 +235,14 @@ function AppInner() {
   const unsavedDrafts = useMemo(
     () => frameworks.filter((f) => !publishedFrameworkIds.has(f.id)),
     [frameworks, publishedFrameworkIds],
+  )
+
+  // Summaries of server frameworks passed to the crosswalk target selector (excludes alignment frameworks)
+  const serverFrameworkSummaries = useMemo(
+    () => serverCfDocuments
+      .filter((d) => d.frameworkType !== 'Alignment')
+      .map((d) => ({ id: d.identifier, title: d.title ?? d.identifier })),
+    [serverCfDocuments],
   )
 
   const openFramework = useCallback((id: string) => {
@@ -352,6 +376,30 @@ function AppInner() {
     [api, mergeCfDefinitions],
   )
 
+  // Load a framework from the server into the local session without navigating to it.
+  // Used by TreePanelView when the user selects a crosswalk target that isn't loaded locally yet.
+  const handleLoadTargetFramework = useCallback(
+    async (docId: string) => {
+      const pkg = await api.getCfPackage({ docId, caseVersion: 'v1p1' })
+      mergeCfDefinitions(pkg)
+      const layout = extractLayoutFromCfPackage(pkg)
+      const editorSettings = extractEditorSettingsFromCfPackage(pkg)
+      const framework = loadFrameworkFromCfPackage(pkg)
+      if (!framework) throw new Error('Failed to load framework from CASE package')
+      const fw = createHomeFrameworkFromDomain(framework)
+      if (layout) setFrameworkLayouts((prev) => ({ ...prev, [fw.id]: layout }))
+      if (editorSettings?.edgeType) setFrameworkEdgeTypes((prev) => ({ ...prev, [fw.id]: editorSettings.edgeType! }))
+      setFrameworks((prev) => {
+        if (prev.some((f) => f.id === fw.id)) return prev
+        const next = [...prev, fw]
+        saveFrameworks(next)
+        return next
+      })
+      setPublishedFrameworkIds((prev) => new Set(prev).add(fw.id))
+    },
+    [api, mergeCfDefinitions],
+  )
+
   // Derive the graph from the active framework
   // This converts the domain Framework to React Flow format.
   // When no saved layout exists the topology is detected and an appropriate
@@ -478,6 +526,90 @@ function AppInner() {
     [api, tenantId, caseApiVersion, activeFrameworkId, openRemoteFramework],
   )
 
+  const handleSaveAlignments = useCallback(
+    async (cfPackage: unknown) => {
+      if (!tenantId) throw new Error('Not signed in to a tenant. Please sign in to save.')
+      const pkg = cfPackage as { CFAssociations?: unknown[]; CFDocument?: { identifier?: string } }
+      const docId = pkg.CFDocument?.identifier
+      if (!pkg.CFAssociations?.length && docId) {
+        // No associations remain — delete the alignment doc so it won't resurface on reload.
+        // If the doc never existed on the server (new target, never saved) the 404 is harmless.
+        try {
+          await api.deleteCfPackage({ tenantId, docId, hardDelete: true })
+        } catch {
+          // ignore — doc may not exist on the server yet
+        }
+      } else {
+        await api.saveCfPackage({ tenantId, cfPackage, caseVersion: caseApiVersion })
+      }
+    },
+    [api, tenantId, caseApiVersion],
+  )
+
+  const handleDiscoverAlignedTargets = useCallback(
+    async (sourceId: string): Promise<Array<{ targetId: string; alignmentDocId: string }>> => {
+      if (!tenantId) return []
+      try {
+        const alignmentDocs = await api.listAlignmentFrameworks({ tenantId, participantId: sourceId })
+        return alignmentDocs.flatMap((doc) => {
+          const participants = doc.alignmentParticipants ?? []
+          const other = participants.find((p) => p.identifier !== sourceId)
+          // No distinct "other" participant means this is a self (intra-framework) alignment doc.
+          const targetIdentifier = other?.identifier ?? (participants.some((p) => p.identifier === sourceId) ? sourceId : undefined)
+          if (!targetIdentifier) return []
+          return [{ targetId: targetIdentifier, alignmentDocId: doc.sourcedId }]
+        })
+      } catch (err) {
+        console.warn('[App] Failed to discover aligned targets:', err)
+        return []
+      }
+    },
+    [api, tenantId],
+  )
+
+  const handleLoadAlignmentsForTarget = useCallback(
+    async (targetId: string): Promise<{
+      docId: string
+      associations: Array<{ id: string; fromItemId: string; toItemId: string; toFrameworkId: string; associationType: string; originUri: string; destinationUri: string }>
+    }> => {
+      const newDocId = () => globalThis.crypto?.randomUUID?.() ?? `align-${Date.now()}`
+      if (!tenantId || !activeFrameworkId) return { docId: newDocId(), associations: [] }
+      try {
+        const alignmentDocs = await api.listAlignmentFrameworks({ tenantId, participantId: activeFrameworkId })
+        // Every doc here already has activeFrameworkId as a participant (that's the query filter), so
+        // for a self-alignment (targetId === activeFrameworkId) matching "any participant === targetId"
+        // would match the first cross-framework doc too — instead require ALL participants to be self.
+        const matchingDoc = alignmentDocs.find((doc) => {
+          const participants = doc.alignmentParticipants ?? []
+          if (targetId === activeFrameworkId) {
+            return participants.length > 0 && participants.every((p) => p.identifier === activeFrameworkId)
+          }
+          return participants.some((p) => p.identifier === targetId)
+        })
+        if (!matchingDoc) return { docId: newDocId(), associations: [] }
+
+        const pkg = await api.getCfPackage({ docId: matchingDoc.sourcedId, caseVersion: 'v1p1' })
+        const cfAssociations = pkg.CFAssociations ?? []
+        const associations = cfAssociations
+          .map((a) => ({
+            id: a.identifier,
+            fromItemId: a.originNodeURI?.identifier ?? '',
+            toItemId: a.destinationNodeURI?.identifier ?? '',
+            toFrameworkId: targetId,
+            associationType: a.associationType ?? 'isRelatedTo',
+            originUri: a.originNodeURI?.uri ?? '',
+            destinationUri: a.destinationNodeURI?.uri ?? '',
+          }))
+          .filter((a) => a.fromItemId && a.toItemId)
+        return { docId: matchingDoc.sourcedId, associations }
+      } catch (err) {
+        console.warn('[App] Failed to load alignment associations:', err)
+        return { docId: newDocId(), associations: [] }
+      }
+    },
+    [api, tenantId, activeFrameworkId],
+  )
+
   if (authCallbackState === 'processing') {
     return (
       <div className="min-h-screen w-full bg-slate-50">
@@ -551,6 +683,12 @@ function AppInner() {
         isPublishedToOpenCase={activeFrameworkId ? publishedFrameworkIds.has(activeFrameworkId) : false}
         onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
         onFetchCfPackage={activeFrameworkId ? handleFetchCfPackage : undefined}
+        availableFrameworks={frameworks}
+        serverFrameworks={serverFrameworkSummaries}
+        onLoadTargetFramework={handleLoadTargetFramework}
+        onSaveAlignments={tenantId ? handleSaveAlignments : undefined}
+        onLoadAlignmentsForTarget={tenantId ? handleLoadAlignmentsForTarget : undefined}
+        onDiscoverAlignedTargets={tenantId ? handleDiscoverAlignedTargets : undefined}
         mirrorStatus={activeFramework.mirrorStatus}
       />
     </EditorProvider>

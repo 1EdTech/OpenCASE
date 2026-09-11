@@ -35,21 +35,45 @@ export class GetCFItemAssociations {
     const item = pkg.items.find(i => i.sourcedId === query.sourcedId)
     if (!item) return null
 
-    // Find all associations where this item is the origin or destination
-    const associations = pkg.associations.filter(a => {
-      const assocJSON = a.toJSON()
-      const originURI = assocJSON.originNodeURI
-      const destURI = assocJSON.destinationNodeURI
-      const originId = typeof originURI === 'string' ? originURI : originURI?.identifier
-      const destId = typeof destURI === 'string' ? destURI : destURI?.identifier
+    const matchesItem = (a: { toJSON: (v?: any) => any }) => {
+      const j = a.toJSON()
+      const originId = typeof j.originNodeURI === 'string' ? j.originNodeURI : j.originNodeURI?.identifier
+      const destId = typeof j.destinationNodeURI === 'string' ? j.destinationNodeURI : j.destinationNodeURI?.identifier
       return originId === query.sourcedId || destId === query.sourcedId
-    })
+    }
+
+    // Intra-framework associations (within the item's own package)
+    const ownAssociations = pkg.associations.filter(matchesItem)
+
+    // Cross-framework associations from alignment packages that reference this framework
+    const alignmentDocs = this.store.getAllDocuments(query.tenantId, storageVersion).filter(
+      meta =>
+        meta.frameworkType === 'Alignment' &&
+        !meta.archived &&
+        meta.alignmentParticipants?.some(p => p.identifier === pkg.document.sourcedId)
+    )
+
+    const crossAssociations = (
+      await Promise.all(
+        alignmentDocs.map(async meta => {
+          try {
+            const alignStorageKey = this.store.resolveStorageKey(query.tenantId, storageVersion, meta.sourcedId)
+            if (!alignStorageKey) return []
+            const alignPkg = await this.pkgRepo.load(query.tenantId, storageVersion, alignStorageKey)
+            return alignPkg?.associations.filter(matchesItem) ?? []
+          } catch (err) {
+            logger.warn({ err, alignmentDocId: meta.sourcedId }, 'Failed to load alignment package for cross-framework associations')
+            return []
+          }
+        })
+      )
+    ).flat()
 
     // Pass caseVersion to toJSON for correct field stripping when downconverting
     const serializeAs = query.loadVersion ? query.caseVersion : undefined
     return {
       CFItem: item.toJSON(serializeAs),
-      CFAssociations: associations.map(a => a.toJSON(serializeAs))
+      CFAssociations: [...ownAssociations, ...crossAssociations].map(a => a.toJSON(serializeAs))
     }
   }
 }
