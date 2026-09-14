@@ -182,7 +182,6 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
     selectedNodeId,
     onNodesChange,
     addChild,
-    addDetachedItem,
   } = useEditor()
 
   const activeFrameworkId = frameworkNodeId
@@ -217,6 +216,11 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
       return next
     })
   }, [])
+
+  const handleAddChild = useCallback((parentId: string) => {
+    addChild(parentId)
+    setLeftExpandedIds((prev) => (prev.has(parentId) ? prev : new Set(prev).add(parentId)))
+  }, [addChild])
   // ── SVG overlay state ──
   const [lineCoords, setLineCoords] = useState<LineCoord[]>([])
   const [hoveredLineId, setHoveredLineId] = useState<string | null>(null)
@@ -846,7 +850,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                 expandedIds={leftExpandedIds}
                 onToggleExpand={handleLeftToggleExpand}
                 onSelect={handleSelect}
-                onAddChild={addChild}
+                onAddChild={handleAddChild}
                 isDraggable={Boolean(expandedTargetFramework) && isSourcePublished}
                 onDragStart={() => { /* cursor hint only */ }}
                 associationCounts={leftAssociationCounts}
@@ -865,7 +869,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
             <div className="shrink-0 border-t border-black/10 p-3">
               <button
                 type="button"
-                onClick={addDetachedItem}
+                onClick={() => { if (frameworkNodeId) addChild(frameworkNodeId) }}
                 className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 transition-colors hover:border-teal-400 hover:text-teal-600 focus:outline-none"
               >
                 <Plus className="h-3.5 w-3.5" />
