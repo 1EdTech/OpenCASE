@@ -18,6 +18,13 @@ import LoginScreen from '@/ui/auth/LoginScreen'
 import { detectTopology } from '@/ui/editor/layout/detectTopology'
 import { applyInitialLayout } from '@/ui/editor/layout/applyInitialLayout'
 
+/** Parse the `<id>` out of a `#/framework/<id>` hash, or null if the hash doesn't match. */
+function getFrameworkIdFromHash(): string | null {
+  const hash = globalThis.location?.hash ?? ''
+  const match = /^#\/framework\/([^/?]+)/.exec(hash)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
 /** Extract CFDefinitions from a raw CFPackage response and merge into tenant state */
 function extractCfDefinitions(pkg: unknown): {
   CFItemTypes?: CFItemType[]
@@ -54,9 +61,11 @@ function AppInner() {
   const cfg = getAppConfig()
   const api = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })), [cfg.opencaseBaseUrl, getAccessToken])
 
-  const [screen, setScreen] = useState<'home' | 'editor'>('home')
+  // Seed from the URL hash so a hard refresh (or restoring from browser history) reopens
+  // the same framework instead of always landing on the home screen.
+  const [screen, setScreen] = useState<'home' | 'editor'>(() => (getFrameworkIdFromHash() ? 'editor' : 'home'))
   const [frameworks, setFrameworks] = useState<HomeFramework[]>(() => loadFrameworks())
-  const [activeFrameworkId, setActiveFrameworkId] = useState<string | null>(null)
+  const [activeFrameworkId, setActiveFrameworkId] = useState<string | null>(() => getFrameworkIdFromHash())
   
   // Store layouts extracted from CASE extensions (keyed by framework ID)
   const [frameworkLayouts, setFrameworkLayouts] = useState<Record<string, LayoutState>>({})
@@ -131,8 +140,21 @@ function AppInner() {
   }, [])
   const [route, setRoute] = useState<'authCallback' | 'login' | 'app'>(() => getRoute())
 
+  // Keep screen/activeFrameworkId in sync with the URL on browser back/forward navigation.
+  // (pushState/replaceState calls we make ourselves don't fire `hashchange`, so this only
+  // reacts to real navigation — our own navigateToFramework/navigateHome set state directly.)
   useEffect(() => {
-    const onHashChange = () => setRoute(getRoute())
+    const onHashChange = () => {
+      setRoute(getRoute())
+      const id = getFrameworkIdFromHash()
+      if (id) {
+        setActiveFrameworkId(id)
+        setScreen('editor')
+      } else if (getRoute() === 'app') {
+        setScreen('home')
+        setActiveFrameworkId(null)
+      }
+    }
     globalThis.addEventListener('hashchange', onHashChange)
     return () => globalThis.removeEventListener('hashchange', onHashChange)
   }, [getRoute])
@@ -170,8 +192,12 @@ function AppInner() {
   }, [completeSignIn, getRoute])
 
   // Force unauthenticated users onto the login route.
+  // Skip while the initial session check is still in flight (authStatus starts as
+  // 'loading' on every mount) — otherwise a refresh or back-navigation gets bounced to
+  // login before the persisted session has had a chance to load.
   useEffect(() => {
     if (route === 'authCallback') return
+    if (authStatus === 'loading') return
     if (authStatus === 'authenticated') return
     if (globalThis.location?.hash?.startsWith('#/login')) return
     globalThis.history?.replaceState(null, '', '/#/login')
@@ -245,10 +271,32 @@ function AppInner() {
     [serverCfDocuments],
   )
 
-  const openFramework = useCallback((id: string) => {
+  // Push/replace the `#/framework/<id>` route alongside the screen state change, so browser
+  // back/forward and refresh reflect which framework (if any) is open.
+  const navigateToFramework = useCallback((id: string, opts?: { replace?: boolean }) => {
+    const url = `/#/framework/${encodeURIComponent(id)}`
+    if (opts?.replace) {
+      globalThis.history?.replaceState(null, '', url)
+    } else {
+      globalThis.history?.pushState(null, '', url)
+    }
     setActiveFrameworkId(id)
     setScreen('editor')
   }, [])
+
+  const navigateHome = useCallback((opts?: { replace?: boolean }) => {
+    if (opts?.replace) {
+      globalThis.history?.replaceState(null, '', '/#/')
+    } else {
+      globalThis.history?.pushState(null, '', '/#/')
+    }
+    setActiveFrameworkId(null)
+    setScreen('home')
+  }, [])
+
+  const openFramework = useCallback((id: string) => {
+    navigateToFramework(id)
+  }, [navigateToFramework])
 
   const deleteDraft = useCallback((id: string) => {
     setFrameworks((prev) => {
@@ -258,10 +306,9 @@ function AppInner() {
     })
     // If we're deleting the active framework, go back to home
     if (activeFrameworkId === id) {
-      setActiveFrameworkId(null)
-      setScreen('home')
+      navigateHome({ replace: true })
     }
-  }, [activeFrameworkId])
+  }, [activeFrameworkId, navigateHome])
 
   /** Remove a framework from localStorage (used after archive or hard delete) */
   const removeFrameworkFromStorage = useCallback((docId: string) => {
@@ -276,10 +323,9 @@ function AppInner() {
       return next
     })
     if (activeFrameworkId === docId) {
-      setActiveFrameworkId(null)
-      setScreen('home')
+      navigateHome({ replace: true })
     }
-  }, [activeFrameworkId])
+  }, [activeFrameworkId, navigateHome])
 
   const createNew = useCallback((draft: CreateFrameworkDraft) => {
     const fw = createNewFrameworkDraft(draft)
@@ -288,9 +334,8 @@ function AppInner() {
       saveFrameworks(next)
       return next
     })
-    setActiveFrameworkId(fw.id)
-    setScreen('editor')
-  }, [])
+    navigateToFramework(fw.id)
+  }, [navigateToFramework])
 
   /** Create a HomeFramework from a pre-populated domain Framework (e.g. from spreadsheet upload). */
   const createFromFramework = useCallback((framework: Framework) => {
@@ -300,12 +345,11 @@ function AppInner() {
       saveFrameworks(next)
       return next
     })
-    setActiveFrameworkId(fw.id)
-    setScreen('editor')
-  }, [])
+    navigateToFramework(fw.id)
+  }, [navigateToFramework])
 
   const openRemoteFramework = useCallback(
-    async (docId: string) => {
+    async (docId: string, opts?: { replace?: boolean }) => {
       setRemoteOpenState('loading')
       try {
         // Fetch the CASE package from the API
@@ -367,14 +411,29 @@ function AppInner() {
         // Mark as published since it was loaded from OpenCASE
         setPublishedFrameworkIds((prev) => new Set(prev).add(fw.id))
 
-        setActiveFrameworkId(fw.id)
-        setScreen('editor')
+        navigateToFramework(fw.id, opts)
       } finally {
         setRemoteOpenState('idle')
       }
     },
-    [api, mergeCfDefinitions],
+    [api, mergeCfDefinitions, navigateToFramework],
   )
+
+  // If the URL points at a framework that isn't in the local cache yet (e.g. a hard refresh,
+  // or a deep link to a framework never opened on this device), fetch it from the server.
+  // Falls back to home if it can't be loaded (deleted, no access, etc.).
+  useEffect(() => {
+    if (!activeFrameworkId) return
+    if (authStatus !== 'authenticated') return
+    if (frameworks.some((f) => f.id === activeFrameworkId)) return
+    let cancelled = false
+    openRemoteFramework(activeFrameworkId, { replace: true }).catch((err: unknown) => {
+      if (cancelled) return
+      console.warn('[App] Failed to restore framework from URL:', err)
+      navigateHome({ replace: true })
+    })
+    return () => { cancelled = true }
+  }, [activeFrameworkId, authStatus, frameworks, openRemoteFramework, navigateHome])
 
   // Load a framework from the server into the local session without navigating to it.
   // Used by TreePanelView when the user selects a crosswalk target that isn't loaded locally yet.
@@ -490,7 +549,7 @@ function AppInner() {
       // pre-fork local record.
       if (activeFrameworkId && result.docId && result.docId !== activeFrameworkId) {
         const oldId = activeFrameworkId
-        await openRemoteFramework(result.docId)
+        await openRemoteFramework(result.docId, { replace: true })
         setFrameworks((prev) => {
           const next = prev.filter((f) => f.id !== oldId)
           saveFrameworks(next)
@@ -676,9 +735,7 @@ function AppInner() {
       initialCfAssociationGroupings={tenantCfAssociationGroupings}
     >
       <EditorCanvas
-        onBack={() => {
-          setScreen('home')
-        }}
+        onBack={() => navigateHome()}
         onSaveToServer={tenantId ? handleSaveToServer : undefined}
         isPublishedToOpenCase={activeFrameworkId ? publishedFrameworkIds.has(activeFrameworkId) : false}
         onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
