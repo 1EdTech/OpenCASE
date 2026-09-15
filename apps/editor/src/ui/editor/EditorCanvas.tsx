@@ -32,7 +32,7 @@ type MirrorStatus = { isModifiedFromSource?: boolean; sourcePackageURI?: string 
 
 type EditorCanvasProps = {
   onBack?: () => void
-  onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>) => Promise<void>
+  onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework) => Promise<void>
   /** Whether the current framework has been published to OpenCASE (loaded from or saved to server) */
   isPublishedToOpenCase?: boolean
   /** Archive the current framework on the server and navigate home */
@@ -215,7 +215,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       setSaveStatus('saving')
       setSaveError(null)
       try {
-        await onSaveToServer(openCasePackage)
+        await onSaveToServer(openCasePackage, framework)
         baselineFrameworkRef.current = framework
         setSaveStatus('success')
         clearDirty()

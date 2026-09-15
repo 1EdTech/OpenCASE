@@ -521,7 +521,7 @@ function AppInner() {
   // Handler to save the CFPackage to the server
   // Must be defined before early returns (React hooks rules)
   const handleSaveToServer = useCallback(
-    async (openCasePackage: unknown) => {
+    async (openCasePackage: unknown, framework: Framework) => {
       if (!tenantId) {
         throw new Error('Not signed in to a tenant. Please sign in to save.')
       }
@@ -568,13 +568,20 @@ function AppInner() {
           const { [oldId]: _dropped, ...rest } = prev
           return rest
         })
-      } else if (activeFrameworkId && result.isModifiedFromSource !== undefined) {
+      } else if (activeFrameworkId) {
+        // Refresh the local cache with the just-saved Framework (items, associations,
+        // metadata) so a hard refresh reflects the server state instead of the
+        // pre-save snapshot. Without this, edits made and saved in this session
+        // (e.g. a newly added item) would vanish on F5 until the framework was
+        // reopened from the Home screen, which always re-fetches from the server.
         setFrameworks((prev) => {
-          const next = prev.map((f) =>
-            f.id === activeFrameworkId
-              ? { ...f, mirrorStatus: { isModifiedFromSource: result.isModifiedFromSource, sourcePackageURI: result.sourcePackageURI } }
-              : f
-          )
+          const existingIdx = prev.findIndex((f) => f.id === activeFrameworkId)
+          if (existingIdx < 0) return prev
+          const mirrorStatus = result.isModifiedFromSource !== undefined
+            ? { isModifiedFromSource: result.isModifiedFromSource, sourcePackageURI: result.sourcePackageURI }
+            : prev[existingIdx].mirrorStatus
+          const next = [...prev]
+          next[existingIdx] = createHomeFrameworkFromDomain(framework, mirrorStatus)
           saveFrameworks(next)
           return next
         })

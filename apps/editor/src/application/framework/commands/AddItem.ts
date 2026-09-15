@@ -8,7 +8,7 @@ export type AddItem = Command<
     frameworkId: FrameworkId
     itemId: ItemId
     statement: string
-    type: ItemType
+    type?: ItemType
   }
 >
 
