@@ -3,13 +3,13 @@ import type { Framework, FrameworkMetadata, Item, Association, AssociationType, 
 import type { FrameworkId, ItemId, AssociationId } from '@/domain/shared/types'
 import { normalizeAdoptionStatus } from '@/domain/framework/model/adoptionStatus'
 
-function mapItemType(rawType?: string): ItemType {
+function mapItemType(rawType?: string): ItemType | undefined {
   const raw = (rawType ?? '').toLowerCase()
   if (raw.includes('skill')) return 'Skill'
   if (raw.includes('learning') || raw.includes('outcome')) return 'LearningOutcome'
   if (raw.includes('standard')) return 'Standard'
   if (raw.includes('compet')) return 'Competency'
-  return 'Competency'
+  return undefined
 }
 
 function mapAssociationType(rawType?: string): AssociationType {

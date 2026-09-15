@@ -18,9 +18,9 @@ const VALID_ITEM_TYPES: Record<string, ItemType> = {
   skill: 'Skill',
 }
 
-function normaliseItemType(raw: string | undefined): ItemType {
-  if (!raw) return 'Standard'
-  return VALID_ITEM_TYPES[raw.trim().toLowerCase()] ?? 'Standard'
+function normaliseItemType(raw: string | undefined): ItemType | undefined {
+  if (!raw) return undefined
+  return VALID_ITEM_TYPES[raw.trim().toLowerCase()] ?? undefined
 }
 
 // ── Public API ──────────────────────────────────────────────────────

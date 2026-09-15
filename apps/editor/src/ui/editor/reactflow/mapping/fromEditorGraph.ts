@@ -7,13 +7,13 @@ import type { CFDocument, CFItem } from '@/domain/case/types'
 const isFrameworkNode = (n: EditorGraph['nodes'][number]) => n.type === 'caseFrameworkNode'
 const isItemNode = (n: EditorGraph['nodes'][number]) => n.type === 'caseItemNode'
 
-function mapItemType(rawType?: string): ItemType {
+function mapItemType(rawType?: string): ItemType | undefined {
   const raw = (rawType ?? '').toLowerCase()
   if (raw.includes('skill')) return 'Skill'
   if (raw.includes('learning') || raw.includes('outcome')) return 'LearningOutcome'
   if (raw.includes('standard')) return 'Standard'
   if (raw.includes('compet')) return 'Competency'
-  return 'Competency'
+  return undefined
 }
 
 function edgeToAssociationType(edgeId: string, edgeData?: { associationType?: string; cfAssociation?: { associationType?: string } }): AssociationType {

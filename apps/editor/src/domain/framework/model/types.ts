@@ -67,7 +67,7 @@ export type AssociationMetadata = {
 export type Item = {
   id: ItemId
   statement: string
-  type: ItemType
+  type?: ItemType
   metadata?: ItemMetadata
 }
 

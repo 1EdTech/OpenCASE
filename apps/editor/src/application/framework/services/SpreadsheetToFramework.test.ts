@@ -156,7 +156,7 @@ describe('SpreadsheetToFramework', () => {
       makeRow({ level: 1, fullStatement: 'A', itemType: 'competency' }),
       makeRow({ level: 1, fullStatement: 'B', itemType: 'LEARNING OUTCOME' }),
       makeRow({ level: 1, fullStatement: 'C', itemType: 'skill' }),
-      makeRow({ level: 1, fullStatement: 'D' }), // defaults to Standard
+      makeRow({ level: 1, fullStatement: 'D' }), // no type entered — should remain unset
     ]
     const fw = spreadsheetToFramework(rows, { title: 'Test' })
     const items = [...fw.items.values()]
@@ -164,7 +164,7 @@ describe('SpreadsheetToFramework', () => {
     expect(items[0].type).toBe('Competency')
     expect(items[1].type).toBe('LearningOutcome')
     expect(items[2].type).toBe('Skill')
-    expect(items[3].type).toBe('Standard')
+    expect(items[3].type).toBeUndefined()
   })
 
   it('handles a single item (flat framework)', () => {
