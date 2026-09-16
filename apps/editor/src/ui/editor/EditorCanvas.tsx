@@ -1104,13 +1104,36 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       didInitialViewportRef.current = true
     }
 
-    // Two rAFs to let React Flow apply any pending node measurements/positions.
-    const id = globalThis.requestAnimationFrame(() => center())
-    const id2 = globalThis.requestAnimationFrame(() => center())
+    // Switching back from Tree View unhides this container (display:none →
+    // visible) in the same tick that triggers this effect, but the browser
+    // doesn't recompute layout — and React Flow's own ResizeObserver doesn't
+    // refresh its cached container size — until a later frame. Centering
+    // immediately would compute pan/zoom against a stale 0x0 size, so poll
+    // until the container actually has a measurable size (bounded, in case
+    // it's genuinely hidden for some other reason).
+    const MAX_ATTEMPTS = 30
+    let attempts = 0
+    let rafId: number
+
+    const waitForSizeThenCenter = () => {
+      const { width, height } = reactFlowWrapRef.current?.getBoundingClientRect() ?? { width: 0, height: 0 }
+      if ((width > 0 && height > 0) || attempts >= MAX_ATTEMPTS) {
+        center()
+        return
+      }
+      attempts += 1
+      rafId = globalThis.requestAnimationFrame(waitForSizeThenCenter)
+    }
+
+    // One rAF to let React Flow apply any pending node measurements/positions
+    // before the size-polling loop starts.
+    const id = globalThis.requestAnimationFrame(() => {
+      rafId = globalThis.requestAnimationFrame(waitForSizeThenCenter)
+    })
 
     return () => {
       globalThis.cancelAnimationFrame(id)
-      globalThis.cancelAnimationFrame(id2)
+      globalThis.cancelAnimationFrame(rafId)
     }
   }, [])
 

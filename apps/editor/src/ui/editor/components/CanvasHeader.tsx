@@ -11,6 +11,9 @@ type MenuItem = {
   disabled?: boolean
 }
 
+// Hierarchy layout is hidden (redundant with Canvas View) but kept wired up for now; slated for removal.
+const SHOW_HIERARCHY_LAYOUT_MENU_ITEM = false
+
 function PopoverMenu({
   label,
   icon: Icon,
@@ -380,9 +383,9 @@ export default function CanvasHeader({
               icon={Cog6ToothIcon}
               items={[
                 { label: 'Settings', icon: Cog6ToothIcon, onClick: onOpenSettings },
-                { label: 'Hierarchy layout', icon: Bars3BottomLeftIcon, onClick: onResetHierarchy, disabled: !onResetHierarchy },
-                { label: 'Star layout', icon: SparklesIcon, onClick: onResetStar, disabled: !onResetStar },
-                { label: activeView === 'tree' ? '✓ Tree view' : 'Tree view', icon: QueueListIcon, onClick: onSwitchTreeView, disabled: !onSwitchTreeView },
+                ...(SHOW_HIERARCHY_LAYOUT_MENU_ITEM ? [{ label: 'Hierarchy layout', icon: Bars3BottomLeftIcon, onClick: onResetHierarchy, disabled: !onResetHierarchy }] : []),
+                { label: 'Canvas View', icon: SparklesIcon, onClick: onResetStar, disabled: !onResetStar },
+                { label: activeView === 'tree' ? '✓ Tree View' : 'Tree View', icon: QueueListIcon, onClick: onSwitchTreeView, disabled: !onSwitchTreeView },
                 'divider',
                 { label: 'Help', icon: QuestionMarkCircleIcon, onClick: () => {} },
               ]}
