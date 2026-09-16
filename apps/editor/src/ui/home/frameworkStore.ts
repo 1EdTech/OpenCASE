@@ -202,7 +202,7 @@ export function createNewFrameworkDraft(params: CreateFrameworkDraft): HomeFrame
   const framework = createFrameworkFromMetadata({
     id,
     title,
-    frameworkType: params.frameworkType ?? 'K-12',
+    frameworkType: params.frameworkType,
     adoptionStatus: params.adoptionStatus ?? 'Draft',
     description: params.description ?? '',
     creator: 'District Curriculum Team',
@@ -215,7 +215,7 @@ export function createNewFrameworkDraft(params: CreateFrameworkDraft): HomeFrame
   const graph = createEmptyFrameworkGraph({
     id,
     title,
-    frameworkType: params.frameworkType ?? 'K-12',
+    frameworkType: params.frameworkType,
     adoptionStatus: params.adoptionStatus ?? 'Draft',
     description: params.description ?? '',
     creator: 'District Curriculum Team',
