@@ -1331,6 +1331,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
           onReconnectEnd={onReconnectEnd}
           connectOnClick={true}
           connectionMode={ConnectionMode.Loose}
+          onlyRenderVisibleElements
           defaultEdgeOptions={{
             interactionWidth: 20,
             style: { strokeWidth: 1.5, stroke: '#94a3b8' },
