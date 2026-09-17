@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { ChevronDown, ChevronRight, Link, Plus } from 'lucide-react'
 import type { FrameworkTreeNode } from '@/domain/framework/treeDerivation'
+import type { CFItem } from '@/domain/case/types'
 
 type Props = {
   node: FrameworkTreeNode
+  /** Item content, looked up by id — kept separate from tree shape so content-only edits don't rebuild the tree. */
+  cfItemsById: Map<string, CFItem>
   selectedId: string | null
   expandedIds: Set<string>
   onToggleExpand: (_id: string) => void
@@ -22,8 +25,9 @@ type Props = {
   onBadgeClick?: (_id: string, _e: React.MouseEvent<HTMLButtonElement>) => void
 }
 
-export default function FrameworkTreeItem({
+function FrameworkTreeItem({
   node,
+  cfItemsById,
   selectedId,
   expandedIds,
   onToggleExpand,
@@ -40,6 +44,7 @@ export default function FrameworkTreeItem({
   onBadgeClick,
 }: Readonly<Props>) {
   const [hovered, setHovered] = useState(false)
+  const cfItem = cfItemsById.get(node.id)
   const isSelected = selectedId === node.id
   const isExpanded = expandedIds.has(node.id)
   const hasChildren = node.children.length > 0
@@ -112,13 +117,13 @@ export default function FrameworkTreeItem({
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            {node.cfItem.humanCodingScheme ? (
+            {cfItem?.humanCodingScheme ? (
               <span className="shrink-0 rounded bg-blue-100 px-2 py-0.5 font-mono text-xs text-blue-700">
-                {node.cfItem.humanCodingScheme}
+                {cfItem.humanCodingScheme}
               </span>
             ) : null}
             <span className="text-[11px] text-slate-400 leading-snug">
-              {node.cfItem.identifier}
+              {node.id}
             </span>
             {associationCount > 0 && (
               <button
@@ -133,13 +138,13 @@ export default function FrameworkTreeItem({
               </button>
             )}
           </div>
-          {node.cfItem.abbreviatedStatement?.trim() ? (
+          {cfItem?.abbreviatedStatement?.trim() ? (
             <p className="mt-1 text-xs leading-snug text-slate-600">
-              {node.cfItem.abbreviatedStatement.trim()}
+              {cfItem.abbreviatedStatement.trim()}
             </p>
           ) : null}
           <p className="mt-0.5 text-sm leading-snug text-slate-800 break-words">
-            {node.cfItem.fullStatement}
+            {cfItem?.fullStatement ?? '(item not found)'}
           </p>
           {hasChildren && (
             <span className="mt-0.5 block text-xs text-slate-400">
@@ -170,6 +175,7 @@ export default function FrameworkTreeItem({
             <FrameworkTreeItem
               key={child.id}
               node={child}
+              cfItemsById={cfItemsById}
               selectedId={selectedId}
               expandedIds={expandedIds}
               onToggleExpand={onToggleExpand}
@@ -191,3 +197,31 @@ export default function FrameworkTreeItem({
     </div>
   )
 }
+
+// `node` (shape) is already stable across content-only edits (see
+// treeDerivation.ts), but `cfItemsById`'s Map reference changes whenever ANY
+// item's content changes, not just this row's — so the default shallow
+// `memo` comparison would still re-render every row on every edit. Compare
+// this row's own looked-up item instead of the whole Map reference.
+function areEqual(prev: Readonly<Props>, next: Readonly<Props>): boolean {
+  return (
+    prev.node === next.node &&
+    prev.selectedId === next.selectedId &&
+    prev.expandedIds === next.expandedIds &&
+    prev.onToggleExpand === next.onToggleExpand &&
+    prev.onSelect === next.onSelect &&
+    prev.onAddChild === next.onAddChild &&
+    prev.isDraggable === next.isDraggable &&
+    prev.onDragStart === next.onDragStart &&
+    prev.isDropTarget === next.isDropTarget &&
+    prev.onDragOver === next.onDragOver &&
+    prev.onDragLeave === next.onDragLeave &&
+    prev.onDrop === next.onDrop &&
+    prev.dragOverItemId === next.dragOverItemId &&
+    prev.associationCounts === next.associationCounts &&
+    prev.onBadgeClick === next.onBadgeClick &&
+    prev.cfItemsById.get(next.node.id) === next.cfItemsById.get(next.node.id)
+  )
+}
+
+export default memo(FrameworkTreeItem, areEqual)

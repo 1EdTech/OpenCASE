@@ -648,15 +648,35 @@ export function EditorProvider({
     [state.nodes],
   )
 
-  const cfItems = useMemo(
-    () => state.nodes.filter(isItemNode).map((n) => n.data.cfItem),
-    [state.nodes],
-  )
+  // Cached derivation (same pattern as `nodesWithCallbacks` below): if every
+  // item node is referentially unchanged from the previous render (e.g. a
+  // dispatch only touched the framework node or selection state), reuse the
+  // previous `cfItems` array instead of allocating a new one. This keeps
+  // `cfItems`'s identity stable across non-item edits, which matters because
+  // downstream consumers (Tree Panel's `buildFrameworkTree`) key expensive
+  // recomputation off this array's reference.
+  const cfItemsCacheRef = useRef<{ inputs: CaseItemNodeType[]; output: CFItem[] }>({ inputs: [], output: [] })
+  const cfItems = useMemo(() => {
+    const itemNodes = state.nodes.filter(isItemNode)
+    const prev = cfItemsCacheRef.current
+    if (itemNodes.length === prev.inputs.length && itemNodes.every((n, i) => n === prev.inputs[i])) {
+      return prev.output
+    }
+    const output = itemNodes.map((n) => n.data.cfItem)
+    cfItemsCacheRef.current = { inputs: itemNodes, output }
+    return output
+  }, [state.nodes])
 
   const frameworkEdges = useMemo(
     (): FrameworkEdgeRecord[] =>
       state.edges
-        .filter((e) => !e.data?.isFrameworkRootConnection)
+        // Only hierarchical item-to-item edges (isChildOf/isPartOf) represent
+        // parent/child structure — non-hierarchical associations (isRelatedTo,
+        // precedes, etc.) must NOT be treated as tree edges here, or a
+        // reciprocal/cross-type association can introduce a cycle into what
+        // buildFrameworkTree assumes is a DAG rooted at the framework node
+        // (mirrors the isHierarchical filtering in nodeGeometry.ts buildAdjacency).
+        .filter((e) => !e.data?.isFrameworkRootConnection && e.data?.isHierarchical)
         .map((e) => ({
           parentId: e.source,
           childId: e.target,

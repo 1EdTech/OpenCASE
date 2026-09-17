@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { Button } from '@/ui/shared/components/ui/button'
 import FrameworkTreeItem from './FrameworkTreeItem'
 import type { FrameworkTreeNode } from '@/domain/framework/treeDerivation'
+import type { CFItem } from '@/domain/case/types'
 
 type Props = {
   title: string
@@ -9,6 +10,8 @@ type Props = {
   publisher?: string
   frameworkNodeId: string | null
   roots: FrameworkTreeNode[]
+  /** Item content, looked up by id — kept separate from tree shape so content-only edits don't rebuild `roots`. */
+  cfItemsById: Map<string, CFItem>
   selectedId: string | null
   expandedIds: Set<string>
   onToggleExpand: (_id: string) => void
@@ -41,6 +44,7 @@ export default function FrameworkTreeList({
   publisher,
   frameworkNodeId,
   roots,
+  cfItemsById,
   selectedId,
   expandedIds,
   onToggleExpand,
@@ -113,6 +117,7 @@ export default function FrameworkTreeList({
               <FrameworkTreeItem
                 key={node.id}
                 node={node}
+                cfItemsById={cfItemsById}
                 selectedId={selectedId}
                 expandedIds={expandedIds}
                 onToggleExpand={onToggleExpand}

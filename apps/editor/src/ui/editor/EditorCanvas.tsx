@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ReactFlowInstance, Connection, Edge, NodeChange, EdgeChange } from '@xyflow/react'
 import type { OnBeforeDelete } from '@xyflow/react'
 import type { OnSelectionChangeFunc } from '@xyflow/react'
@@ -27,6 +27,135 @@ import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
 import { absolutizeCaseUris, frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
 import type { Framework } from '@/domain/framework/model/types'
 import { hasFrameworkDataChanged } from '@/domain/framework/hasFrameworkDataChanged'
+
+// ── Stable ReactFlow config (module scope — never recreated) ──────────────
+//
+// A fresh object/array/function literal passed as a prop to <ReactFlow> on
+// every EditorCanvas render defeats any attempt to keep it from doing work
+// while hidden behind Tree View: CPU profiling showed React Flow's internal
+// store (setState/shallow-equality selectors) re-syncing on every keystroke
+// even when node/edge DATA was unchanged, because other props (these) were
+// still fresh references each render.
+const REACT_FLOW_DEFAULT_EDGE_OPTIONS = {
+  interactionWidth: 20,
+  style: { strokeWidth: 1.5, stroke: '#94a3b8' },
+  focusable: true,
+  reconnectable: true,
+}
+const REACT_FLOW_PRO_OPTIONS = { hideAttribution: true }
+const REACT_FLOW_BACKGROUND_STYLE = { backgroundColor: '#f0f0f2' }
+const minimapNodeColor = (node: CaseEditorNodeType) => (node.selected ? '#8b5cf6' : '#e2e8f0') // violet-500 if selected, slate-200 otherwise
+const minimapNodeStrokeColor = (node: CaseEditorNodeType) => (node.selected ? '#7c3aed' : '#cbd5e1') // violet-600 if selected, slate-300 otherwise
+
+type ReactFlowGraphProps = {
+  wrapRef: React.RefObject<HTMLDivElement | null>
+  visible: boolean
+  nodes: CaseEditorNodeType[]
+  edges: CaseEditorEdge[]
+  onNodesChange: (changes: NodeChange<CaseEditorNodeType>[]) => void
+  onEdgesChange: (changes: EdgeChange[]) => void
+  onConnect: (connection: Connection) => void
+  onNodeClick: (event: ReactMouseEvent, node: CaseEditorNodeType) => void
+  onNodeDragStart: (event: ReactMouseEvent, node: CaseEditorNodeType) => void
+  onNodeDragStop: () => void
+  onEdgeClick: (event: ReactMouseEvent, edge: Edge) => void
+  onPaneClick: (event: ReactMouseEvent) => void
+  isValidConnection: (connection: Connection) => boolean
+  onSelectionChange: OnSelectionChangeFunc<CaseEditorNodeType>
+  onBeforeDelete: OnBeforeDelete<CaseEditorNodeType>
+  nodesDraggable: boolean
+  onReconnectStart: () => void
+  onReconnect: (oldEdge: Edge, newConnection: Connection) => void
+  onReconnectEnd: (_: unknown, edge: Edge) => void
+  onInit: (instance: ReactFlowInstance<CaseEditorNodeType>) => void
+  onPointerDownCapture: (event: ReactPointerEvent<HTMLDivElement>) => void
+}
+
+/**
+ * Isolated in its own `React.memo`'d component (rather than inline JSX in
+ * EditorCanvas) so that when every prop here is referentially stable —
+ * which is the case while Tree View is active, since `nodes`/`edges` are
+ * frozen and every handler is `useCallback`'d — React skips calling this
+ * component's render function entirely, instead of merely receiving
+ * unchanged props. That's what actually stops React Flow's internal effects
+ * from re-running on every keystroke while the canvas is invisible.
+ */
+const ReactFlowGraph = memo(function ReactFlowGraph({
+  wrapRef,
+  visible,
+  nodes,
+  edges,
+  onNodesChange,
+  onEdgesChange,
+  onConnect,
+  onNodeClick,
+  onNodeDragStart,
+  onNodeDragStop,
+  onEdgeClick,
+  onPaneClick,
+  isValidConnection,
+  onSelectionChange,
+  onBeforeDelete,
+  nodesDraggable,
+  onReconnectStart,
+  onReconnect,
+  onReconnectEnd,
+  onInit,
+  onPointerDownCapture,
+}: ReactFlowGraphProps) {
+  return (
+    <div ref={wrapRef} className={visible ? 'h-full w-full' : 'hidden'} onPointerDownCapture={onPointerDownCapture}>
+      <ReactFlow<CaseEditorNodeType>
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={onNodeClick}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDragStop={onNodeDragStop}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={onPaneClick}
+        isValidConnection={isValidConnection}
+        onSelectionChange={onSelectionChange}
+        onBeforeDelete={onBeforeDelete}
+        selectionMode={SelectionMode.Full}
+        multiSelectionKeyCode="Meta"
+        selectionOnDrag={false}
+        selectionKeyCode="Shift"
+        panOnDrag
+        nodesDraggable={nodesDraggable}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        edgesFocusable
+        elevateEdgesOnSelect
+        edgesReconnectable
+        onReconnectStart={onReconnectStart}
+        onReconnect={onReconnect}
+        onReconnectEnd={onReconnectEnd}
+        connectOnClick={true}
+        connectionMode={ConnectionMode.Loose}
+        onlyRenderVisibleElements
+        defaultEdgeOptions={REACT_FLOW_DEFAULT_EDGE_OPTIONS}
+        proOptions={REACT_FLOW_PRO_OPTIONS}
+        onInit={onInit}
+      >
+        <Background color="#c8c8ca" gap={20} size={1.5} variant={BackgroundVariant.Dots} style={REACT_FLOW_BACKGROUND_STYLE} />
+        <Controls />
+        <MiniMap
+          position="bottom-left"
+          className="!bottom-1 !left-12"
+          pannable
+          zoomable
+          nodeStrokeWidth={2}
+          nodeColor={minimapNodeColor}
+          nodeStrokeColor={minimapNodeStrokeColor}
+          maskColor="rgba(240, 240, 245, 0.7)"
+        />
+      </ReactFlow>
+    </div>
+  )
+})
 
 type MirrorStatus = { isModifiedFromSource?: boolean; sourcePackageURI?: string }
 
@@ -390,6 +519,31 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     return result
   }, [editorEdges, settings.edgeType, effectiveGroupingFilter])
 
+  // React Flow stays MOUNTED (just CSS-hidden) while Tree View is active, so
+  // that pan/zoom/selection state survives switching views. But feeding it a
+  // fresh `nodes`/`edges` array reference on every keystroke — even while
+  // invisible — makes it redo internal store diffing across the whole graph
+  // for nothing (confirmed via CPU profile: React Flow's internal selectors/
+  // shallow-equality checks dominate keystroke cost at ~7,500 nodes). Freeze
+  // the props actually delivered to <ReactFlow> while hidden, and only catch
+  // up to the latest data the moment the canvas becomes visible again.
+  const frozenCanvasGraphRef = useRef<{ nodes: CaseEditorNodeType[]; edges: CaseEditorEdge[] }>({
+    nodes: nodesWithCallbacks,
+    edges: edgesWithType,
+  })
+  if (activeView !== 'tree') {
+    frozenCanvasGraphRef.current = { nodes: nodesWithCallbacks, edges: edgesWithType }
+  }
+  const canvasNodes = activeView === 'tree' ? frozenCanvasGraphRef.current.nodes : nodesWithCallbacks
+  const canvasEdges = activeView === 'tree' ? frozenCanvasGraphRef.current.edges : edgesWithType
+
+  // Stable identity (see comment above) — an inline arrow function here would
+  // itself defeat the freeze the same way defaultEdgeOptions/proOptions did.
+  const onReactFlowInit = useCallback((instance: ReactFlowInstance<CaseEditorNodeType>) => {
+    reactFlowRef.current = instance
+    setRfReady(true)
+  }, [])
+
   // Validate connections - prevent framework-to-framework connections
   const nodesWithCallbacksRef = useRef(nodesWithCallbacks)
   nodesWithCallbacksRef.current = nodesWithCallbacks
@@ -635,7 +789,10 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
           const flowX = (pointer.clientX - rect.left - viewport.x) / viewport.zoom
           const flowY = (pointer.clientY - rect.top - viewport.y) / viewport.zoom
           const hitSelectedNodeId = selectedNodeIds.find((id) => {
-            const node = nodes.find((n) => n.id === id)
+            // Read via graphRef, not the closed-over `nodes`, so this callback's
+            // identity doesn't change on every keystroke (nodes' reference
+            // changes on every dispatch, even ones that don't touch positions).
+            const node = graphRef.current.nodes.find((n) => n.id === id)
             if (!node) return false
             const anyNode = node as unknown as {
               measured?: { width?: number; height?: number }
@@ -716,7 +873,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
 
     onNodesChange(changes)
     logSelectionDebug('onNodesChange/forwarded', { changeCount: changes.length })
-  }, [logSelectionDebug, nodes, onNodesChange, selectedNodeIds])
+  }, [logSelectionDebug, onNodesChange, selectedNodeIds])
 
   const onEdgesChangeWithSelectionGuard = useCallback((changes: EdgeChange[]) => {
     const suppressEcho = suppressSelectEchoRef.current
@@ -893,17 +1050,23 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
 
   const onBeforeDelete: OnBeforeDelete<CaseEditorNodeType> = useCallback(
     async ({ nodes, edges: deletedEdges }) => {
+      // Read via refs, not the closed-over nodesWithCallbacks/editorEdges, so
+      // this callback's identity doesn't change on every keystroke (both
+      // change reference on every dispatch, even ones that don't affect
+      // what's deletable) — see graphRef/nodesWithCallbacksRef above.
+      const allNodes = nodesWithCallbacksRef.current
+      const allEdges = graphRef.current.edges
       const includesFramework = nodes.some((n) => n.type === 'caseFrameworkNode')
 
-      const nodeIds = includesFramework ? nodesWithCallbacks.map((n) => n.id) : nodes.map((n) => n.id)
-      const edgeIds = includesFramework ? editorEdges.map((e) => e.id) : deletedEdges.map((e) => e.id)
+      const nodeIds = includesFramework ? allNodes.map((n) => n.id) : nodes.map((n) => n.id)
+      const edgeIds = includesFramework ? allEdges.map((e) => e.id) : deletedEdges.map((e) => e.id)
 
       const nodeIdSet = new Set(nodeIds)
       const deletedItemIdSet = new Set(
-        (includesFramework ? nodesWithCallbacks : nodes).filter((n) => n.type === 'caseItemNode').map((n) => n.id),
+        (includesFramework ? allNodes : nodes).filter((n) => n.type === 'caseItemNode').map((n) => n.id),
       )
 
-      const childItemCount = nodesWithCallbacks.filter(
+      const childItemCount = allNodes.filter(
         (n) =>
           n.type === 'caseItemNode' &&
           !nodeIdSet.has(n.id) &&
@@ -925,7 +1088,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         })
       })
     },
-    [nodesWithCallbacks, editorEdges],
+    [],
   )
 
   const closeActionDialog = useCallback(() => {
@@ -1300,64 +1463,29 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         </div>
       ) : null}
 
-      <div ref={reactFlowWrapRef} className={activeView === 'tree' ? 'hidden' : 'h-full w-full'} onPointerDownCapture={onCanvasPointerDownCapture}>
-        <ReactFlow<CaseEditorNodeType>
-          nodes={nodesWithCallbacks}
-          edges={edgesWithType}
-          onNodesChange={onNodesChangeWithSelectionGuard}
-          onEdgesChange={onEdgesChangeWithSelectionGuard}
-          onConnect={onConnect}
-          onNodeClick={onNodeClick}
-          onNodeDragStart={onNodeDragStart}
-          onNodeDragStop={onNodeDragStop}
-          onEdgeClick={onEdgeClick}
-          onPaneClick={onPaneClick}
-          isValidConnection={isValidConnection}
-          onSelectionChange={onSelectionChangeWithPan}
-          onBeforeDelete={onBeforeDelete}
-          selectionMode={SelectionMode.Full}
-          multiSelectionKeyCode="Meta"
-          selectionOnDrag={false}
-          selectionKeyCode="Shift"
-          panOnDrag
-          nodesDraggable={!shiftHeldForInteractions}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          edgesFocusable
-          elevateEdgesOnSelect
-          edgesReconnectable
-          onReconnectStart={onReconnectStart}
-          onReconnect={onReconnect}
-          onReconnectEnd={onReconnectEnd}
-          connectOnClick={true}
-          connectionMode={ConnectionMode.Loose}
-          onlyRenderVisibleElements
-          defaultEdgeOptions={{
-            interactionWidth: 20,
-            style: { strokeWidth: 1.5, stroke: '#94a3b8' },
-            focusable: true,
-            reconnectable: true,
-          }}
-          proOptions={{ hideAttribution: true }}
-          onInit={(instance) => {
-            reactFlowRef.current = instance as unknown as ReactFlowInstance<CaseEditorNodeType>
-            setRfReady(true)
-          }}
-        >
-          <Background color="#c8c8ca" gap={20} size={1.5} variant={BackgroundVariant.Dots} style={{ backgroundColor: '#f0f0f2' }} />
-          <Controls />
-          <MiniMap
-            position="bottom-left"
-            className="!bottom-1 !left-12"
-            pannable
-            zoomable
-            nodeStrokeWidth={2}
-            nodeColor={(node) => (node.selected ? '#8b5cf6' : '#e2e8f0')} // violet-500 if selected, slate-200 otherwise
-            nodeStrokeColor={(node) => (node.selected ? '#7c3aed' : '#cbd5e1')} // violet-600 if selected, slate-300 otherwise
-            maskColor="rgba(240, 240, 245, 0.7)"
-          />
-        </ReactFlow>
-      </div>
+      <ReactFlowGraph
+        wrapRef={reactFlowWrapRef}
+        visible={activeView !== 'tree'}
+        nodes={canvasNodes}
+        edges={canvasEdges}
+        onNodesChange={onNodesChangeWithSelectionGuard}
+        onEdgesChange={onEdgesChangeWithSelectionGuard}
+        onConnect={onConnect}
+        onNodeClick={onNodeClick}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDragStop={onNodeDragStop}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={onPaneClick}
+        isValidConnection={isValidConnection}
+        onSelectionChange={onSelectionChangeWithPan}
+        onBeforeDelete={onBeforeDelete}
+        nodesDraggable={!shiftHeldForInteractions}
+        onReconnectStart={onReconnectStart}
+        onReconnect={onReconnect}
+        onReconnectEnd={onReconnectEnd}
+        onInit={onReactFlowInit}
+        onPointerDownCapture={onCanvasPointerDownCapture}
+      />
 
       <NodePropertiesPanel
         node={selectedNode}
