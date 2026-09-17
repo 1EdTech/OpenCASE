@@ -35,19 +35,27 @@ export function computeTreeLayout(
 
   // Recursive sub-tree width
   const subtreeWidth = new Map<string, number>()
+  const widthInProgress = new Set<string>() // cycle guard: malformed/cyclic hierarchical data
   const calcWidth = (id: string): number => {
     if (subtreeWidth.has(id)) return subtreeWidth.get(id)!
+    if (widthInProgress.has(id)) return 0 // re-entrant call means a cycle — bail instead of recursing forever
+    widthInProgress.add(id)
     const n = nodeById.get(id)
-    if (!n) return 0
+    if (!n) {
+      widthInProgress.delete(id)
+      return 0
+    }
     const { w } = getNodeSize(n)
     const kids = childrenOf.get(id) ?? []
     if (!kids.length) {
       subtreeWidth.set(id, w)
+      widthInProgress.delete(id)
       return w
     }
     const total = kids.map(calcWidth).reduce((a, b) => a + b, 0) + TREE_GAP_X * Math.max(0, kids.length - 1)
     const sw = Math.max(w, total)
     subtreeWidth.set(id, sw)
+    widthInProgress.delete(id)
     return sw
   }
   calcWidth(frameworkNode.id)
@@ -55,6 +63,7 @@ export function computeTreeLayout(
   // Recursive positioning
   const positions: LayoutResult['positions'] = {}
   const layoutNode = (id: string, centerX: number, y: number) => {
+    if (positions[id]) return // already positioned — guards against cycles / multi-parent DAGs
     const n = nodeById.get(id)
     if (!n) return
     const { w, h } = getNodeSize(n)
