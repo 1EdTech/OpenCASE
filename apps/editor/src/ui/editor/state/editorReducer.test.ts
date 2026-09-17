@@ -346,6 +346,88 @@ describe('graph/delete', () => {
   })
 })
 
+// ── Referential identity (perf regression guards) ──────────────────────
+//
+// These guard against re-introducing full-array reallocation for actions
+// that should only touch a specific node/edge — see POR-736 phase 2.
+// Downstream memoization (EditorContext's `nodesWithCallbacks`, Tree Panel's
+// `cfItemsById`) relies on untouched entries keeping their exact object
+// reference across a dispatch.
+
+describe('referential identity', () => {
+  it('node/updateData on one item leaves other nodes untouched', () => {
+    const state = makeState()
+    const otherNode = state.nodes.find((n) => n.id === 'item-2')
+    const next = editorReducer(state, {
+      type: 'node/updateData',
+      nodeId: 'item-1',
+      patch: { cfItem: { fullStatement: 'Updated' } },
+    })
+    expect(next.nodes.find((n) => n.id === 'item-2')).toBe(otherNode)
+  })
+
+  it('node/addChild only reallocates the previously-selected node and the new one', () => {
+    const state = makeState({ selectedNodeId: 'item-2', selectedNodeIds: ['item-2'] })
+    const untouchedItem = state.nodes.find((n) => n.id === 'item-1')
+    const untouchedEdgeToItem1 = state.edges.find((e) => e.target === 'item-1')
+
+    const next = editorReducer(state, {
+      type: 'node/addChild',
+      parentId: 'item-1',
+      childId: 'child-1',
+      cfItem: { identifier: 'child-1', uri: '', fullStatement: 'Child', lastChangeDateTime: '' },
+    })
+
+    expect(next.nodes.find((n) => n.id === 'item-1')).toBe(untouchedItem)
+    expect(next.edges.find((e) => e.target === 'item-1')).toBe(untouchedEdgeToItem1)
+    // The previously-selected node should be the only pre-existing node reallocated (selected: false)
+    const previouslySelected = next.nodes.find((n) => n.id === 'item-2')
+    expect(previouslySelected?.selected).toBe(false)
+  })
+
+  it('node/addDetachedItem leaves all existing nodes untouched except the previously-selected one', () => {
+    const state = makeState({ selectedNodeId: 'item-1', selectedNodeIds: ['item-1'] })
+    const untouchedItem = state.nodes.find((n) => n.id === 'item-2')
+
+    const next = editorReducer(state, {
+      type: 'node/addDetachedItem',
+      nodeId: 'detached-1',
+      cfItem: { identifier: 'detached-1', uri: '', fullStatement: 'Detached', lastChangeDateTime: '' },
+    })
+
+    expect(next.nodes.find((n) => n.id === 'item-2')).toBe(untouchedItem)
+  })
+
+  it('node/addExternalFramework leaves all existing nodes untouched except the previously-selected one', () => {
+    const state = makeState({ selectedNodeId: 'item-1', selectedNodeIds: ['item-1'] })
+    const untouchedItem = state.nodes.find((n) => n.id === 'item-2')
+
+    const next = editorReducer(state, {
+      type: 'node/addExternalFramework',
+      nodeId: 'ext-1',
+      data: { title: 'External' },
+    })
+
+    expect(next.nodes.find((n) => n.id === 'item-2')).toBe(untouchedItem)
+  })
+
+  it('graph/delete leaves untouched remaining nodes/edges referentially identical', () => {
+    const state = makeState()
+    const untouchedNode = state.nodes.find((n) => n.id === 'item-2')
+    const untouchedEdge = state.edges.find((e) => e.target === 'item-2')
+
+    const next = editorReducer(state, {
+      type: 'graph/delete',
+      nodeIds: ['item-1'],
+      edgeIds: [],
+      reattachChildren: false,
+    })
+
+    expect(next.nodes.find((n) => n.id === 'item-2')).toBe(untouchedNode)
+    expect(next.edges.find((e) => e.target === 'item-2')).toBe(untouchedEdge)
+  })
+})
+
 // ── Default / unknown action ───────────────────────────────────────────
 
 describe('unknown action', () => {

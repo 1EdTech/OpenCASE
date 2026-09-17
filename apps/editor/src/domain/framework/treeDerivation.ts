@@ -1,8 +1,5 @@
-import type { CFItem } from '@/domain/case/types'
-
 export interface FrameworkTreeNode {
   id: string
-  cfItem: CFItem
   children: FrameworkTreeNode[]
   depth: number
 }
@@ -17,17 +14,19 @@ export type FrameworkEdgeRecord = {
 /**
  * Pure domain function — no React Flow imports.
  *
- * @param cfItems    All CFItems in the framework.
- * @param edges      Parent→child relationships (item-to-item only, no framework-root edges).
+ * Builds only the tree SHAPE (id/children/depth) from parent→child edges.
+ * Item content (CFItem) is intentionally NOT embedded here — callers look it
+ * up separately (e.g. by id, from a Map) so that editing an item's own field
+ * data doesn't change this shape and force a full tree rebuild; only actual
+ * structural changes (items added/removed/reparented) should.
+ *
+ * @param edges       Parent→child relationships (item-to-item only, no framework-root edges).
  * @param rootItemIds Top-level item IDs in sequence order (pre-sorted by the caller).
  */
 export function buildFrameworkTree(
-  cfItems: CFItem[],
   edges: FrameworkEdgeRecord[],
   rootItemIds: string[],
 ): FrameworkTreeNode[] {
-  const itemById = new Map(cfItems.map((item) => [item.identifier, item]))
-
   // Build parent → [{childId, seq}] map
   const childrenOf = new Map<string, { childId: string; seq: number }[]>()
   for (const edge of edges) {
@@ -41,17 +40,18 @@ export function buildFrameworkTree(
     entry.sort((a, b) => a.seq - b.seq)
   }
 
-  function buildNode(id: string, depth: number): FrameworkTreeNode | null {
-    const item = itemById.get(id)
-    if (!item) return null
+  function buildNode(id: string, depth: number, visiting: Set<string>): FrameworkTreeNode | null {
+    if (visiting.has(id)) return null // cycle guard: malformed/cyclic hierarchical data
+    visiting.add(id)
     const childEntries = childrenOf.get(id) ?? []
     const children = childEntries
-      .map((e) => buildNode(e.childId, depth + 1))
+      .map((e) => buildNode(e.childId, depth + 1, visiting))
       .filter((n): n is FrameworkTreeNode => n !== null)
-    return { id, cfItem: item, children, depth }
+    visiting.delete(id)
+    return { id, children, depth }
   }
 
   return rootItemIds
-    .map((id) => buildNode(id, 0))
+    .map((id) => buildNode(id, 0, new Set()))
     .filter((n): n is FrameworkTreeNode => n !== null)
 }

@@ -21,6 +21,10 @@ type PendingAssociation = {
   destinationUri: string
 }
 
+// Module-scope stable reference (never recreated) — passed as a no-op
+// onDragStart prop so it doesn't defeat FrameworkTreeItem's React.memo.
+const NOOP_DRAG_START = () => { /* cursor hint only */ }
+
 const ALIGNMENT_ASSOCIATION_TYPES: Array<{ value: string; label: string }> = [
   { value: 'exactMatchOf', label: 'Exact Match Of' },
   { value: 'isRelatedTo', label: 'Is Related To' },
@@ -244,9 +248,17 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
 
   // ── Tree data ──
 
+  // Tree SHAPE — depends only on structure (edges/root order), never on item
+  // content, so editing an item's own fields doesn't force a rebuild of the
+  // whole tree. Content is looked up separately via `cfItemsById` below.
   const leftRoots = useMemo(
-    () => buildFrameworkTree(cfItems, frameworkEdges, rootItemIds),
-    [cfItems, frameworkEdges, rootItemIds],
+    () => buildFrameworkTree(frameworkEdges, rootItemIds),
+    [frameworkEdges, rootItemIds],
+  )
+
+  const cfItemsById = useMemo(
+    () => new Map(cfItems.map((item) => [item.identifier, item])),
+    [cfItems],
   )
 
   // Self-alignment target: when the expanded target IS the framework being edited, the right
@@ -269,8 +281,13 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
     if (!expandedTargetFramework) return []
     const edges = domainFrameworkToEdges(expandedTargetFramework.framework)
     const roots = domainFrameworkToRootIds(expandedTargetFramework.framework)
-    return buildFrameworkTree(targetCfItems, edges, roots)
-  }, [isSelfTarget, leftRoots, expandedTargetFramework, targetCfItems])
+    return buildFrameworkTree(edges, roots)
+  }, [isSelfTarget, leftRoots, expandedTargetFramework])
+
+  const targetCfItemsById = useMemo(
+    () => (isSelfTarget ? cfItemsById : new Map(targetCfItems.map((item) => [item.identifier, item]))),
+    [isSelfTarget, cfItemsById, targetCfItems],
+  )
 
   // Keep parent maps current so recalculateLines can walk the tree without stale closure issues
   const leftParentMap = useMemo(() => buildParentMap(leftRoots), [leftRoots])
@@ -539,17 +556,20 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
 
   // ── Drag handlers ──
 
-  const handleSelect = (id: string) => {
+  // Stable references: FrameworkTreeItem is React.memo'd, so unstable callback
+  // identities here would force every visible row to re-render on every
+  // TreePanelView render (defeating the memo).
+  const handleSelect = useCallback((id: string) => {
     const deselects = nodes
       .filter((n) => n.selected && n.id !== id)
       .map((n) => ({ type: 'select' as const, id: n.id, selected: false }))
     onNodesChange([...deselects, { type: 'select' as const, id, selected: true }])
-  }
+  }, [nodes, onNodesChange])
 
-  const handleRightDragOver = (id: string) => setDragOverItemId(id)
-  const handleRightDragLeave = () => setDragOverItemId(null)
+  const handleRightDragOver = useCallback((id: string) => setDragOverItemId(id), [])
+  const handleRightDragLeave = useCallback(() => setDragOverItemId(null), [])
 
-  const handleRightDrop = (toItemId: string, e: React.DragEvent) => {
+  const handleRightDrop = useCallback((toItemId: string, e: React.DragEvent) => {
     const fromItemId = e.dataTransfer.getData('text/plain')
     if (!fromItemId || !expandedTargetId) return
     if (fromItemId === toItemId) {
@@ -560,8 +580,8 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
 
     // Resolve canonical URIs from the loaded CFItem data so they survive round-trips,
     // including the case where the destination framework is on a different server.
-    const fromCfItem = cfItems.find((i) => i.identifier === fromItemId)
-    const toCfItem = targetCfItems.find((i) => i.identifier === toItemId)
+    const fromCfItem = cfItemsById.get(fromItemId)
+    const toCfItem = targetCfItemsById.get(toItemId)
     const originUri = fromCfItem?.uri ?? `urn:case:item:${fromItemId}`
     const destinationUri = toCfItem?.uri ?? `urn:case:item:${toItemId}`
 
@@ -579,7 +599,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
     ])
     setTargets((prev) => prev.map((t) => (t.id === expandedTargetId ? { ...t, hasUnsavedChanges: true } : t)))
     setDragOverItemId(null)
-  }
+  }, [expandedTargetId, cfItemsById, targetCfItemsById])
 
   const handleAssociationTypeChange = useCallback((id: string, newType: string) => {
     setPendingAssociations((prev) => {
@@ -846,13 +866,14 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                 publisher={cfDocument?.publisher}
                 frameworkNodeId={frameworkNodeId}
                 roots={leftRoots}
+                cfItemsById={cfItemsById}
                 selectedId={selectedNodeId}
                 expandedIds={leftExpandedIds}
                 onToggleExpand={handleLeftToggleExpand}
                 onSelect={handleSelect}
                 onAddChild={handleAddChild}
                 isDraggable={Boolean(expandedTargetFramework) && isSourcePublished}
-                onDragStart={() => { /* cursor hint only */ }}
+                onDragStart={NOOP_DRAG_START}
                 associationCounts={leftAssociationCounts}
                 onBadgeClick={handleLeftBadgeClick}
               />
@@ -937,6 +958,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                               title={fw.cfDocument.title}
                               frameworkNodeId={null}
                               roots={rightRoots}
+                              cfItemsById={targetCfItemsById}
                               selectedId={null}
                               expandedIds={rightExpandedIds}
                               onToggleExpand={handleRightToggleExpand}

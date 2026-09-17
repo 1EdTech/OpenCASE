@@ -70,6 +70,21 @@ export type Action =
   | { type: 'dirty/mark' }
   | { type: 'dirty/clear' }
 
+// ── Helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Clear `selected` on only the given ids, leaving every other element's
+ * object reference untouched. Adding one node/edge shouldn't reallocate
+ * the entire array just to clear the previous selection — that breaks
+ * `nodesWithCallbacks`'s identity fast-path (EditorContext.tsx) for the
+ * whole graph on every "add item" action.
+ */
+function deselectExcept<T extends { id: string; selected?: boolean }>(items: T[], selectedIds: string[]): T[] {
+  if (!selectedIds.length) return items
+  const selectedSet = new Set(selectedIds)
+  return items.map((item) => (selectedSet.has(item.id) ? { ...item, selected: false } : item))
+}
+
 // ── Reducer ────────────────────────────────────────────────────────────
 
 export function editorReducer(state: EditorState, action: Action): EditorState {
@@ -410,7 +425,7 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         className: WRAPPER_NODE_CLASS,
       }
 
-      const nextNodes = [...state.nodes.map((n) => ({ ...n, selected: false })), { ...childNode, selected: true }]
+      const nextNodes = [...deselectExcept(state.nodes, state.selectedNodeIds), { ...childNode, selected: true }]
 
       const handles = getClosestHandles(parent.position, parentSize, nextPosition, childSize)
 
@@ -427,7 +442,7 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
       }
 
       const nextEdges: CaseEditorEdge[] = [
-        ...state.edges.map((e) => ({ ...e, selected: false })),
+        ...deselectExcept(state.edges, state.selectedEdgeIds),
         {
           id: `e_${action.parentId}_${childId}`,
           source: action.parentId,
@@ -477,7 +492,7 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         className: WRAPPER_NODE_CLASS,
       }
 
-      const nextNodes = [...state.nodes.map((n) => ({ ...n, selected: false })), { ...newNode, selected: true }]
+      const nextNodes = [...deselectExcept(state.nodes, state.selectedNodeIds), { ...newNode, selected: true }]
       return { ...state, nodes: nextNodes, selectedNodeId: action.nodeId, selectedEdgeId: null, selectedNodeIds: [action.nodeId], selectedEdgeIds: [], dirty: true }
     }
     case 'node/addExternalFramework': {
@@ -507,7 +522,7 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         className: WRAPPER_NODE_CLASS,
       }
 
-      const nextNodes = [...state.nodes.map((n) => ({ ...n, selected: false })), { ...newNode, selected: true }]
+      const nextNodes = [...deselectExcept(state.nodes, state.selectedNodeIds), { ...newNode, selected: true }]
       return { ...state, nodes: nextNodes, selectedNodeId: action.nodeId, selectedEdgeId: null, selectedNodeIds: [action.nodeId], selectedEdgeIds: [], dirty: true }
     }
     case 'graph/delete': {
@@ -525,6 +540,17 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         const parentExists = new Set(remainingNodes.map((n) => n.id))
         const reparentMap = new Map<string, string>()
 
+        // Group remaining item nodes by their current parentId once, up
+        // front, instead of re-scanning all remaining nodes per deleted
+        // node (was O(deleted × remaining); now O(remaining + deleted)).
+        const childrenByParentId = new Map<string, CaseItemNodeType[]>()
+        for (const n of remainingNodes) {
+          if (!isItemNode(n) || !n.data.parentId) continue
+          const list = childrenByParentId.get(n.data.parentId) ?? []
+          list.push(n)
+          childrenByParentId.set(n.data.parentId, list)
+        }
+
         for (const dn of deletedNodes) {
           if (!isItemNode(dn)) continue
           const parentId = dn.data.parentId
@@ -532,10 +558,8 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
           if (deleteNodeIds.has(parentId)) continue
           if (!parentExists.has(parentId)) continue
 
-          for (const n of remainingNodes) {
-            if (isItemNode(n) && n.data.parentId === dn.id) {
-              reparentMap.set(n.id, parentId)
-            }
+          for (const n of childrenByParentId.get(dn.id) ?? []) {
+            reparentMap.set(n.id, parentId)
           }
         }
 
@@ -577,8 +601,18 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         selectedEdgeId,
         selectedNodeIds,
         selectedEdgeIds,
-        nodes: remainingNodes.map((n) => ({ ...n, selected: selectedNodeId ? n.id === selectedNodeId : false })),
-        edges: remainingEdges.map((e) => ({ ...e, selected: selectedEdgeId ? e.id === selectedEdgeId : false })) as CaseEditorEdge[],
+        // Only reallocate entries whose `selected` flag actually changes —
+        // touching every remaining node/edge on every delete defeats
+        // `nodesWithCallbacks`'s identity fast-path (EditorContext.tsx) for
+        // the whole graph.
+        nodes: remainingNodes.map((n) => {
+          const shouldBeSelected = selectedNodeId ? n.id === selectedNodeId : false
+          return Boolean(n.selected) === shouldBeSelected ? n : { ...n, selected: shouldBeSelected }
+        }),
+        edges: remainingEdges.map((e) => {
+          const shouldBeSelected = selectedEdgeId ? e.id === selectedEdgeId : false
+          return Boolean(e.selected) === shouldBeSelected ? e : { ...e, selected: shouldBeSelected }
+        }) as CaseEditorEdge[],
         dirty: true,
       }
     }
