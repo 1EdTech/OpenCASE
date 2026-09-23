@@ -40,8 +40,9 @@ describe('CFPackagesManagementController', () => {
     mockRequest = {
       params: { tenantId: 'test-tenant' },
       query: {},
-      body: {}
-    }
+      body: {},
+      header: jest.fn().mockReturnValue(undefined)
+    } as any
 
     mockResponse = {
       status: responseStatus,
@@ -61,9 +62,24 @@ describe('CFPackagesManagementController', () => {
     expect(mockListFrameworks.execute).toHaveBeenCalledWith({
       tenantId: 'test-tenant',
       caseVersion: '1.0',
-      includeArchived: false
+      includeArchived: false,
+      includeOpenCaseExtensions: false
     })
     expect(responseStatus).toHaveBeenCalledWith(200)
+  })
+
+  it('requests OpenCASE extensions when X-CASE-EDITOR header is present', async () => {
+    ;(mockRequest as any).tenantId = 'test-tenant'
+    ;(mockRequest.header as jest.Mock).mockImplementation((name: string) =>
+      name === 'X-CASE-EDITOR' ? 'true' : undefined
+    )
+    mockListFrameworks.execute.mockResolvedValueOnce({ frameworks: [], total: 0, tenantId: 'test-tenant' } as any)
+
+    await (controller.list as any)(mockRequest as Request, mockResponse as Response, next)
+
+    expect(mockListFrameworks.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ includeOpenCaseExtensions: true })
+    )
   })
 
   it('archives a CFPackage by id (soft delete by default)', async () => {

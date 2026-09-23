@@ -32,7 +32,8 @@ export class CFPackagesManagementController {
       const frameworkType = typeof req.query.frameworkType === 'string' ? req.query.frameworkType : undefined
       const participantId = typeof req.query.participantId === 'string' ? req.query.participantId : undefined
 
-      const result = await this.listFrameworks.execute({ tenantId, caseVersion, includeArchived, frameworkType, participantId })
+      const includeOpenCaseExtensions = req.header('X-CASE-EDITOR') !== undefined
+      const result = await this.listFrameworks.execute({ tenantId, caseVersion, includeArchived, frameworkType, participantId, includeOpenCaseExtensions })
       return res.status(200).json(result)
     } catch (error: any) {
       return res.status(400).json({ error: error.message || 'List failed' })
