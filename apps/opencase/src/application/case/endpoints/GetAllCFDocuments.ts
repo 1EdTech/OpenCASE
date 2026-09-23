@@ -13,6 +13,8 @@ export interface GetAllCFDocumentsQuery {
   filter?: string
   fields?: string[]
   includeArchived?: boolean
+  /** When true, include OpenCASE-proprietary fields derived from ext:opencase (e.g. sourcePackageURI, isModifiedFromSource). Set when the request carries the X-CASE-EDITOR header. */
+  includeOpenCaseExtensions?: boolean
 }
 
 export class GetAllCFDocuments {
@@ -124,12 +126,16 @@ export class GetAllCFDocuments {
       if (docMeta.subject) doc.subject = docMeta.subject
       if (docMeta.version) doc.version = docMeta.version
       if (docMeta.adoptionStatus) doc.adoptionStatus = docMeta.adoptionStatus
-      if (docMeta.sourcePackageURI) doc.sourcePackageURI = docMeta.sourcePackageURI
-      // isModifiedFromSource is set (true or false) on any mirrored/forked framework,
-      // even one imported without a known sourcePackageURI (e.g. pasted JSON) — so it
-      // must be surfaced even when false, since the frontend uses its presence to
-      // decide whether to show the Mirrored/Forked badge at all.
-      if (docMeta.isModifiedFromSource !== undefined) doc.isModifiedFromSource = docMeta.isModifiedFromSource
+      // sourcePackageURI/isModifiedFromSource are derived from the ext:opencase extension and
+      // are OpenCASE-proprietary — only surface them to callers that requested extensions.
+      if (query.includeOpenCaseExtensions) {
+        if (docMeta.sourcePackageURI) doc.sourcePackageURI = docMeta.sourcePackageURI
+        // isModifiedFromSource is set (true or false) on any mirrored/forked framework,
+        // even one imported without a known sourcePackageURI (e.g. pasted JSON) — so it
+        // must be surfaced even when false, since the frontend uses its presence to
+        // decide whether to show the Mirrored/Forked badge at all.
+        if (docMeta.isModifiedFromSource !== undefined) doc.isModifiedFromSource = docMeta.isModifiedFromSource
+      }
       if (docMeta.archived) doc.archived = true
 
       // CASE v1.1-only fields: only include when not serving via v1p0

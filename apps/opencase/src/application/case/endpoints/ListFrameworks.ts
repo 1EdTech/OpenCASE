@@ -10,6 +10,8 @@ export interface ListFrameworksQuery {
   frameworkType?: string
   /** When set, only alignment frameworks listing this docId as a participant are returned */
   participantId?: string
+  /** When true, include OpenCASE-proprietary fields derived from ext:opencase (e.g. alignmentParticipants). Set when the request carries the X-CASE-EDITOR header. */
+  includeOpenCaseExtensions?: boolean
 }
 
 export class ListFrameworks {
@@ -50,7 +52,9 @@ export class ListFrameworks {
           subject: doc.subject,
           version: doc.version,
           lastChangeDateTime: doc.lastChangeDateTime.toISOString(),
-          alignmentParticipants: doc.alignmentParticipants,
+          // alignmentParticipants is derived from the ext:opencase extension and is
+          // OpenCASE-proprietary — only surface it to callers that requested extensions.
+          ...(query.includeOpenCaseExtensions && doc.alignmentParticipants ? { alignmentParticipants: doc.alignmentParticipants } : {})
         })
       }
     }
