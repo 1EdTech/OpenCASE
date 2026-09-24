@@ -724,8 +724,11 @@ export class CaseApiClient {
     const query = qs.toString()
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/cache/${encodeURIComponent(params.docId)}/items${query ? `?${query}` : ''}`
     const res = (await this._http.get(url)) as unknown
-    if (res && typeof res === 'object' && Array.isArray((res as any).items)) {
-      return { items: (res as any).items as CachedFrameworkItemSummary[] }
+    if (res && typeof res === 'object') {
+      const items = (res as Record<string, unknown>).items
+      if (Array.isArray(items)) {
+        return { items: items as CachedFrameworkItemSummary[] }
+      }
     }
     return { items: [] }
   }

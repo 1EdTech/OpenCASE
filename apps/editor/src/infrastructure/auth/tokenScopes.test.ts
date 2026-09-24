@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { tokenHasCaseOwner, decodeJwtPayload } from './tokenScopes'
+import { tokenHasCaseOwner } from './tokenScopes'
 
 function makeToken (payload: Record<string, unknown>): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url')

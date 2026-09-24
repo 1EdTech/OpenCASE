@@ -41,6 +41,18 @@ export type CachedFrameworkItemSummary = {
   CFItemType?: string
 }
 
+function optionalText (value: unknown): string | undefined {
+  if (value == null) return undefined
+  return typeof value === 'string' ? value : String(value)
+}
+
+function firstText (...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (value != null) return optionalText(value)
+  }
+  return undefined
+}
+
 /** Extract an array from heterogeneous CGE list responses. */
 function extractCgeListArray (data: unknown, keys: string[]): unknown[] {
   if (!data) return []
@@ -58,24 +70,30 @@ function extractCgeListArray (data: unknown, keys: string[]): unknown[] {
 export function normalizeCgeFrameworkList (data: unknown): CgeFrameworkSummary[] {
   const raw = extractCgeListArray(data, ['data', 'frameworks', 'items', 'results'])
 
-  return raw.map((item: any) => ({
-    frameworkId: String(item.frameworkId ?? item.identifier ?? ''),
-    registryId: item.id ? String(item.id) : undefined,
-    title: String(item.title ?? item.name ?? 'Untitled framework'),
-    publisher: item.publisher ?? item.providerName ?? item.organization ?? item.creator,
-    version: item.version ?? undefined,
-    sourceUri: item.sourceUri ?? item.source_uri ?? item.uri ?? item.packageUri,
-    subscribed: item.subscribed === true || item.isSubscribed === true || item.subscriptionStatus === 'active',
-    description: item.description
-  })).filter(f => f.frameworkId)
+  return raw.map((item) => {
+    const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>
+    return {
+      frameworkId: String(row.frameworkId ?? row.identifier ?? ''),
+      registryId: row.id ? String(row.id) : undefined,
+      title: String(row.title ?? row.name ?? 'Untitled framework'),
+      publisher: firstText(row.publisher, row.providerName, row.organization, row.creator),
+      version: optionalText(row.version),
+      sourceUri: firstText(row.sourceUri, row.source_uri, row.uri, row.packageUri),
+      subscribed: row.subscribed === true || row.isSubscribed === true || row.subscriptionStatus === 'active',
+      description: optionalText(row.description),
+    }
+  }).filter(f => f.frameworkId)
 }
 
 export function normalizeCgeSubscriptionList (data: unknown): CgeSubscriptionSummary[] {
   const raw = extractCgeListArray(data, ['data', 'subscriptions'])
 
-  return raw.map((item: any) => ({
-    frameworkId: String(item.frameworkId ?? item.id ?? ''),
-    status: item.status,
-    subscribedAt: item.subscribedAt ?? item.createdAt
-  })).filter(s => s.frameworkId)
+  return raw.map((item) => {
+    const row = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>
+    return {
+      frameworkId: String(row.frameworkId ?? row.id ?? ''),
+      status: optionalText(row.status),
+      subscribedAt: firstText(row.subscribedAt, row.createdAt),
+    }
+  }).filter(s => s.frameworkId)
 }
