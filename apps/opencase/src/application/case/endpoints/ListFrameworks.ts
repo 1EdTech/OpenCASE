@@ -10,8 +10,6 @@ export interface ListFrameworksQuery {
   frameworkType?: string
   /** When set, only alignment frameworks listing this docId as a participant are returned */
   participantId?: string
-  /** When true, include OpenCASE-proprietary fields derived from ext:opencase (e.g. alignmentParticipants). Set when the request carries the X-CASE-EDITOR header. */
-  includeOpenCaseExtensions?: boolean
 }
 
 export class ListFrameworks {
@@ -30,7 +28,7 @@ export class ListFrameworks {
       subject?: string
       version?: string
       lastChangeDateTime: string
-      alignmentParticipants?: Array<{ identifier?: string; uri: string }>
+      extensions?: { 'ext:opencase': { alignmentParticipants: Array<{ identifier?: string; uri: string }> } }
     }> = []
 
     for (const version of versions) {
@@ -52,9 +50,10 @@ export class ListFrameworks {
           subject: doc.subject,
           version: doc.version,
           lastChangeDateTime: doc.lastChangeDateTime.toISOString(),
-          // alignmentParticipants is derived from the ext:opencase extension and is
-          // OpenCASE-proprietary — only surface it to callers that requested extensions.
-          ...(query.includeOpenCaseExtensions && doc.alignmentParticipants ? { alignmentParticipants: doc.alignmentParticipants } : {})
+          // alignmentParticipants is derived from the ext:opencase extension — keep it nested
+          // under `extensions` (not a flat top-level field) so the caller (management controller)
+          // can strip it the same way the public API strips `extensions` when X-CASE-EDITOR is absent.
+          ...(doc.alignmentParticipants ? { extensions: { 'ext:opencase': { alignmentParticipants: doc.alignmentParticipants } } } : {})
         })
       }
     }
