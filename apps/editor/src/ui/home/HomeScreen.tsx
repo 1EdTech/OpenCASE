@@ -1,4 +1,4 @@
-import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon, KeyIcon, ArrowUpTrayIcon } from '@heroicons/react/24/solid'
+import { PlusIcon, ArrowPathIcon, MagnifyingGlassIcon, FunnelIcon, XMarkIcon, ArrowRightStartOnRectangleIcon, CloudArrowDownIcon, KeyIcon, ArrowUpTrayIcon, UsersIcon, GlobeAltIcon } from '@heroicons/react/24/solid'
 import { CodeBracketSquareIcon } from '@heroicons/react/24/outline'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
@@ -8,11 +8,14 @@ import CreateFrameworkDialog, { type CreateFrameworkDraft } from '@/ui/home/Crea
 import ImportFrameworkDialog from '@/ui/home/ImportFrameworkDialog'
 import UploadFrameworkDialog from '@/ui/home/UploadFrameworkDialog'
 import ApiKeysDialog from '@/ui/home/ApiKeysDialog'
+import MembersDialog from '@/ui/home/MembersDialog'
+import CgeCredentialsDialog from '@/ui/home/CgeCredentialsDialog'
 import type { Framework } from '@/domain/framework/model/types'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
 import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
+import { tokenHasCaseOwner, decodeJwtPayload } from '@/infrastructure/auth/tokenScopes'
 import { ADOPTION_STATUS_OPTIONS } from '@/domain/framework/model/adoptionStatus'
 
 /** Compute initials from a display name */
@@ -33,7 +36,25 @@ import {
 } from '@/ui/shared/components/ui/dialog'
 
 /** Minimal user avatar dropdown for the hero */
-function UserAvatarMenu({ userName, tenantId: _tenantId, isAuthenticated, onSignOut, onChangePassword, onApiKeys }: Readonly<{ userName?: string; tenantId?: string; isAuthenticated: boolean; onSignOut?: () => void; onChangePassword?: () => void; onApiKeys?: () => void }>) {
+function UserAvatarMenu({
+  userName,
+  tenantId: _tenantId,
+  isAuthenticated,
+  onSignOut,
+  onChangePassword,
+  onApiKeys,
+  onMembers,
+  onCgeCredentials,
+}: Readonly<{
+  userName?: string
+  tenantId?: string
+  isAuthenticated: boolean
+  onSignOut?: () => void
+  onChangePassword?: () => void
+  onApiKeys?: () => void
+  onMembers?: () => void
+  onCgeCredentials?: () => void
+}>) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const avatarText = useMemo(() => initials(userName), [userName])
@@ -48,7 +69,7 @@ function UserAvatarMenu({ userName, tenantId: _tenantId, isAuthenticated, onSign
   }, [open])
 
   return (
-    <div className="absolute right-5 top-4 z-10" ref={rootRef}>
+    <div className="absolute right-5 top-4 z-50" ref={rootRef}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -61,7 +82,7 @@ function UserAvatarMenu({ userName, tenantId: _tenantId, isAuthenticated, onSign
       </button>
 
       {open ? (
-        <div role="menu" className="absolute right-0 z-40 mt-2 w-52 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+        <div role="menu" className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
           <div className="p-1">
             {userName ? (
               <div className="px-2 py-2 text-sm text-gray-400">Signed in as {userName}</div>
@@ -80,6 +101,17 @@ function UserAvatarMenu({ userName, tenantId: _tenantId, isAuthenticated, onSign
                 Change password
               </button>
             ) : null}
+            {isAuthenticated && onMembers ? (
+              <button
+                role="menuitem"
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-[#2E2F2F] hover:bg-gray-50"
+                onClick={() => { onMembers(); setOpen(false) }}
+              >
+                <UsersIcon className="h-4 w-4 text-gray-500" aria-hidden />
+                Members
+              </button>
+            ) : null}
             {isAuthenticated && onApiKeys ? (
               <button
                 role="menuitem"
@@ -89,6 +121,17 @@ function UserAvatarMenu({ userName, tenantId: _tenantId, isAuthenticated, onSign
               >
                 <CodeBracketSquareIcon className="h-4 w-4 text-gray-500" aria-hidden />
                 API Keys
+              </button>
+            ) : null}
+            {isAuthenticated && onCgeCredentials ? (
+              <button
+                role="menuitem"
+                type="button"
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm text-[#2E2F2F] hover:bg-gray-50"
+                onClick={() => { onCgeCredentials(); setOpen(false) }}
+              >
+                <GlobeAltIcon className="h-4 w-4 text-gray-500" aria-hidden />
+                CASE Global
               </button>
             ) : null}
             {isAuthenticated && onSignOut ? (
@@ -134,6 +177,8 @@ export default function HomeScreen({
   const [importOpen, setImportOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [apiKeysOpen, setApiKeysOpen] = useState(false)
+  const [membersOpen, setMembersOpen] = useState(false)
+  const [cgeCredentialsOpen, setCgeCredentialsOpen] = useState(false)
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false)
   const actionsMenuRef = useRef<HTMLDivElement | null>(null)
 
@@ -146,8 +191,13 @@ export default function HomeScreen({
     globalThis.addEventListener('pointerdown', onPointerDown)
     return () => globalThis.removeEventListener('pointerdown', onPointerDown)
   }, [actionsMenuOpen])
-  const { status, tenantId, userName, signOut, getAccessToken, changePassword } = useAuth()
+  const { status, tenantId, userName, signOut, getAccessToken, changePassword, accessToken } = useAuth()
   const cfg = getAppConfig()
+  const isTenantAdmin = useMemo(() => tokenHasCaseOwner(accessToken), [accessToken])
+  const currentUserId = useMemo(() => {
+    const payload = decodeJwtPayload(accessToken)
+    return typeof payload?.sub === 'string' ? payload.sub : null
+  }, [accessToken])
 
   const api = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })), [cfg.opencaseBaseUrl, getAccessToken])
 
@@ -157,8 +207,8 @@ export default function HomeScreen({
   const [error, setError] = useState<string | null>(null)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
 
-  // Active / Archived tab
-  const [viewMode, setViewMode] = useState<'active' | 'archived'>('active')
+  // Active / Remote / Archived tabs
+  const [viewMode, setViewMode] = useState<'active' | 'remote' | 'archived'>('active')
 
   // Archived frameworks (loaded when switching to Archived tab)
   const [archivedFrameworks, setArchivedFrameworks] = useState<CfDocumentSummary[]>([])
@@ -185,7 +235,9 @@ export default function HomeScreen({
     setLoading(true)
     setError(null)
     try {
-      const docs = await api.listCfDocuments({ caseVersion: 'v1p1' })
+      const docs = tenantId
+        ? await api.listManagementCfPackages({ tenantId, caseVersion: '1.1' })
+        : await api.listCfDocuments({ caseVersion: 'v1p1' })
       setServerFrameworks(docs)
       setHasLoadedOnce(true)
     } catch (e: unknown) {
@@ -194,7 +246,7 @@ export default function HomeScreen({
     } finally {
       setLoading(false)
     }
-  }, [api])
+  }, [api, tenantId])
 
   // Auto-load when authenticated
   useEffect(() => {
@@ -395,26 +447,49 @@ export default function HomeScreen({
     [visibleDrafts, searchQuery, statusFilter, typeFilter],
   )
 
-  // Filtered server frameworks
+  // Editable vs read-only remote cache frameworks
+  const editableServerFrameworks = useMemo(
+    () => serverFrameworks.filter((doc) => doc.readOnly !== true),
+    [serverFrameworks],
+  )
+
+  const remoteServerFrameworks = useMemo(
+    () => serverFrameworks.filter((doc) => doc.readOnly === true),
+    [serverFrameworks],
+  )
+
+  // Filtered editable server frameworks (Active tab)
   const filteredServerFrameworks = useMemo(
     () =>
-      serverFrameworks.filter((doc) => {
+      editableServerFrameworks.filter((doc) => {
         return doc.frameworkType !== 'Alignment' && matchesSearch(doc.title, doc.creator, doc.description) && matchesFilters(doc.adoptionStatus, doc.frameworkType)
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [serverFrameworks, searchQuery, statusFilter, typeFilter],
+    [editableServerFrameworks, searchQuery, statusFilter, typeFilter],
+  )
+
+  // Filtered remote cache frameworks (Remote tab)
+  const filteredRemoteFrameworks = useMemo(
+    () =>
+      remoteServerFrameworks.filter((doc) => {
+        return matchesSearch(doc.title, doc.creator, doc.description) && matchesFilters(doc.adoptionStatus, doc.frameworkType)
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [remoteServerFrameworks, searchQuery, statusFilter, typeFilter],
   )
 
   // Collect unique framework types for the type filter dropdown
   const allFrameworkTypes = useMemo(() => {
     const types = new Set<string>()
     visibleDrafts.forEach((d) => { if (d.cfDocument.frameworkType) types.add(d.cfDocument.frameworkType) })
-    serverFrameworks.forEach((d) => { if (d.frameworkType && d.frameworkType !== 'Alignment') types.add(d.frameworkType) })
+    editableServerFrameworks.forEach((d) => { if (d.frameworkType && d.frameworkType !== 'Alignment') types.add(d.frameworkType) })
+    remoteServerFrameworks.forEach((d) => { if (d.frameworkType && d.frameworkType !== 'Alignment') types.add(d.frameworkType) })
     return Array.from(types).sort((a, b) => a.localeCompare(b))
-  }, [visibleDrafts, serverFrameworks])
+  }, [visibleDrafts, editableServerFrameworks, remoteServerFrameworks])
 
   const hasActiveFilters = Boolean(searchQuery || statusFilter || typeFilter)
-  const totalResults = filteredDrafts.length + filteredServerFrameworks.length
+  const totalActiveResults = filteredDrafts.length + filteredServerFrameworks.length
+  const totalRemoteResults = filteredRemoteFrameworks.length
 
   const clearFilters = useCallback(() => {
     setSearchQuery('')
@@ -427,21 +502,20 @@ export default function HomeScreen({
 
       {/* ── Hero Section ─────────────────────────────────────────── */}
       <div
-        className="relative overflow-hidden"
+        className="relative z-30"
         style={{ background: 'linear-gradient(135deg, #000072 0%, #1a0f80 25%, #3d1a9b 50%, #662F90 80%)' }}
       >
-        {/* Subtle radial glow accents */}
-        <div className="pointer-events-none absolute inset-0" aria-hidden>
+        {/* Subtle radial glow accents (clipped so they don't spill) */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
           <div className="absolute -right-32 -top-32 h-[28rem] w-[28rem] rounded-full bg-[#662F90]/15 blur-3xl" />
           <div className="absolute -bottom-20 -left-20 h-80 w-80 rounded-full bg-[#3d1a9b]/10 blur-3xl" />
-        </div>
-        {/* Network graph pattern — right side */}
-        <svg
-          className="pointer-events-none absolute right-0 top-0 hidden h-full w-[55%] sm:block"
-          viewBox="0 0 600 200"
-          preserveAspectRatio="xMaxYMid slice"
-          aria-hidden
-        >
+          {/* Network graph pattern — right side */}
+          <svg
+            className="absolute right-0 top-0 hidden h-full w-[55%] sm:block"
+            viewBox="0 0 600 200"
+            preserveAspectRatio="xMaxYMid slice"
+            aria-hidden
+          >
           <defs>
             <linearGradient id="hero-fade" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor="white" stopOpacity="0" />
@@ -487,9 +561,19 @@ export default function HomeScreen({
             <circle cx="480" cy="170" r="3" />
           </g>
         </svg>
+        </div>
 
         {/* User button — top right */}
-        <UserAvatarMenu userName={userName ?? undefined} tenantId={tenantId ?? undefined} isAuthenticated={isAuthenticated} onSignOut={isAuthenticated ? () => void signOut() : undefined} onChangePassword={isAuthenticated && changePassword ? () => void changePassword() : undefined} onApiKeys={isAuthenticated ? () => setApiKeysOpen(true) : undefined} />
+        <UserAvatarMenu
+          userName={userName ?? undefined}
+          tenantId={tenantId ?? undefined}
+          isAuthenticated={isAuthenticated}
+          onSignOut={isAuthenticated ? () => void signOut() : undefined}
+          onChangePassword={isAuthenticated && changePassword ? () => void changePassword() : undefined}
+          onMembers={isAuthenticated && isTenantAdmin ? () => setMembersOpen(true) : undefined}
+          onApiKeys={isAuthenticated && isTenantAdmin ? () => setApiKeysOpen(true) : undefined}
+          onCgeCredentials={isAuthenticated && isTenantAdmin ? () => setCgeCredentialsOpen(true) : undefined}
+        />
 
         <div className="relative mx-auto max-w-6xl px-5 pb-12 pt-14">
           <div className="flex items-baseline gap-3">
@@ -586,7 +670,7 @@ export default function HomeScreen({
           )}
         </div>
 
-        {/* ── Active / Archived tabs + Refresh icon ───────────────── */}
+        {/* ── Active / Remote / Archived tabs + Refresh icon ───────── */}
         {isAuthenticated && (
           <div className="mb-6 flex items-center justify-between">
             <div className="flex gap-1 rounded-lg bg-gray-100 p-1">
@@ -601,6 +685,23 @@ export default function HomeScreen({
                 ].join(' ')}
               >
                 Active
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('remote')}
+                className={[
+                  'rounded-md px-4 py-2 text-sm font-medium transition-colors',
+                  viewMode === 'remote'
+                    ? 'bg-white text-[#2E2F2F] shadow-sm'
+                    : 'text-gray-500 hover:text-[#2E2F2F]',
+                ].join(' ')}
+              >
+                Remote
+                {remoteServerFrameworks.length > 0 ? (
+                  <span className="ml-1.5 rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                    {remoteServerFrameworks.length}
+                  </span>
+                ) : null}
               </button>
               <button
                 type="button"
@@ -633,8 +734,8 @@ export default function HomeScreen({
           </div>
         )}
 
-        {/* ── Search & filter bar (active tab only) ──────────────────── */}
-        {viewMode === 'active' && <div className="flex flex-wrap items-center gap-3">
+        {/* ── Search & filter bar (active / remote tabs) ─────────────── */}
+        {(viewMode === 'active' || viewMode === 'remote') && <div className="flex flex-wrap items-center gap-3">
           {/* Search input (always visible) */}
           <div className="relative min-w-0 flex-1">
             <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -695,7 +796,15 @@ export default function HomeScreen({
         {/* Active filter summary */}
         {viewMode === 'active' && hasActiveFilters && (
           <div className="mt-3 text-sm text-gray-400">
-            Showing {totalResults} {totalResults === 1 ? 'framework' : 'frameworks'}
+            Showing {totalActiveResults} {totalActiveResults === 1 ? 'framework' : 'frameworks'}
+            {searchQuery ? <> matching &ldquo;{searchQuery}&rdquo;</> : null}
+          </div>
+        )}
+
+        {/* Remote filter summary */}
+        {viewMode === 'remote' && hasActiveFilters && (
+          <div className="mt-3 text-sm text-gray-400">
+            Showing {totalRemoteResults} {totalRemoteResults === 1 ? 'framework' : 'frameworks'}
             {searchQuery ? <> matching &ldquo;{searchQuery}&rdquo;</> : null}
           </div>
         )}
@@ -759,14 +868,20 @@ export default function HomeScreen({
                 </div>
               )}
 
-              {isAuthenticated && !loading && hasLoadedOnce && serverFrameworks.length === 0 && !error && (
+              {isAuthenticated && !loading && hasLoadedOnce && editableServerFrameworks.length === 0 && remoteServerFrameworks.length === 0 && !error && (
                 <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
                   No frameworks found. Create a new framework to get started.
                 </div>
               )}
 
+              {isAuthenticated && !loading && hasLoadedOnce && editableServerFrameworks.length === 0 && remoteServerFrameworks.length > 0 && !error && (
+                <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
+                  No editable frameworks yet. Remote cached frameworks are listed under the Remote tab.
+                </div>
+              )}
+
               {/* No results after filtering */}
-              {isAuthenticated && hasLoadedOnce && serverFrameworks.length > 0 && filteredServerFrameworks.length === 0 && hasActiveFilters && (
+              {isAuthenticated && hasLoadedOnce && editableServerFrameworks.length > 0 && filteredServerFrameworks.length === 0 && hasActiveFilters && (
                 <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
                   No frameworks match your current filters.{' '}
                   <button type="button" onClick={clearFilters} className="font-medium text-[#662F90] underline underline-offset-2 hover:text-[#2E2F2F]">
@@ -794,6 +909,75 @@ export default function HomeScreen({
                         }}
                         sourcePackageURI={doc.sourcePackageURI}
                         isModifiedFromSource={doc.isModifiedFromSource}
+                        readOnly={doc.readOnly === true}
+                        publicAccess={doc.publicAccess === true}
+                        rightHint={isArchiving ? 'Archiving' : hint}
+                        lastChanged={doc.lastChangeDateTime}
+                        onClick={() => openRemote(doc.identifier)}
+                        onDelete={tenantId ? () => handleArchiveRequest(doc.identifier, title) : undefined}
+                        deleteDisabled={isArchiving || remoteOpenLoading}
+                        actionStyle="archive"
+                        className={cardClass}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Remote frameworks view ──────────────────────────────── */}
+          {viewMode === 'remote' && (
+            <>
+              <div className="mb-1">
+                <p className="text-sm text-gray-500">
+                  Read-only copies of frameworks linked from CASE Global or other publishers. Open to browse items or use as remote references on your editable frameworks.
+                </p>
+              </div>
+
+              {isAuthenticated && loading && !hasLoadedOnce && (
+                <div className="mt-4 flex items-center gap-2 text-sm text-gray-400">
+                  <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                  Loading remote frameworks
+                </div>
+              )}
+
+              {isAuthenticated && !loading && hasLoadedOnce && remoteServerFrameworks.length === 0 && !error && (
+                <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
+                  No remote frameworks cached yet. Add one from the editor using &ldquo;Add remote framework&rdquo;.
+                </div>
+              )}
+
+              {isAuthenticated && hasLoadedOnce && remoteServerFrameworks.length > 0 && filteredRemoteFrameworks.length === 0 && hasActiveFilters && (
+                <div className="mt-4 rounded-md border border-gray-200 px-4 py-3 text-sm text-gray-400">
+                  No remote frameworks match your current filters.{' '}
+                  <button type="button" onClick={clearFilters} className="font-medium text-[#662F90] underline underline-offset-2 hover:text-[#2E2F2F]">
+                    Clear filters
+                  </button>
+                </div>
+              )}
+
+              {isAuthenticated && filteredRemoteFrameworks.length > 0 && (
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredRemoteFrameworks.map((doc) => {
+                    const title = doc.title ?? doc.identifier ?? 'Untitled Framework'
+                    const hint = remoteOpenLoading ? 'Loading' : 'Open'
+                    const isArchiving = archivingDocId === doc.identifier
+                    const cardClass = remoteOpenLoading || isArchiving ? 'opacity-60 pointer-events-none' : undefined
+                    return (
+                      <FrameworkCard
+                        key={doc.identifier}
+                        cfDocument={{
+                          title,
+                          creator: doc.creator && doc.creator !== 'Unknown' ? doc.creator : undefined,
+                          description: doc.description,
+                          frameworkType: doc.frameworkType,
+                          adoptionStatus: doc.adoptionStatus,
+                        }}
+                        sourcePackageURI={doc.sourcePackageURI}
+                        isModifiedFromSource={doc.isModifiedFromSource}
+                        readOnly
+                        publicAccess={doc.publicAccess === true}
                         rightHint={isArchiving ? 'Archiving' : hint}
                         lastChanged={doc.lastChangeDateTime}
                         onClick={() => openRemote(doc.identifier)}
@@ -845,6 +1029,8 @@ export default function HomeScreen({
                         }}
                         sourcePackageURI={doc.sourcePackageURI}
                         isModifiedFromSource={doc.isModifiedFromSource}
+                        readOnly={doc.readOnly === true}
+                        publicAccess={doc.publicAccess === true}
                         rightHint={isDeleting ? 'Deleting' : (isRestoring ? 'Restoring' : undefined)}
                         lastChanged={doc.lastChangeDateTime}
                         onDelete={tenantId ? () => handleHardDeleteRequest(doc.identifier, title) : undefined}
@@ -924,13 +1110,32 @@ export default function HomeScreen({
         }}
       />
 
-      {tenantId && (
+      {tenantId && isTenantAdmin && (
         <ApiKeysDialog
           open={apiKeysOpen}
           onClose={() => setApiKeysOpen(false)}
           api={api}
           tenantId={tenantId}
           tokenEndpoint={`${cfg.oidcAuthority}/protocol/openid-connect/token`}
+        />
+      )}
+
+      {tenantId && isTenantAdmin && (
+        <MembersDialog
+          open={membersOpen}
+          onClose={() => setMembersOpen(false)}
+          api={api}
+          tenantId={tenantId}
+          currentUserId={currentUserId}
+        />
+      )}
+
+      {tenantId && isTenantAdmin && (
+        <CgeCredentialsDialog
+          open={cgeCredentialsOpen}
+          onClose={() => setCgeCredentialsOpen(false)}
+          api={api}
+          tenantId={tenantId}
         />
       )}
 

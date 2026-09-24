@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { type CaseVersion, type TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { logger } from '../../logging/Logger'
-import { DEFAULT_LICENSES, isPublicLicense } from '../../../domain/case/seed/defaultLicenses'
+import { DEFAULT_LICENSES } from '../../../domain/case/seed/defaultLicenses'
 import { DEFAULT_CONCEPTS, DEFAULT_SUBJECTS, DEFAULT_ITEM_TYPES, DEFAULT_ASSOCIATION_GROUPINGS } from '../../../domain/case/seed/defaultDefinitions'
 
 export interface FileFrameworkStoreConfig {
@@ -21,13 +21,27 @@ export interface DocumentMetadata {
   lastChangeDateTime: Date
   currentFile: string // relative to tenant/version root
   adoptionStatus?: string // CASE domain field — NOT used for server-level archive filtering
-  licenseIdentifier?: string // UUID of the assigned CFLicense (for public-access checks)
+  licenseIdentifier?: string // UUID of the assigned CFLicense
+  /**
+   * When true, the CASE Provider API serves this framework without authentication.
+   * Absent or false means sign-in is required. Independent of licenseURI.
+   * Stored on the document as `extensions['ext:opencase'].publicAccess`.
+   */
+  publicAccess?: boolean
   /** URL this framework was imported from (set during import). */
   sourcePackageURI?: string
   /** True when an imported framework has been locally modified after import. */
   isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
+  /** When true, framework is a cached remote reference and cannot be mutated. */
+  readOnly?: boolean
+  /** CASE Global coalition registry ID (read-only caches). */
+  cgeFrameworkId?: string
+  /** Local framework that triggered a CGE cache import. */
+  linkedFromDocId?: string
+  /** When a read-only CGE cache was last fetched. */
+  cgeCachedAt?: Date
   /** Participant frameworks in an alignment document (extracted from ext:opencase.alignmentParticipants) */
   alignmentParticipants?: Array<{ identifier?: string; uri: string }>
 }
@@ -174,9 +188,14 @@ export class FileFrameworkStore {
           currentFile: d.currentFile,
           adoptionStatus: d.adoptionStatus,
           licenseIdentifier: d.licenseIdentifier,
+          publicAccess: d.publicAccess === true ? true : undefined,
           sourcePackageURI: d.sourcePackageURI,
           isModifiedFromSource: d.isModifiedFromSource,
           archived: d.archived,
+          readOnly: d.readOnly === true,
+          cgeFrameworkId: typeof d.cgeFrameworkId === 'string' ? d.cgeFrameworkId : undefined,
+          linkedFromDocId: typeof d.linkedFromDocId === 'string' ? d.linkedFromDocId : undefined,
+          cgeCachedAt: d.cgeCachedAt ? new Date(d.cgeCachedAt as string | number | Date) : undefined,
           alignmentParticipants: d.alignmentParticipants,
         })
       }
@@ -432,6 +451,10 @@ export class FileFrameworkStore {
     // Extract sourcePackageURI and isModifiedFromSource from ext:opencase extension
     let sourcePackageURI: string | undefined
     let isModifiedFromSource: boolean | undefined
+    let readOnly: boolean | undefined
+    let cgeFrameworkId: string | undefined
+    let linkedFromDocId: string | undefined
+    let cgeCachedAt: Date | undefined
     const extOpencase = doc.extensions?.['ext:opencase']
     if (extOpencase && typeof extOpencase === 'object') {
       if (typeof (extOpencase as any).sourcePackageURI === 'string') {
@@ -440,12 +463,37 @@ export class FileFrameworkStore {
       if (typeof (extOpencase as any).isModifiedFromSource === 'boolean') {
         isModifiedFromSource = (extOpencase as any).isModifiedFromSource
       }
+      if ((extOpencase as any).readOnly === true) {
+        readOnly = true
+      }
+      if (typeof (extOpencase as any).cgeFrameworkId === 'string') {
+        cgeFrameworkId = (extOpencase as any).cgeFrameworkId
+      }
+      if (typeof (extOpencase as any).linkedFromDocId === 'string') {
+        linkedFromDocId = (extOpencase as any).linkedFromDocId
+      }
+      if (typeof (extOpencase as any).cgeCachedAt === 'string') {
+        cgeCachedAt = new Date((extOpencase as any).cgeCachedAt)
+      }
     }
 
     let alignmentParticipants: Array<{ identifier?: string; uri: string }> | undefined
-    if (extOpencase && typeof extOpencase === 'object' && Array.isArray((extOpencase as any).alignmentParticipants)) {
-      alignmentParticipants = (extOpencase as any).alignmentParticipants
+    let publicAccess: boolean | undefined
+    if (extOpencase && typeof extOpencase === 'object') {
+      if (Array.isArray((extOpencase as any).alignmentParticipants)) {
+        alignmentParticipants = (extOpencase as any).alignmentParticipants
+      }
+      if ((extOpencase as any).publicAccess === true) {
+        publicAccess = true
+      }
     }
+
+    // Preserve index-only flags when a new bundle omits ext:opencase fields (e.g. partial update).
+    // `previous` is the metadata already recorded under this storage key (resolved above).
+    if (readOnly !== true && previous?.readOnly === true) readOnly = true
+    if (!cgeFrameworkId && previous?.cgeFrameworkId) cgeFrameworkId = previous.cgeFrameworkId
+    if (!linkedFromDocId && previous?.linkedFromDocId) linkedFromDocId = previous.linkedFromDocId
+    if (!cgeCachedAt && previous?.cgeCachedAt) cgeCachedAt = previous.cgeCachedAt
 
     versionMap.set(storageKey, {
       sourcedId: currentIdentifier,
@@ -460,8 +508,13 @@ export class FileFrameworkStore {
       currentFile: relativePath,
       adoptionStatus: doc.adoptionStatus as string | undefined,
       licenseIdentifier,
+      publicAccess,
       sourcePackageURI,
       isModifiedFromSource,
+      readOnly,
+      cgeFrameworkId,
+      linkedFromDocId,
+      cgeCachedAt,
       alignmentParticipants,
     })
   }
@@ -664,9 +717,14 @@ export class FileFrameworkStore {
       currentFile: meta.currentFile,
       adoptionStatus: meta.adoptionStatus,
       licenseIdentifier: meta.licenseIdentifier,
+      publicAccess: meta.publicAccess === true ? true : undefined,
       sourcePackageURI: meta.sourcePackageURI,
       isModifiedFromSource: meta.isModifiedFromSource,
       archived: meta.archived,
+      readOnly: meta.readOnly,
+      cgeFrameworkId: meta.cgeFrameworkId,
+      linkedFromDocId: meta.linkedFromDocId,
+      cgeCachedAt: meta.cgeCachedAt?.toISOString(),
       alignmentParticipants: meta.alignmentParticipants,
     }))
 
@@ -811,13 +869,13 @@ export class FileFrameworkStore {
   }
 
   /**
-   * Returns true if the framework has a license that allows unauthenticated access.
-   * Frameworks with no license or a private license return false.
+   * Returns true when the framework is explicitly marked public.
+   * Sign-in is required unless `publicAccess` is true — license does not affect this.
    */
   isDocumentPublic (tenantId: TenantId, version: CaseVersion, storageKey: string): boolean {
     const meta = this.getDocumentMetadata(tenantId, version, storageKey)
     if (!meta) return false
-    return isPublicLicense(meta.licenseIdentifier)
+    return meta.publicAccess === true
   }
 
   itemExists (tenantId: TenantId, version: CaseVersion, itemId: string): boolean {
@@ -847,6 +905,58 @@ export class FileFrameworkStore {
     const versionMap = this.documents.get(tenantId)?.get(version)
     if (!versionMap) return []
     return Array.from(versionMap.values())
+  }
+
+  findDocumentByCgeFrameworkId (
+    tenantId: TenantId,
+    version: CaseVersion,
+    cgeFrameworkId: string
+  ): DocumentMetadata | null {
+    const docs = this.getAllDocuments(tenantId, version)
+    return docs.find(d => d.cgeFrameworkId === cgeFrameworkId && d.readOnly === true) ?? null
+  }
+
+  async searchItemsInDocument (
+    tenantId: TenantId,
+    version: CaseVersion,
+    docId: string,
+    query: string,
+    limit: number
+  ): Promise<Array<{
+    identifier: string
+    uri?: string
+    fullStatement?: string
+    abbreviatedStatement?: string
+    humanCodingScheme?: string
+    CFItemType?: string
+  }>> {
+    const bundle = await this.loadDocumentBundle(tenantId, version, docId)
+    if (!bundle?.items || !Array.isArray(bundle.items)) return []
+
+    const q = query.trim().toLowerCase()
+    const matches = (item: any): boolean => {
+      if (!q) return true
+      const parts = [
+        item.fullStatement,
+        item.abbreviatedStatement,
+        item.humanCodingScheme,
+        item.identifier,
+        item.CFItemType
+      ]
+      return parts.some(p => typeof p === 'string' && p.toLowerCase().includes(q))
+    }
+
+    return bundle.items
+      .filter(matches)
+      .slice(0, limit)
+      .map((item: any) => ({
+        identifier: item.identifier ?? item.sourcedId,
+        uri: item.uri,
+        fullStatement: item.fullStatement,
+        abbreviatedStatement: item.abbreviatedStatement,
+        humanCodingScheme: item.humanCodingScheme,
+        CFItemType: item.CFItemType
+      }))
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -940,12 +1050,12 @@ export class FileFrameworkStore {
   }
 
   /**
-   * Check whether a globally-unique document ID has a public license, searching all tenants.
+   * Check whether a globally-unique document ID is marked public, searching all tenants.
    */
   isDocumentPublicGlobal (docId: string): boolean {
     const resolved = this.resolveDocumentGlobal(docId)
     if (!resolved) return false
-    return isPublicLicense(resolved.metadata.licenseIdentifier)
+    return resolved.metadata.publicAccess === true
   }
 
   // Public methods for index management (used by management endpoints)

@@ -43,6 +43,10 @@ export class KeycloakTenantProvisioner {
     const { id: userId } = await this.admin.ensureUser({ username: email, email, enabled: true })
     await this.admin.setUserPassword(userId, password, false)
     await this.admin.assignClientRoles(userId, clientUuid, roles)
+    // Tenant-admin membership so system-admin can use Members / API Keys on the system tenant
+    await this.admin.setMemberRole(userId, clientUuid, [
+      'case.read', 'case.write', 'case.owner', 'admin'
+    ])
 
     logger.info({ clientId, email }, 'Bootstrapped system admin user in Keycloak')
   }
@@ -57,7 +61,8 @@ export class KeycloakTenantProvisioner {
     const { id: userId } = await this.admin.ensureUser({ username: adminEmail, email: adminEmail, enabled: true })
     const adminPassword = randomBytes(18).toString('base64url')
     await this.admin.setUserPassword(userId, adminPassword, true)
-    await this.admin.assignClientRoles(userId, clientUuid, roles)
+    // Assign admin membership (human-readable label + case.* scopes)
+    await this.admin.setMemberRole(userId, clientUuid, [...roles, 'admin'])
 
     logger.info({ tenantId, clientId, adminEmail }, 'Provisioned tenant client and admin user in Keycloak')
     return { adminEmail, adminPassword }
@@ -73,9 +78,13 @@ export class KeycloakTenantProvisioner {
       webOrigins: this.cfg.spaWebOrigins
     })
 
+    // Scope roles requested by the caller (e.g. case.admin on the system tenant)…
     for (const role of roles) {
       await this.admin.ensureClientRole(clientUuid, role)
     }
+    // …plus the human-readable membership roles (viewer/author/admin) the Members
+    // UI assigns, which are composites of the corresponding case.* scopes.
+    await this.admin.ensureTenantMemberRoles(clientUuid)
 
     await this.admin.ensureProtocolMapper(clientUuid, {
       name: 'tenantId',

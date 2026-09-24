@@ -1,5 +1,35 @@
 import { Request, Response, NextFunction } from 'express'
-import { requireScope } from '../scope'
+import { requireScope, expandScopes, userHasScope } from '../scope'
+
+describe('expandScopes', () => {
+  it('expands case.owner to include write and read', () => {
+    expect([...expandScopes(['case.owner'])].sort()).toEqual([
+      'case.owner',
+      'case.read',
+      'case.write'
+    ])
+  })
+
+  it('expands admin membership role to case.owner', () => {
+    expect([...expandScopes(['admin'])].sort()).toEqual([
+      'admin',
+      'case.owner',
+      'case.read',
+      'case.write'
+    ])
+  })
+
+  it('expands case.write to include read', () => {
+    expect([...expandScopes(['case.write'])].sort()).toEqual([
+      'case.read',
+      'case.write'
+    ])
+  })
+
+  it('does not expand case.admin into tenant scopes', () => {
+    expect([...expandScopes(['case.admin'])]).toEqual(['case.admin'])
+  })
+})
 
 describe('requireScope', () => {
   let mockRequest: Partial<Request>
@@ -34,6 +64,43 @@ describe('requireScope', () => {
 
     expect(mockNext).toHaveBeenCalled()
     expect(responseStatus).not.toHaveBeenCalled()
+  })
+
+  it('should allow case.owner to satisfy case.write', () => {
+    const middleware = requireScope('case.write')
+    ;(mockRequest as any).user = { scope: 'case.owner' }
+
+    middleware(mockRequest as Request, mockResponse as Response, mockNext)
+
+    expect(mockNext).toHaveBeenCalled()
+  })
+
+  it('should allow admin membership role to satisfy case.owner', () => {
+    const middleware = requireScope('case.owner')
+    ;(mockRequest as any).user = { scope: 'admin' }
+
+    middleware(mockRequest as Request, mockResponse as Response, mockNext)
+
+    expect(mockNext).toHaveBeenCalled()
+  })
+
+  it('should allow case.write to satisfy case.read', () => {
+    const middleware = requireScope('case.read')
+    ;(mockRequest as any).user = { scope: 'case.write' }
+
+    middleware(mockRequest as Request, mockResponse as Response, mockNext)
+
+    expect(mockNext).toHaveBeenCalled()
+  })
+
+  it('should not allow case.write to satisfy case.owner', () => {
+    const middleware = requireScope('case.owner')
+    ;(mockRequest as any).user = { scope: 'case.write' }
+
+    middleware(mockRequest as Request, mockResponse as Response, mockNext)
+
+    expect(responseStatus).toHaveBeenCalledWith(403)
+    expect(mockNext).not.toHaveBeenCalled()
   })
 
   it('should return 401 when user is not set', () => {
@@ -115,17 +182,15 @@ describe('requireScope', () => {
     expect(responseStatus).toHaveBeenCalledWith(403)
     expect(mockNext).not.toHaveBeenCalled()
   })
+
+  it('userHasScope reads resource_access roles', () => {
+    const user = {
+      resource_access: {
+        'tenant-demo': { roles: ['case.write'] }
+      }
+    }
+    expect(userHasScope(user, 'case.read')).toBe(true)
+    expect(userHasScope(user, 'case.write')).toBe(true)
+    expect(userHasScope(user, 'case.owner')).toBe(false)
+  })
 })
-
-
-
-
-
-
-
-
-
-
-
-
-

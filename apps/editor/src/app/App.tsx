@@ -10,7 +10,7 @@ import { getAppConfig } from '@/app/config'
 import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
-import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage } from '@/ui/editor/reactflow/mapping'
+import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage, extractRemoteFrameworkDataFromCfPackage, normalizeLinkedFrameworkColors } from '@/ui/editor/reactflow/mapping'
 import type { LayoutState } from '@/ui/editor/reactflow/mapping'
 import type { CaseVersion } from '@/application/framework/mappers/case/CasePackageSnapshot'
 import type { CFAssociationGrouping, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
@@ -204,6 +204,19 @@ function AppInner() {
     setRoute('login')
   }, [authStatus, route])
 
+  // SSO: ensure default tenant membership when org_id claim matches (idempotent).
+  const ensureSelfAttempted = useRef<string | null>(null)
+  useEffect(() => {
+    if (authStatus !== 'authenticated' || !tenantId) return
+    const key = tenantId
+    if (ensureSelfAttempted.current === key) return
+    ensureSelfAttempted.current = key
+    void api.ensureSelfMembership({ tenantId }).catch((err: unknown) => {
+      // Expected when org_id claim is absent (non-SSO / local users).
+      console.debug('[App] ensure-self skipped or failed:', err)
+    })
+  }, [authStatus, tenantId, api])
+
   // Fetch the full definitions catalogue from the management endpoint once authenticated.
   useEffect(() => {
     if (authStatus !== 'authenticated' || !tenantId) return
@@ -381,6 +394,9 @@ function AppInner() {
 
         // Create a HomeFramework entry from the domain Framework
         const fw = createHomeFrameworkFromDomain(framework, mirrorStatus)
+        if (pkg.CFDocument?.extensions) {
+          fw.cfDocument = { ...fw.cfDocument, extensions: pkg.CFDocument.extensions }
+        }
 
         // Store the extracted layout
         if (layout) {
@@ -473,7 +489,13 @@ function AppInner() {
 
     // Get the stored layout for this framework (from CASE extensions)
     const layout = frameworkLayouts[activeFramework.id]
-    const graph = toReactFlowGraph({ framework: activeFramework.framework, layout })
+    const remoteEditorData = extractRemoteFrameworkDataFromCfPackage({
+      CFDocument: activeFramework.cfDocument,
+      CFItems: [],
+      CFAssociations: [],
+    })
+    remoteEditorData.linkedFrameworks = normalizeLinkedFrameworkColors(remoteEditorData.linkedFrameworks)
+    const graph = toReactFlowGraph({ framework: activeFramework.framework, layout, remoteEditorData })
 
     // If no saved layout, detect topology and apply appropriate layout
     if (!layout) {

@@ -1,8 +1,8 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ReactFlowInstance, Connection, Edge, NodeChange, EdgeChange } from '@xyflow/react'
 import type { OnBeforeDelete } from '@xyflow/react'
 import type { OnSelectionChangeFunc } from '@xyflow/react'
-import { Background, BackgroundVariant, ConnectionMode, Controls, MiniMap, ReactFlow, SelectionMode } from '@xyflow/react'
+import { Background, BackgroundVariant, ConnectionMode, Controls, MiniMap, ReactFlow, SelectionMode, useUpdateNodeInternals } from '@xyflow/react'
 import { nodeTypes } from '@/ui/editor/reactflow/nodeTypes'
 import { edgeTypes } from '@/ui/editor/reactflow/edgeTypes'
 import CanvasHeader from '@/ui/editor/components/CanvasHeader'
@@ -14,9 +14,20 @@ import ConfirmActionDialog from '@/ui/editor/components/ConfirmActionDialog'
 import ConfirmLeaveDialog from '@/ui/editor/components/ConfirmLeaveDialog'
 import SettingsModal from '@/ui/editor/components/SettingsModal'
 import FloatingAddButton from '@/ui/editor/components/FloatingAddButton'
-import AddExternalFrameworkDialog from '@/ui/editor/components/AddExternalFrameworkDialog'
+import CgeFrameworkSearchPanel from '@/ui/editor/components/CgeFrameworkSearchPanel'
+import RemoteFrameworkItemsPanel from '@/ui/editor/components/RemoteFrameworkItemsPanel'
+import AssociationTypePickerDialog from '@/ui/editor/components/AssociationTypePickerDialog'
 import ViewCFPackageDialog from '@/ui/editor/components/ViewCFPackageDialog'
 import TreePanelView from '@/ui/editor/treePanel/TreePanelView'
+import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
+import { createFetchHttpClient, formatApiErrorMessage } from '@/infrastructure/caseApi/http'
+import { getAppConfig } from '@/app/config'
+import type { CgeFrameworkSummary } from '@/infrastructure/caseApi/cgeTypes'
+import { REMOTE_ITEM_MIME, parseRemoteItemDragPayload, type RemoteItemLink } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
+import {
+  buildRemoteLinkEdges,
+  remoteLinkIdFromEdgeId,
+} from '@/ui/editor/remoteFramework/buildRemoteLinkGraph'
 import { useEditor } from '@/ui/editor/state/EditorContext'
 import { isFrameworkNode, getNodeSize } from '@/ui/editor/state/helpers/nodeGeometry'
 import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/types'
@@ -52,10 +63,13 @@ type ReactFlowGraphProps = {
   visible: boolean
   nodes: CaseEditorNodeType[]
   edges: CaseEditorEdge[]
+  /** Cross-framework links — drive handle-position resyncs via RemoteLinkInternalsSync */
+  remoteLinks: RemoteItemLink[]
   onNodesChange: (changes: NodeChange<CaseEditorNodeType>[]) => void
   onEdgesChange: (changes: EdgeChange[]) => void
   onConnect: (connection: Connection) => void
   onNodeClick: (event: ReactMouseEvent, node: CaseEditorNodeType) => void
+  onNodeDoubleClick: (event: ReactMouseEvent, node: CaseEditorNodeType) => void
   onNodeDragStart: (event: ReactMouseEvent, node: CaseEditorNodeType) => void
   onNodeDragStop: () => void
   onEdgeClick: (event: ReactMouseEvent, edge: Edge) => void
@@ -69,6 +83,8 @@ type ReactFlowGraphProps = {
   onReconnectEnd: (_: unknown, edge: Edge) => void
   onInit: (instance: ReactFlowInstance<CaseEditorNodeType>) => void
   onPointerDownCapture: (event: ReactPointerEvent<HTMLDivElement>) => void
+  onDragOver: (event: React.DragEvent) => void
+  onDrop: (event: React.DragEvent) => void
 }
 
 /**
@@ -85,10 +101,12 @@ const ReactFlowGraph = memo(function ReactFlowGraph({
   visible,
   nodes,
   edges,
+  remoteLinks,
   onNodesChange,
   onEdgesChange,
   onConnect,
   onNodeClick,
+  onNodeDoubleClick,
   onNodeDragStart,
   onNodeDragStop,
   onEdgeClick,
@@ -102,9 +120,17 @@ const ReactFlowGraph = memo(function ReactFlowGraph({
   onReconnectEnd,
   onInit,
   onPointerDownCapture,
+  onDragOver,
+  onDrop,
 }: ReactFlowGraphProps) {
   return (
-    <div ref={wrapRef} className={visible ? 'h-full w-full' : 'hidden'} onPointerDownCapture={onPointerDownCapture}>
+    <div
+      ref={wrapRef}
+      className={visible ? 'h-full w-full' : 'hidden'}
+      onPointerDownCapture={onPointerDownCapture}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       <ReactFlow<CaseEditorNodeType>
         nodes={nodes}
         edges={edges}
@@ -112,6 +138,7 @@ const ReactFlowGraph = memo(function ReactFlowGraph({
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onEdgeClick={onEdgeClick}
@@ -140,6 +167,7 @@ const ReactFlowGraph = memo(function ReactFlowGraph({
         proOptions={REACT_FLOW_PRO_OPTIONS}
         onInit={onInit}
       >
+        <RemoteLinkInternalsSync remoteLinks={remoteLinks} nodes={nodes} />
         <Background color="#c8c8ca" gap={20} size={1.5} variant={BackgroundVariant.Dots} style={REACT_FLOW_BACKGROUND_STYLE} />
         <Controls />
         <MiniMap
@@ -187,6 +215,35 @@ type EditorCanvasProps = {
   mirrorStatus?: MirrorStatus
 }
 
+function RemoteLinkInternalsSync({
+  remoteLinks,
+  nodes,
+}: {
+  remoteLinks: RemoteItemLink[]
+  nodes: CaseEditorNodeType[]
+}) {
+  const updateNodeInternals = useUpdateNodeInternals()
+
+  useLayoutEffect(() => {
+    const frameworkRefIds = new Set(remoteLinks.map((l) => l.remoteFrameworkRefId))
+    const frameworkNodeIds = nodes
+      .filter((n) => n.type === 'externalFrameworkNode' && frameworkRefIds.has((n.data as { refId?: string }).refId ?? ''))
+      .map((n) => n.id)
+
+    const raf = requestAnimationFrame(() => {
+      for (const link of remoteLinks) {
+        updateNodeInternals(link.localItemId)
+      }
+      for (const nodeId of frameworkNodeIds) {
+        updateNodeInternals(nodeId)
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [remoteLinks, nodes, updateNodeInternals])
+
+  return null
+}
+
 export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
@@ -230,9 +287,29 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     updateSettings,
     addDetachedItem,
     addExternalFramework,
+    remoteLinks,
+    addRemoteLink,
+    removeRemoteLink,
+    updateRemoteLinkType,
+    removeRemoteFramework,
+    openCgeSearchPanel,
+    openRemoteItemsPanel,
+    closeSidePanel,
+    openExternalFrameworkSettings,
+    sidePanelMode,
+    setSidePanelMode,
+    activeRemoteFrameworkNodeId,
+    setActiveRemoteFrameworkNodeId,
     applyHierarchyLayout,
     applyStarLayout,
   } = useEditor()
+
+  const cfg = getAppConfig()
+  const { getAccessToken } = useAuth()
+  const api = useMemo(
+    () => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })),
+    [cfg.opencaseBaseUrl, getAccessToken],
+  )
 
   const reactFlowWrapRef = useRef<HTMLDivElement | null>(null)
   const reactFlowRef = useRef<ReactFlowInstance<CaseEditorNodeType> | null>(null)
@@ -241,13 +318,25 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const prevLayoutVersionRef = useRef<number | null>(null)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [externalFwDialogOpen, setExternalFwDialogOpen] = useState(false)
-  const [externalFwViewportCenter, setExternalFwViewportCenter] = useState<{ x: number; y: number } | undefined>(undefined)
+  const [pendingRemoteDrop, setPendingRemoteDrop] = useState<{ localItemId: string; payload: ReturnType<typeof parseRemoteItemDragPayload> } | null>(null)
+  const [remoteFrameworkRefreshing, setRemoteFrameworkRefreshing] = useState(false)
   const [cfPackageDialogOpen, setCfPackageDialogOpen] = useState(false)
   const [generatedCfPackage, setGeneratedCfPackage] = useState<CFPackage | null>(null)
   const [viewCaseLoading, setViewCaseLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [selectedRemoteEdgeIds, setSelectedRemoteEdgeIds] = useState<string[]>([])
+
+  const remoteLinkEdges = useMemo(
+    () => buildRemoteLinkEdges(nodesWithCallbacks, remoteLinks, selectedRemoteEdgeIds),
+    [nodesWithCallbacks, remoteLinks, selectedRemoteEdgeIds],
+  )
+
+  const allEditorEdges = useMemo(
+    () => [...editorEdges, ...remoteLinkEdges],
+    [editorEdges, remoteLinkEdges],
+  )
+
   const [activeView, setActiveView] = useState<'canvas' | 'tree'>('tree')
   const [forkWarningOpen, setForkWarningOpen] = useState(false)
 
@@ -304,8 +393,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const edgeReconnectSuccessful = useRef(true)
 
   // ── Refs for save/export (keeps callbacks stable, avoids re-renders) ──
-  const graphRef = useRef({ nodes, edges: editorEdges })
-  graphRef.current = { nodes, edges: editorEdges }
+  const graphRef = useRef({ nodes, edges: editorEdges, remoteLinks })
+  graphRef.current = { nodes, edges: editorEdges, remoteLinks }
   const saveCtxRef = useRef({ caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings })
   saveCtxRef.current = { caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings }
 
@@ -322,14 +411,15 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         setViewCaseLoading(false)
       }
     } else {
-      const { nodes: n, edges: e } = graphRef.current
+      const { nodes: n, edges: e, remoteLinks: rl } = graphRef.current
       const ctx = saveCtxRef.current
-      const { framework, layout } = fromEditorGraph({ graph: { nodes: n, edges: e } })
+      const { framework, layout, remoteEditorData } = fromEditorGraph({ graph: { nodes: n, edges: e, remoteLinks: rl } })
       const cfPackage = frameworkToCfPackage({
         framework, layout,
         caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
         cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
         cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
+        remoteEditorData,
       })
       const caseJson = toOpenCaseFormat(cfPackage)
       setGeneratedCfPackage(absolutizeCaseUris(caseJson, window.location.origin))
@@ -368,14 +458,15 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   // data (not just canvas layout), in which case warn first: saving will
   // fork it into an independent local copy.
   const handleSave = useCallback(async () => {
-    const { nodes: n, edges: e } = graphRef.current
+    const { nodes: n, edges: e, remoteLinks: rl } = graphRef.current
     const ctx = saveCtxRef.current
-    const { framework, layout } = fromEditorGraph({ graph: { nodes: n, edges: e } })
+    const { framework, layout, remoteEditorData } = fromEditorGraph({ graph: { nodes: n, edges: e, remoteLinks: rl } })
     const cfPackage = frameworkToCfPackage({
       framework, layout,
       caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
       cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
       cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
+      remoteEditorData,
     })
     const openCasePackage = toOpenCaseFormat(cfPackage)
     console.log('[Save] Generated OpenCASE package:', openCasePackage)
@@ -430,7 +521,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     // Group edges by node pair (direction-agnostic) to fan out parallel labels.
     // This keeps multiple associations (e.g. precedes + exactMatchOf) readable.
     const byPair = new Map<string, CaseEditorEdge[]>()
-    for (const edge of editorEdges) {
+    for (const edge of allEditorEdges) {
       const pairKey =
         edge.source < edge.target
           ? `${edge.source}__${edge.target}`
@@ -453,7 +544,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         })
     }
 
-    const result = editorEdges.map((edge) => {
+    const result = allEditorEdges.map((edge) => {
       const cached = prev.get(edge.id)
       const parallel = parallelOffsetsByEdgeId.get(edge.id)
       const parallelIndex = parallel?.parallelIndex ?? 0
@@ -482,7 +573,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         cached.parallelIndex === parallelIndex &&
         cached.parallelCount === parallelCount
       ) {
-        const output: CaseEditorEdge = { ...edge, type: 'labeled' as const, data: cached.output.data, style: cached.output.style }
+        const resolvedType = edge.data?.isRemoteLink ? 'remoteLink' as const : 'labeled' as const
+        const output: CaseEditorEdge = { ...edge, type: resolvedType, data: cached.output.data, style: cached.output.style }
         next.set(edge.id, { input: edge, edgeType: globalEdgeType, filter: effectiveGroupingFilter, parallelIndex, parallelCount, output })
         return output
       }
@@ -496,7 +588,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       }
       let style = edge.style
 
-      if (effectiveGroupingFilter) {
+      if (effectiveGroupingFilter && !edge.data?.isRemoteLink) {
         const edgeGroupId = edge.data?.cfAssociation?.CFAssociationGroupingURI?.identifier
         const isRootEdge = edge.data?.isFrameworkRootConnection
         const matches = edgeGroupId === effectiveGroupingFilter
@@ -510,14 +602,15 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         }
       }
 
-      const output: CaseEditorEdge = { ...edge, type: 'labeled' as const, data: baseData, style }
+      const resolvedType = edge.data?.isRemoteLink ? 'remoteLink' as const : 'labeled' as const
+      const output: CaseEditorEdge = { ...edge, type: resolvedType, data: baseData, style }
       next.set(edge.id, { input: edge, edgeType: globalEdgeType, filter: effectiveGroupingFilter, parallelIndex, parallelCount, output })
       return output
     })
 
     edgesCacheRef.current = next
     return result
-  }, [editorEdges, settings.edgeType, effectiveGroupingFilter])
+  }, [allEditorEdges, settings.edgeType, effectiveGroupingFilter])
 
   // React Flow stays MOUNTED (just CSS-hidden) while Tree View is active, so
   // that pan/zoom/selection state survives switching views. But feeding it a
@@ -757,7 +850,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       Date.now() <= preserveDuringDrag.until &&
       hasSelectChanges
     ) {
-      const nonSelectChanges = changes.filter((c) => c.type !== 'select')
+      const nonSelectChanges = changesToProcess.filter((c) => c.type !== 'select')
       const reassertSelected = selectedNodeIds.map((id) => ({ type: 'select' as const, id, selected: true }))
       logSelectionDebug('onNodesChange/preserveMultiSelectionDuringDrag', {
         selectCount: selectChanges.length,
@@ -830,7 +923,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         }
       }
 
-      const nonSelectChanges = changes.filter((c) => c.type !== 'select')
+      const nonSelectChanges = changesToProcess.filter((c) => c.type !== 'select')
       const reassertSelected = selectedNodeIds.map((id) => ({ type: 'select' as const, id, selected: true }))
       suppressSelectEchoRef.current = { until: Date.now() + 300 }
       logSelectionDebug('onNodesChange/blockedShiftDeselectAllBatch', {
@@ -852,7 +945,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       selectChanges.some((c) => c.selected === true) &&
       selectChanges.some((c) => c.selected === false)
     ) {
-      const nonSelectChanges = changes.filter((c) => c.type !== 'select') as NodeChange<CaseEditorNodeType>[]
+      const nonSelectChanges = changesToProcess.filter((c) => c.type !== 'select') as NodeChange<CaseEditorNodeType>[]
       suppressSelectEchoRef.current = { until: Date.now() + 300 }
       logSelectionDebug('onNodesChange/ignoredShiftMixedBatch', {
         originalCount: changes.length,
@@ -865,7 +958,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     }
 
     if (suppressEcho && Date.now() <= suppressEcho.until && hasSelectChanges) {
-      const nonSelectChanges = changes.filter((c) => c.type !== 'select')
+      const nonSelectChanges = changesToProcess.filter((c) => c.type !== 'select')
       logSelectionDebug('onNodesChange/suppressedSelectEcho', { forwardedNonSelectCount: nonSelectChanges.length })
       if (nonSelectChanges.length > 0) onNodesChange(nonSelectChanges)
       return
@@ -875,10 +968,59 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     logSelectionDebug('onNodesChange/forwarded', { changeCount: changes.length })
   }, [logSelectionDebug, onNodesChange, selectedNodeIds])
 
+  const handleRemoteEdgeChanges = useCallback((changes: EdgeChange[]) => {
+    for (const change of changes) {
+      if (!('id' in change) || !change.id.startsWith('remote_link_')) continue
+
+      if (change.type === 'remove') {
+        const linkId = remoteLinkIdFromEdgeId(change.id)
+        if (linkId) removeRemoteLink(linkId)
+        setSelectedRemoteEdgeIds((prev) => prev.filter((id) => id !== change.id))
+        continue
+      }
+
+      if (change.type === 'select') {
+        if (change.selected) {
+          setSelectedRemoteEdgeIds((prev) =>
+            shiftHeldRef.current
+              ? [...prev.filter((id) => id !== change.id), change.id]
+              : [change.id],
+          )
+          const linkId = remoteLinkIdFromEdgeId(change.id)
+          const link = remoteLinks.find((l) => l.id === linkId)
+          if (link && !shiftHeldRef.current) {
+            onNodesChange([
+              ...nodesWithCallbacks
+                .filter((n) => n.selected)
+                .map((n) => ({ type: 'select' as const, id: n.id, selected: false })),
+              { type: 'select', id: link.localItemId, selected: true },
+            ])
+          }
+        } else {
+          setSelectedRemoteEdgeIds((prev) => prev.filter((id) => id !== change.id))
+        }
+      }
+    }
+  }, [nodesWithCallbacks, onNodesChange, remoteLinks, removeRemoteLink])
+
   const onEdgesChangeWithSelectionGuard = useCallback((changes: EdgeChange[]) => {
+    const remoteChanges = changes.filter((c) => 'id' in c && c.id.startsWith('remote_link_'))
+    const normalChanges = changes.filter((c) => !('id' in c) || !c.id.startsWith('remote_link_'))
+
+    if (remoteChanges.length > 0) {
+      handleRemoteEdgeChanges(remoteChanges)
+    }
+
+    if (normalChanges.length === 0) return
+
+    if (normalChanges.some((c) => c.type === 'select' && c.selected === true)) {
+      setSelectedRemoteEdgeIds([])
+    }
+
+    const changesToProcess = normalChanges
     const suppressEcho = suppressSelectEchoRef.current
     const preserveDuringDrag = preserveSelectionDuringDragRef.current
-    const selectChanges = changes.filter((c): c is Extract<EdgeChange, { type: 'select' }> => c.type === 'select')
+    const selectChanges = changesToProcess.filter((c): c is Extract<EdgeChange, { type: 'select' }> => c.type === 'select')
     const hasSelectChanges = selectChanges.length > 0
     logSelectionDebug('onEdgesChange/received', {
       hasSelectChanges,
@@ -896,7 +1038,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       Date.now() <= preserveDuringDrag.until &&
       hasSelectChanges
     ) {
-      const nonSelectChanges = changes.filter((c) => c.type !== 'select')
+      const nonSelectChanges = changesToProcess.filter((c) => c.type !== 'select')
       const reassertSelected = selectedEdgeIds.map((id) => ({ type: 'select' as const, id, selected: true }))
       logSelectionDebug('onEdgesChange/preserveMultiSelectionDuringDrag', {
         selectCount: selectChanges.length,
@@ -914,7 +1056,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       selectChanges.length > 1 &&
       selectChanges.every((c) => c.selected === false)
     ) {
-      const nonSelectChanges = changes.filter((c) => c.type !== 'select')
+      const nonSelectChanges = changesToProcess.filter((c) => c.type !== 'select')
       const reassertSelected = selectedEdgeIds.map((id) => ({ type: 'select' as const, id, selected: true }))
       suppressSelectEchoRef.current = { until: Date.now() + 300 }
       logSelectionDebug('onEdgesChange/blockedShiftDeselectAllBatch', {
@@ -933,7 +1075,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       selectChanges.some((c) => c.selected === true) &&
       selectChanges.some((c) => c.selected === false)
     ) {
-      const nonSelectChanges = changes.filter((c) => c.type !== 'select') as EdgeChange[]
+      const nonSelectChanges = changesToProcess.filter((c) => c.type !== 'select') as EdgeChange[]
       suppressSelectEchoRef.current = { until: Date.now() + 300 }
       logSelectionDebug('onEdgesChange/ignoredShiftMixedBatch', {
         originalCount: changes.length,
@@ -946,15 +1088,15 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     }
 
     if (suppressEcho && Date.now() <= suppressEcho.until && hasSelectChanges) {
-      const nonSelectChanges = changes.filter((c) => c.type !== 'select')
+      const nonSelectChanges = changesToProcess.filter((c) => c.type !== 'select')
       logSelectionDebug('onEdgesChange/suppressedSelectEcho', { forwardedNonSelectCount: nonSelectChanges.length })
       if (nonSelectChanges.length > 0) onEdgesChange(nonSelectChanges)
       return
     }
 
-    onEdgesChange(changes)
-    logSelectionDebug('onEdgesChange/forwarded', { changeCount: changes.length })
-  }, [logSelectionDebug, onEdgesChange, selectedEdgeIds])
+    onEdgesChange(changesToProcess)
+    logSelectionDebug('onEdgesChange/forwarded', { changeCount: changesToProcess.length })
+  }, [handleRemoteEdgeChanges, logSelectionDebug, onEdgesChange, selectedEdgeIds])
 
   const onPaneClick = useCallback((event: ReactMouseEvent) => {
     // Ignore Shift-modified pane clicks (they may occur as part of add-to-selection gestures).
@@ -974,6 +1116,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       return
     }
     suppressSelectEchoRef.current = null
+    setSelectedRemoteEdgeIds([])
     if (selectedNodeIds.length + selectedEdgeIds.length > 0) {
       logSelectionDebug('onPaneClick/clearSelection')
       clearSelection()
@@ -1009,7 +1152,191 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     return { x: centerX, y: centerY }
   }, [])
 
-  // Keyboard shortcuts for adding items and external frameworks
+  const linkedFrameworkNodes = useMemo(
+    () => nodesWithCallbacks.filter((n) => n.type === 'externalFrameworkNode'),
+    [nodesWithCallbacks],
+  )
+
+  const hasSelection = Boolean(selectedNode || selectedEdge || (selectedNodeIds.length + selectedEdgeIds.length > 1))
+  const showBrowsePanel = sidePanelMode === 'cgeSearch' || sidePanelMode === 'remoteItems'
+  const showPropertiesPanel = hasSelection && !showBrowsePanel
+  const sidePanelOpen = showBrowsePanel || showPropertiesPanel
+
+  const handleAddCgeFrameworkToCanvas = useCallback(async (fw: CgeFrameworkSummary) => {
+    if (!tenantId) throw new Error('Sign in required')
+
+    const existing = linkedFrameworkNodes.find((n) => n.data.cgeFrameworkId === fw.frameworkId)
+    if (existing) {
+      if (existing.data.cacheDocId && !existing.data.cacheError) {
+        openRemoteItemsPanel(existing.id)
+      } else {
+        openExternalFrameworkSettings(existing.id)
+      }
+      return
+    }
+
+    const refId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}`
+    const viewportCenter = getViewportCenter()
+    const nodeId = addExternalFramework({
+      refId,
+      title: fw.title,
+      cgeFrameworkId: fw.frameworkId,
+      color: '',
+      sourceUri: fw.sourceUri,
+      uri: fw.sourceUri,
+      source: fw.publisher,
+      cacheLoading: true,
+    }, viewportCenter)
+
+    try {
+      const result = await api.importCgeFramework({
+        tenantId,
+        frameworkId: fw.frameworkId,
+        sourceUri: fw.sourceUri,
+        registryId: fw.registryId,
+        readOnly: true,
+        subscribe: false,
+      })
+      updateNodeData(nodeId, {
+        title: result.title ?? fw.title,
+        cacheDocId: result.docId,
+        itemCount: result.itemCount,
+        cachedAt: result.cachedAt,
+        sourceUri: result.sourceUri ?? fw.sourceUri,
+        cacheError: null,
+        cacheLoading: false,
+      })
+      setActiveRemoteFrameworkNodeId(nodeId)
+      setSidePanelMode('remoteItems')
+    } catch (e) {
+      updateNodeData(nodeId, {
+        cacheError: formatApiErrorMessage(e, 'Failed to download framework from publisher'),
+        cacheLoading: false,
+      })
+      openExternalFrameworkSettings(nodeId)
+    }
+  }, [
+    tenantId,
+    linkedFrameworkNodes,
+    getViewportCenter,
+    addExternalFramework,
+    api,
+    updateNodeData,
+    openRemoteItemsPanel,
+    openExternalFrameworkSettings,
+    setActiveRemoteFrameworkNodeId,
+    setSidePanelMode,
+  ])
+
+  const handleRefreshActiveRemoteFramework = useCallback(async () => {
+    const nodeId = activeRemoteFrameworkNodeId ?? selectedNode?.id
+    const node = linkedFrameworkNodes.find((n) => n.id === nodeId) ?? selectedNode
+    if (!tenantId || !node || node.type !== 'externalFrameworkNode') return
+    const cgeFrameworkId = node.data.cgeFrameworkId
+    if (!cgeFrameworkId) return
+    setRemoteFrameworkRefreshing(true)
+    updateNodeData(node.id, { cacheLoading: true, cacheError: null })
+    try {
+      const result = node.data.cacheDocId
+        ? await api.refreshCgeCache({
+            tenantId,
+            frameworkId: cgeFrameworkId,
+            skipPublisherAuth: node.data.skipPublisherAuth,
+          })
+        : await api.importCgeFramework({
+            tenantId,
+            frameworkId: cgeFrameworkId,
+            sourceUri: node.data.sourceUri ?? node.data.uri,
+            readOnly: true,
+            subscribe: false,
+            skipPublisherAuth: node.data.skipPublisherAuth,
+          })
+      updateNodeData(node.id, {
+        title: result.title ?? node.data.title,
+        itemCount: result.itemCount,
+        cachedAt: result.cachedAt,
+        cacheDocId: result.docId ?? node.data.cacheDocId,
+        sourceUri: result.sourceUri ?? node.data.sourceUri,
+        cacheError: null,
+        cacheLoading: false,
+      })
+    } catch (e) {
+      updateNodeData(node.id, {
+        cacheError: formatApiErrorMessage(e, 'Failed to download framework from publisher'),
+        cacheLoading: false,
+      })
+    } finally {
+      setRemoteFrameworkRefreshing(false)
+    }
+  }, [tenantId, activeRemoteFrameworkNodeId, selectedNode, linkedFrameworkNodes, api, updateNodeData])
+
+  const handleRemoveActiveRemoteFramework = useCallback(() => {
+    const nodeId = activeRemoteFrameworkNodeId ?? selectedNode?.id
+    if (nodeId) removeRemoteFramework(nodeId)
+  }, [activeRemoteFrameworkNodeId, selectedNode?.id, removeRemoteFramework])
+
+  // Double-clicking a linked CASE Global framework opens its item browser once
+  // its cache has downloaded, or its settings panel when the download failed /
+  // hasn't happened yet. `useCallback` keeps ReactFlowGraph's memo intact.
+  const onNodeDoubleClick = useCallback((_: ReactMouseEvent, node: CaseEditorNodeType) => {
+    if (node.type !== 'externalFrameworkNode') return
+    const ext = node.data
+    if (ext.cacheDocId && !ext.cacheError) {
+      openRemoteItemsPanel(node.id)
+    } else {
+      openExternalFrameworkSettings(node.id)
+    }
+  }, [openRemoteItemsPanel, openExternalFrameworkSettings])
+
+  const handleRemoteDrop = useCallback((localItemId: string, raw: string) => {
+    const payload = parseRemoteItemDragPayload(raw)
+    if (!payload) return
+    setPendingRemoteDrop({ localItemId, payload })
+  }, [])
+
+  const confirmRemoteLink = useCallback((associationType: string) => {
+    if (!pendingRemoteDrop?.payload) return
+    const p = pendingRemoteDrop.payload
+    const linkId = globalThis.crypto?.randomUUID?.() ?? `link_${Date.now()}`
+    const link: RemoteItemLink = {
+      id: linkId,
+      localItemId: pendingRemoteDrop.localItemId,
+      remoteItemUri: p.uri ?? p.identifier,
+      remoteItemIdentifier: p.identifier,
+      remoteFrameworkRefId: p.remoteFrameworkRefId,
+      associationType,
+      remoteLabel: p.label,
+      remoteHumanCodingScheme: p.humanCodingScheme,
+      remoteFrameworkTitle: p.remoteFrameworkTitle,
+      remoteFrameworkColor: p.remoteFrameworkColor,
+      cfAssociationId: linkId,
+    }
+    addRemoteLink(link)
+    setPendingRemoteDrop(null)
+  }, [pendingRemoteDrop, addRemoteLink])
+
+  const onPaneDragOver = useCallback((e: React.DragEvent) => {
+    if (e.dataTransfer.types.includes(REMOTE_ITEM_MIME)) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'link'
+    }
+  }, [])
+
+  const onPaneDrop = useCallback((e: React.DragEvent) => {
+    const raw = e.dataTransfer.getData(REMOTE_ITEM_MIME)
+    if (!raw) return
+    e.preventDefault()
+    const instance = reactFlowRef.current
+    if (!instance) return
+    const position = instance.screenToFlowPosition({ x: e.clientX, y: e.clientY })
+    const targetNode = instance.getIntersectingNodes({ x: position.x, y: position.y, width: 1, height: 1 })
+      .find((n) => n.type === 'caseItemNode')
+    if (targetNode) {
+      handleRemoteDrop(targetNode.id, raw)
+    }
+  }, [handleRemoteDrop])
+
+  // Keyboard shortcuts for adding items and remote frameworks
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check if user is typing in an input field
@@ -1034,19 +1361,17 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         return
       }
 
-      // Cmd/Ctrl + F: Add external framework
+      // Cmd/Ctrl + F: Search CASE Global frameworks
       if (e.key.toLowerCase() === 'f') {
         e.preventDefault()
-        const viewportCenter = getViewportCenter()
-        setExternalFwViewportCenter(viewportCenter)
-        setExternalFwDialogOpen(true)
+        openCgeSearchPanel()
         return
       }
     }
 
     globalThis.addEventListener('keydown', handleKeyDown)
     return () => globalThis.removeEventListener('keydown', handleKeyDown)
-  }, [addDetachedItem, getViewportCenter])
+  }, [addDetachedItem, getViewportCenter, openCgeSearchPanel])
 
   const onBeforeDelete: OnBeforeDelete<CaseEditorNodeType> = useCallback(
     async ({ nodes, edges: deletedEdges }) => {
@@ -1417,7 +1742,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         userName={userName ?? undefined}
         tenantId={tenantId ?? undefined}
         onChangePassword={authStatus === 'authenticated' && changePassword ? () => void changePassword() : undefined}
-        reserveRightForPanel={Boolean(selectedNode || selectedEdge || (selectedNodeIds.length + selectedEdgeIds.length > 1))}
+        reserveRightForPanel={sidePanelOpen}
         showSettings
         isDirty={isDirty}
         saveStatus={saveStatus}
@@ -1468,10 +1793,12 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         visible={activeView !== 'tree'}
         nodes={canvasNodes}
         edges={canvasEdges}
+        remoteLinks={remoteLinks}
         onNodesChange={onNodesChangeWithSelectionGuard}
         onEdgesChange={onEdgesChangeWithSelectionGuard}
         onConnect={onConnect}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
         onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onEdgeClick={onEdgeClick}
@@ -1485,11 +1812,13 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onReconnectEnd={onReconnectEnd}
         onInit={onReactFlowInit}
         onPointerDownCapture={onCanvasPointerDownCapture}
+        onDragOver={onPaneDragOver}
+        onDrop={onPaneDrop}
       />
 
       <NodePropertiesPanel
-        node={selectedNode}
-        onClose={clearSelection}
+        node={showPropertiesPanel ? selectedNode : null}
+        onClose={() => { clearSelection(); closeSidePanel() }}
         onChangeNode={updateNodeData}
         hideColorBand={activeView === 'tree'}
         onViewCFPackage={handleViewCFPackage}
@@ -1501,12 +1830,19 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         ensureCfSubject={ensureCfSubject}
         cfConcepts={cfConcepts}
         ensureCfConcept={ensureCfConcept}
+        remoteLinks={remoteLinks}
+        onRemoveRemoteLink={removeRemoteLink}
+        onUpdateRemoteLinkType={updateRemoteLinkType}
+        onRemoveRemoteFramework={removeRemoteFramework}
+        onBrowseRemoteItems={openRemoteItemsPanel}
+        onRefreshRemoteFramework={selectedNode?.type === 'externalFrameworkNode' && selectedNode.data.cgeFrameworkId ? handleRefreshActiveRemoteFramework : undefined}
+        remoteFrameworkRefreshing={remoteFrameworkRefreshing}
       />
 
       <EdgePropertiesPanel
-        edge={selectedEdge}
+        edge={showPropertiesPanel ? selectedEdge : null}
         nodes={nodesWithCallbacks}
-        onClose={clearSelection}
+        onClose={() => { clearSelection(); closeSidePanel() }}
         onChangeEdge={updateEdgeData}
         onFlipEdge={flipEdge}
         cfAssociationGroupings={cfAssociationGroupings}
@@ -1514,11 +1850,11 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       />
 
       <MultiSelectionPanel
-        selectedNodeIds={selectedNodeIds}
-        selectedEdgeIds={selectedEdgeIds}
+        selectedNodeIds={showPropertiesPanel ? selectedNodeIds : []}
+        selectedEdgeIds={showPropertiesPanel ? selectedEdgeIds : []}
         nodes={nodesWithCallbacks}
         edges={editorEdges}
-        onClose={clearSelection}
+        onClose={() => { clearSelection(); closeSidePanel() }}
         onDeleteSelected={() => {
           const selectedNodes = nodesWithCallbacks.filter((n) => selectedNodeIds.includes(n.id))
           const selectedEdgesForDelete = editorEdges.filter((e) => selectedEdgeIds.includes(e.id))
@@ -1617,30 +1953,59 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onSave={updateSettings}
       />
 
+      {showBrowsePanel ? (
+        <div className="fixed right-0 top-0 z-20 h-screen w-[min(460px,92vw)] border-l border-black/10 bg-white shadow-xl">
+          {sidePanelMode === 'cgeSearch' && tenantId ? (
+            <CgeFrameworkSearchPanel
+              tenantId={tenantId}
+              api={api}
+              onClose={closeSidePanel}
+              onAddToCanvas={handleAddCgeFrameworkToCanvas}
+            />
+          ) : null}
+          {sidePanelMode === 'remoteItems' && tenantId ? (
+            <RemoteFrameworkItemsPanel
+              tenantId={tenantId}
+              api={api}
+              linkedFrameworkNodes={linkedFrameworkNodes as import('@/ui/editor/reactflow/types').ExternalFrameworkNodeType[]}
+              activeNodeId={activeRemoteFrameworkNodeId ?? linkedFrameworkNodes[0]?.id ?? null}
+              onSelectFramework={setActiveRemoteFrameworkNodeId}
+              onClose={closeSidePanel}
+              onRefreshFramework={
+                (linkedFrameworkNodes.find((n) => n.id === (activeRemoteFrameworkNodeId ?? linkedFrameworkNodes[0]?.id))?.data.cgeFrameworkId)
+                  ? handleRefreshActiveRemoteFramework
+                  : undefined
+              }
+              onRemoveFramework={handleRemoveActiveRemoteFramework}
+              frameworkRefreshing={remoteFrameworkRefreshing}
+              onOpenFrameworkSettings={() => {
+                const nodeId = activeRemoteFrameworkNodeId ?? linkedFrameworkNodes[0]?.id
+                if (nodeId) {
+                  setSelectedRemoteEdgeIds([])
+                  openExternalFrameworkSettings(nodeId)
+                }
+              }}
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      <AssociationTypePickerDialog
+        open={Boolean(pendingRemoteDrop)}
+        remoteLabel={pendingRemoteDrop?.payload?.label ?? ''}
+        onCancel={() => setPendingRemoteDrop(null)}
+        onConfirm={confirmRemoteLink}
+      />
+
       <FloatingAddButton
         onAddItem={() => {
           const viewportCenter = getViewportCenter()
           addDetachedItem(viewportCenter)
         }}
         onAddExternalFramework={() => {
-          const viewportCenter = getViewportCenter()
-          setExternalFwViewportCenter(viewportCenter)
-          setExternalFwDialogOpen(true)
+          openCgeSearchPanel()
         }}
-        sidePanelOpen={Boolean(selectedNode || selectedEdge || (selectedNodeIds.length + selectedEdgeIds.length > 1))}
-      />
-
-      <AddExternalFrameworkDialog
-        open={externalFwDialogOpen}
-        onCancel={() => {
-          setExternalFwDialogOpen(false)
-          setExternalFwViewportCenter(undefined)
-        }}
-        onCreate={(draft) => {
-          setExternalFwDialogOpen(false)
-          addExternalFramework(draft, externalFwViewportCenter)
-          setExternalFwViewportCenter(undefined)
-        }}
+        sidePanelOpen={sidePanelOpen}
       />
 
       <ViewCFPackageDialog

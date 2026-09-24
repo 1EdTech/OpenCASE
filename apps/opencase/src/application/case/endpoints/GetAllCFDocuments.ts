@@ -135,6 +135,7 @@ export class GetAllCFDocuments {
         // must be surfaced even when false, since the frontend uses its presence to
         // decide whether to show the Mirrored/Forked badge at all.
         if (docMeta.isModifiedFromSource !== undefined) doc.isModifiedFromSource = docMeta.isModifiedFromSource
+        if (docMeta.publicAccess === true) doc.publicAccess = true
       }
       if (docMeta.archived) doc.archived = true
 

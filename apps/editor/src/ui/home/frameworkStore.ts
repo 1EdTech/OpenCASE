@@ -114,6 +114,7 @@ function createCfDocumentFromFramework(framework: Framework): CFDocument {
     lastChangeDateTime: meta.lastChangeDateTime ?? new Date().toISOString(),
     CFPackageURI: { uri: `urn:case:package:${id}` },
     licenseURI: meta.licenseURI,
+    publicAccess: meta.publicAccess === true ? true : undefined,
   }
 }
 

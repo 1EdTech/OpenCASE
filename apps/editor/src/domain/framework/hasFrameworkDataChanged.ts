@@ -49,8 +49,16 @@ function sortedNormalizedEntries<K extends string, V>(map: Map<K, V>, normalize:
  * handle anchors), since those don't affect a mirrored framework's CASE-spec
  * content and shouldn't be treated as a forking change.
  */
+function comparableDocumentMetadata(metadata: Framework['metadata']): Framework['metadata'] {
+  if (!metadata) return {}
+  // Public read access is an OpenCASE server setting, not CASE content.
+  // Toggling it must not fork a mirrored framework.
+  const { publicAccess: _publicAccess, ...rest } = metadata
+  return rest
+}
+
 export function hasFrameworkDataChanged(baseline: Framework, current: Framework): boolean {
-  if (JSON.stringify(baseline.metadata) !== JSON.stringify(current.metadata)) return true
+  if (JSON.stringify(comparableDocumentMetadata(baseline.metadata)) !== JSON.stringify(comparableDocumentMetadata(current.metadata))) return true
 
   if (JSON.stringify(sortedNormalizedEntries(baseline.items, normalizeItem)) !==
       JSON.stringify(sortedNormalizedEntries(current.items, normalizeItem))) {
