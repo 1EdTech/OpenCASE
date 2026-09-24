@@ -76,6 +76,8 @@ type Props = {
   isModifiedFromSource?: boolean
   /** Read-only cached remote framework (CGE cache) */
   readOnly?: boolean
+  /** CASE API readable without signing in */
+  publicAccess?: boolean
 }
 
 export function FrameworkCard({
@@ -98,6 +100,7 @@ export function FrameworkCard({
   sourcePackageURI,
   isModifiedFromSource,
   readOnly,
+  publicAccess,
 }: Readonly<Props>) {
   const title = cfDocument.title ?? 'Untitled framework'
   const frameworkType = (cfDocument as { frameworkType?: string }).frameworkType
@@ -224,6 +227,11 @@ export function FrameworkCard({
             {readOnly ? (
               <span className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700">
                 Read-only
+              </span>
+            ) : null}
+            {publicAccess ? (
+              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800" title="Anyone can read this framework without signing in">
+                Public
               </span>
             ) : null}
             {isModifiedFromSource !== undefined ? (

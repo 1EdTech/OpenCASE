@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { type CaseVersion, type TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { logger } from '../../logging/Logger'
-import { DEFAULT_LICENSES, isPublicLicense } from '../../../domain/case/seed/defaultLicenses'
+import { DEFAULT_LICENSES } from '../../../domain/case/seed/defaultLicenses'
 import { DEFAULT_CONCEPTS, DEFAULT_SUBJECTS, DEFAULT_ITEM_TYPES, DEFAULT_ASSOCIATION_GROUPINGS } from '../../../domain/case/seed/defaultDefinitions'
 
 export interface FileFrameworkStoreConfig {
@@ -21,7 +21,13 @@ export interface DocumentMetadata {
   lastChangeDateTime: Date
   currentFile: string // relative to tenant/version root
   adoptionStatus?: string // CASE domain field — NOT used for server-level archive filtering
-  licenseIdentifier?: string // UUID of the assigned CFLicense (for public-access checks)
+  licenseIdentifier?: string // UUID of the assigned CFLicense
+  /**
+   * When true, the CASE Provider API serves this framework without authentication.
+   * Absent or false means sign-in is required. Independent of licenseURI.
+   * Stored on the document as `extensions['ext:opencase'].publicAccess`.
+   */
+  publicAccess?: boolean
   /** URL this framework was imported from (set during import). */
   sourcePackageURI?: string
   /** True when an imported framework has been locally modified after import. */
@@ -182,6 +188,7 @@ export class FileFrameworkStore {
           currentFile: d.currentFile,
           adoptionStatus: d.adoptionStatus,
           licenseIdentifier: d.licenseIdentifier,
+          publicAccess: d.publicAccess === true ? true : undefined,
           sourcePackageURI: d.sourcePackageURI,
           isModifiedFromSource: d.isModifiedFromSource,
           archived: d.archived,
@@ -471,8 +478,14 @@ export class FileFrameworkStore {
     }
 
     let alignmentParticipants: Array<{ identifier?: string; uri: string }> | undefined
-    if (extOpencase && typeof extOpencase === 'object' && Array.isArray((extOpencase as any).alignmentParticipants)) {
-      alignmentParticipants = (extOpencase as any).alignmentParticipants
+    let publicAccess: boolean | undefined
+    if (extOpencase && typeof extOpencase === 'object') {
+      if (Array.isArray((extOpencase as any).alignmentParticipants)) {
+        alignmentParticipants = (extOpencase as any).alignmentParticipants
+      }
+      if ((extOpencase as any).publicAccess === true) {
+        publicAccess = true
+      }
     }
 
     // Preserve index-only flags when a new bundle omits ext:opencase fields (e.g. partial update).
@@ -495,6 +508,7 @@ export class FileFrameworkStore {
       currentFile: relativePath,
       adoptionStatus: doc.adoptionStatus as string | undefined,
       licenseIdentifier,
+      publicAccess,
       sourcePackageURI,
       isModifiedFromSource,
       readOnly,
@@ -703,6 +717,7 @@ export class FileFrameworkStore {
       currentFile: meta.currentFile,
       adoptionStatus: meta.adoptionStatus,
       licenseIdentifier: meta.licenseIdentifier,
+      publicAccess: meta.publicAccess === true ? true : undefined,
       sourcePackageURI: meta.sourcePackageURI,
       isModifiedFromSource: meta.isModifiedFromSource,
       archived: meta.archived,
@@ -854,13 +869,13 @@ export class FileFrameworkStore {
   }
 
   /**
-   * Returns true if the framework has a license that allows unauthenticated access.
-   * Frameworks with no license or a private license return false.
+   * Returns true when the framework is explicitly marked public.
+   * Sign-in is required unless `publicAccess` is true — license does not affect this.
    */
   isDocumentPublic (tenantId: TenantId, version: CaseVersion, storageKey: string): boolean {
     const meta = this.getDocumentMetadata(tenantId, version, storageKey)
     if (!meta) return false
-    return isPublicLicense(meta.licenseIdentifier)
+    return meta.publicAccess === true
   }
 
   itemExists (tenantId: TenantId, version: CaseVersion, itemId: string): boolean {
@@ -1035,12 +1050,12 @@ export class FileFrameworkStore {
   }
 
   /**
-   * Check whether a globally-unique document ID has a public license, searching all tenants.
+   * Check whether a globally-unique document ID is marked public, searching all tenants.
    */
   isDocumentPublicGlobal (docId: string): boolean {
     const resolved = this.resolveDocumentGlobal(docId)
     if (!resolved) return false
-    return isPublicLicense(resolved.metadata.licenseIdentifier)
+    return resolved.metadata.publicAccess === true
   }
 
   // Public methods for index management (used by management endpoints)

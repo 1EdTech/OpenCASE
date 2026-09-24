@@ -107,6 +107,7 @@ function mapDomainFrameworkToCfDocument(framework: Framework): CFDocument {
     lastChangeDateTime: meta.lastChangeDateTime ?? nowIso(),
     CFPackageURI: { uri: `urn:case:package:${id}` },
     licenseURI: meta.licenseURI,
+    publicAccess: meta.publicAccess === true ? true : undefined,
   }
 }
 

@@ -88,6 +88,7 @@ type OpencaseExtension = {
   colorBand?: string
   linkedFrameworks?: unknown[]
   remoteItemLinks?: unknown[]
+  publicAccess?: boolean
 }
 
 /**
@@ -101,7 +102,7 @@ function mergeOpencaseExtension(
   const extensions = { ...base }
   
   // Only add if there's data to store
-  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType || opencaseData.colorBand || opencaseData.linkedFrameworks || opencaseData.remoteItemLinks) {
+  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType || opencaseData.colorBand || opencaseData.linkedFrameworks || opencaseData.remoteItemLinks || opencaseData.publicAccess) {
     const existing = (extensions[OPENCASE_EXT_KEY] as OpencaseExtension | undefined) ?? {}
     extensions[OPENCASE_EXT_KEY] = {
       ...existing,
@@ -154,12 +155,13 @@ function frameworkToCfDocument(
       title: docTitle,
       identifier: fwId,
     },
-    extensions: (layout || options?.edgeType || options?.linkedFrameworks || options?.remoteItemLinks)
+    extensions: (layout || options?.edgeType || options?.linkedFrameworks || options?.remoteItemLinks || meta.publicAccess === true)
       ? mergeOpencaseExtension(undefined, {
           layout,
           edgeType: options?.edgeType,
           linkedFrameworks: options?.linkedFrameworks,
           remoteItemLinks: options?.remoteItemLinks,
+          ...(meta.publicAccess === true ? { publicAccess: true } : {}),
         })
       : undefined,
   }

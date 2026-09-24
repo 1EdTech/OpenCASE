@@ -46,6 +46,8 @@ export type CfDocumentSummary = {
   isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
+  /** When true, the CASE API serves this framework without authentication. */
+  publicAccess?: boolean
   readOnly?: boolean
   cgeFrameworkId?: string
 }
@@ -104,6 +106,7 @@ export class CaseApiClient {
         lastChangeDateTime: typeof f.lastChangeDateTime === 'string' ? f.lastChangeDateTime : undefined,
         caseVersion: typeof f.caseVersion === 'string' ? f.caseVersion : undefined,
         sourcePackageURI: typeof f.sourcePackageURI === 'string' ? f.sourcePackageURI : undefined,
+        publicAccess: f.publicAccess === true,
         readOnly: f.readOnly === true,
         cgeFrameworkId: typeof f.cgeFrameworkId === 'string' ? f.cgeFrameworkId : undefined,
       }))

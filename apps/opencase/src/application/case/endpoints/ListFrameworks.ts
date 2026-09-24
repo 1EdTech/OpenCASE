@@ -34,6 +34,7 @@ export class ListFrameworks {
       cgeFrameworkId?: string
       sourcePackageURI?: string
       alignmentParticipants?: Array<{ identifier?: string; uri: string }>
+      publicAccess?: boolean
     }> = []
 
     for (const version of versions) {
@@ -58,9 +59,11 @@ export class ListFrameworks {
           readOnly: doc.readOnly === true,
           cgeFrameworkId: doc.cgeFrameworkId,
           sourcePackageURI: doc.sourcePackageURI,
-          // alignmentParticipants is derived from the ext:opencase extension and is
-          // OpenCASE-proprietary — only surface it to callers that requested extensions.
-          ...(query.includeOpenCaseExtensions && doc.alignmentParticipants ? { alignmentParticipants: doc.alignmentParticipants } : {})
+          // alignmentParticipants and publicAccess are derived from the ext:opencase
+          // extension and are OpenCASE-proprietary — only surface them to callers
+          // that requested extensions.
+          ...(query.includeOpenCaseExtensions && doc.alignmentParticipants ? { alignmentParticipants: doc.alignmentParticipants } : {}),
+          ...(query.includeOpenCaseExtensions && doc.publicAccess === true ? { publicAccess: true } : {})
         })
       }
     }

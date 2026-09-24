@@ -116,24 +116,6 @@ export const DEFAULT_LICENSES: SeedCFLicense[] = [
   },
 ]
 
-/**
- * License identifiers that grant unauthenticated (public) access
- * to frameworks via the CASE Provider API.
- */
-export const PUBLIC_LICENSE_IDS = new Set([
-  'c0c0c0c0-0000-4000-a000-000000000001', // Public Domain (CC0 1.0)
-  'c0c0c0c0-0000-4000-a000-000000000002', // Open — Credit Required (CC BY 4.0)
-  'c0c0c0c0-0000-4000-a000-000000000003', // Educational Use (CC BY-NC-SA 4.0)
-])
-
-/**
- * Returns true if the given license identifier allows unauthenticated access.
- * No license (undefined) is treated as private.
- */
-export function isPublicLicense (licenseId: string | undefined): boolean {
-  return !!licenseId && PUBLIC_LICENSE_IDS.has(licenseId)
-}
-
 import {
   DEFAULT_CONCEPTS,
   DEFAULT_SUBJECTS,

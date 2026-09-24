@@ -628,9 +628,32 @@ export default memo(function NodePropertiesPanel({
               </SidebarSection>
             ) : null}
 
+            {/* ── Access (framework only) ── */}
+            {isFramework ? (
+              <SidebarSection title="Access" subtitle="Who can read this framework from the API." accentColor={accentColor} defaultOpen>
+                <div className="rounded-xl border border-black/10 bg-white p-3">
+                  <div className="flex items-start gap-3">
+                    <Checkbox
+                      id="node-fw-public"
+                      checked={cfDocument?.publicAccess === true}
+                      onCheckedChange={(v: CheckedState) => updateDocument({ publicAccess: v === true ? true : undefined })}
+                    />
+                    <div className="grid gap-1">
+                      <Label htmlFor="node-fw-public" className="text-sm font-medium text-slate-900">
+                        Make public
+                      </Label>
+                      <div className={HINT_CLS}>
+                        Off by default, so readers must sign in. Turn this on and save to let anyone read the framework without signing in.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </SidebarSection>
+            ) : null}
+
             {/* ── License (framework only) ── */}
             {isFramework && availableLicenses && availableLicenses.length > 0 ? (
-              <SidebarSection title="License" subtitle="Choose who can use this framework and how." accentColor={accentColor} defaultOpen>
+              <SidebarSection title="License" subtitle="Legal terms for how this framework may be used." accentColor={accentColor} defaultOpen>
                 <div className="space-y-3">
                   <select
                     id="node-license"
