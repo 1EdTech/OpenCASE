@@ -205,7 +205,7 @@ describe('ListFrameworks', () => {
       expect(result.frameworks).toHaveLength(2)
     })
 
-    it('should omit alignmentParticipants when includeOpenCaseExtensions is not set', async () => {
+    it('should not surface alignmentParticipants as a flat top-level field', async () => {
       const docs: DocumentMetadata[] = [
         {
           sourcedId: 'doc-1',
@@ -225,7 +225,7 @@ describe('ListFrameworks', () => {
       expect(result.frameworks[0]).not.toHaveProperty('alignmentParticipants')
     })
 
-    it('should include alignmentParticipants when includeOpenCaseExtensions is true', async () => {
+    it('should nest alignmentParticipants under extensions.ext:opencase when present', async () => {
       const participants = [{ identifier: 'participant-1', uri: '/ims/case/v1p1/CFDocuments/participant-1' }]
       const docs: DocumentMetadata[] = [
         {
@@ -241,9 +241,30 @@ describe('ListFrameworks', () => {
         .mockReturnValueOnce([]) // For 1.0
         .mockReturnValueOnce(docs) // For 1.1
 
-      const result = await listFrameworks.execute({ tenantId, includeOpenCaseExtensions: true })
+      const result = await listFrameworks.execute({ tenantId })
 
-      expect(result.frameworks[0].alignmentParticipants).toEqual(participants)
+      expect(result.frameworks[0].extensions).toEqual({
+        'ext:opencase': { alignmentParticipants: participants }
+      })
+    })
+
+    it('should omit extensions entirely when there are no alignmentParticipants', async () => {
+      const docs: DocumentMetadata[] = [
+        {
+          sourcedId: 'doc-1',
+          title: 'Plain Framework',
+          lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
+          currentFile: 'frameworks/doc-1/doc-1_v0001.json'
+        }
+      ]
+
+      mockStore.getAllDocuments
+        .mockReturnValueOnce([]) // For 1.0
+        .mockReturnValueOnce(docs) // For 1.1
+
+      const result = await listFrameworks.execute({ tenantId })
+
+      expect(result.frameworks[0]).not.toHaveProperty('extensions')
     })
   })
 })

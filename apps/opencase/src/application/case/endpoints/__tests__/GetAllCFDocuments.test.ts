@@ -268,7 +268,7 @@ describe('GetAllCFDocuments', () => {
       expect(result.CFDocuments).toHaveLength(2)
     })
 
-    it('should omit sourcePackageURI and isModifiedFromSource when includeOpenCaseExtensions is not set', async () => {
+    it('should nest sourcePackageURI and isModifiedFromSource under extensions.ext:opencase for CASE 1.1', async () => {
       const documents = [
         {
           sourcedId: 'doc-1',
@@ -286,9 +286,15 @@ describe('GetAllCFDocuments', () => {
 
       expect(result.CFDocuments[0]).not.toHaveProperty('sourcePackageURI')
       expect(result.CFDocuments[0]).not.toHaveProperty('isModifiedFromSource')
+      expect(result.CFDocuments[0].extensions).toEqual({
+        'ext:opencase': {
+          sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
+          isModifiedFromSource: true
+        }
+      })
     })
 
-    it('should include sourcePackageURI and isModifiedFromSource when includeOpenCaseExtensions is true', async () => {
+    it('should omit the extensions block entirely for CASE 1.0', async () => {
       const documents = [
         {
           sourcedId: 'doc-1',
@@ -296,16 +302,15 @@ describe('GetAllCFDocuments', () => {
           lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
           currentFile: 'file1.json',
           sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
-          isModifiedFromSource: false
+          isModifiedFromSource: true
         }
       ]
 
       mockStore.getAllDocuments.mockImplementation((_: any, v: any) => (v === '1.0' ? documents as any : []))
 
-      const result = await getAllCFDocuments.execute({ tenantId, caseVersion, includeOpenCaseExtensions: true })
+      const result = await getAllCFDocuments.execute({ tenantId, caseVersion: '1.0' })
 
-      expect(result.CFDocuments[0].sourcePackageURI).toBe('https://standards.example.org/ims/case/v1p1/CFPackages/abc')
-      expect(result.CFDocuments[0].isModifiedFromSource).toBe(false)
+      expect(result.CFDocuments[0]).not.toHaveProperty('extensions')
     })
   })
 })
