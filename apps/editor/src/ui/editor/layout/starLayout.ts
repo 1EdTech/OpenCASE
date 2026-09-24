@@ -47,14 +47,20 @@ export function computeStarLayout(
 
   // ── Count leaves for proportional angular allocation ─────────────────
   const leafCount = new Map<string, number>()
+  const leafCountInProgress = new Set<string>() // cycle guard: malformed/cyclic hierarchical data
   const countLeaves = (id: string): number => {
+    if (leafCount.has(id)) return leafCount.get(id)!
+    if (leafCountInProgress.has(id)) return 1 // re-entrant call means a cycle — treat as a leaf and bail
+    leafCountInProgress.add(id)
     const kids = childrenOf.get(id) ?? []
     if (!kids.length) {
       leafCount.set(id, 1)
+      leafCountInProgress.delete(id)
       return 1
     }
     const count = kids.reduce((sum, kid) => sum + countLeaves(kid), 0)
     leafCount.set(id, count)
+    leafCountInProgress.delete(id)
     return count
   }
   for (const id of startNodeIds) countLeaves(id)
@@ -62,20 +68,28 @@ export function computeStarLayout(
 
   // ── Recursive tangential span ────────────────────────────────────────
   const tangentialSpan = new Map<string, number>()
+  const spanInProgress = new Set<string>() // cycle guard: malformed/cyclic hierarchical data
   const calcSpan = (id: string): number => {
     if (tangentialSpan.has(id)) return tangentialSpan.get(id)!
+    if (spanInProgress.has(id)) return DEFAULT_NODE_WIDTH // re-entrant call means a cycle — bail instead of recursing forever
+    spanInProgress.add(id)
     const n = nodeById.get(id)
-    if (!n) return DEFAULT_NODE_WIDTH
+    if (!n) {
+      spanInProgress.delete(id)
+      return DEFAULT_NODE_WIDTH
+    }
     const { w } = getNodeSize(n)
     const kids = childrenOf.get(id) ?? []
     if (!kids.length) {
       tangentialSpan.set(id, w)
+      spanInProgress.delete(id)
       return w
     }
     const kidsSpan =
       kids.reduce((sum, kid) => sum + calcSpan(kid), 0) + Math.max(0, kids.length - 1) * STAR_SIBLING_GAP
     const span = Math.max(w, kidsSpan)
     tangentialSpan.set(id, span)
+    spanInProgress.delete(id)
     return span
   }
   for (const id of startNodeIds) calcSpan(id)
@@ -139,6 +153,7 @@ export function computeStarLayout(
     let kidAngleOffset = sectorStart
 
     for (const kid of kids) {
+      if (positions[kid]) continue // already positioned — guards against cycles / multi-parent DAGs
       const kidNode = nodeById.get(kid)
       if (!kidNode) continue
       const kidSize = getNodeSize(kidNode)

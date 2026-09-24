@@ -42,7 +42,7 @@ describe('GetCFAssociationGrouping', () => {
       }
 
       mockStore.getDefinitionById.mockReturnValue({
-        docSourcedId: 'doc-123',
+        docStorageKey: 'doc-123',
         value: grouping
       } as any)
 

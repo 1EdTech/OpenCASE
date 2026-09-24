@@ -7,7 +7,7 @@ import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 import type { Framework } from '@/domain/framework/model/types'
 import { AuthProvider, useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
-import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
+import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
 import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage, extractRemoteFrameworkDataFromCfPackage, normalizeLinkedFrameworkColors } from '@/ui/editor/reactflow/mapping'
@@ -17,6 +17,13 @@ import type { CFAssociationGrouping, CFItemType, CFLicense, CFSubject, CFConcept
 import LoginScreen from '@/ui/auth/LoginScreen'
 import { detectTopology } from '@/ui/editor/layout/detectTopology'
 import { applyInitialLayout } from '@/ui/editor/layout/applyInitialLayout'
+
+/** Parse the `<id>` out of a `#/framework/<id>` hash, or null if the hash doesn't match. */
+function getFrameworkIdFromHash(): string | null {
+  const hash = globalThis.location?.hash ?? ''
+  const match = /^#\/framework\/([^/?]+)/.exec(hash)
+  return match ? decodeURIComponent(match[1]) : null
+}
 
 /** Extract CFDefinitions from a raw CFPackage response and merge into tenant state */
 function extractCfDefinitions(pkg: unknown): {
@@ -54,9 +61,11 @@ function AppInner() {
   const cfg = getAppConfig()
   const api = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })), [cfg.opencaseBaseUrl, getAccessToken])
 
-  const [screen, setScreen] = useState<'home' | 'editor'>('home')
+  // Seed from the URL hash so a hard refresh (or restoring from browser history) reopens
+  // the same framework instead of always landing on the home screen.
+  const [screen, setScreen] = useState<'home' | 'editor'>(() => (getFrameworkIdFromHash() ? 'editor' : 'home'))
   const [frameworks, setFrameworks] = useState<HomeFramework[]>(() => loadFrameworks())
-  const [activeFrameworkId, setActiveFrameworkId] = useState<string | null>(null)
+  const [activeFrameworkId, setActiveFrameworkId] = useState<string | null>(() => getFrameworkIdFromHash())
   
   // Store layouts extracted from CASE extensions (keyed by framework ID)
   const [frameworkLayouts, setFrameworkLayouts] = useState<Record<string, LayoutState>>({})
@@ -74,6 +83,9 @@ function AppInner() {
   // Track which framework IDs have been published to OpenCASE
   // (either loaded from the server or successfully saved)
   const [publishedFrameworkIds, setPublishedFrameworkIds] = useState<Set<string>>(new Set())
+
+  // Server-side framework list — populated from GET /ims/case/v1p1/CFDocuments on auth
+  const [serverCfDocuments, setServerCfDocuments] = useState<CfDocumentSummary[]>([])
 
   /** Merge CFDefinitions from a loaded CFPackage into the tenant state (additive, no overwrites) */
   const mergeCfDefinitions = useCallback((pkg: unknown) => {
@@ -128,8 +140,21 @@ function AppInner() {
   }, [])
   const [route, setRoute] = useState<'authCallback' | 'login' | 'app'>(() => getRoute())
 
+  // Keep screen/activeFrameworkId in sync with the URL on browser back/forward navigation.
+  // (pushState/replaceState calls we make ourselves don't fire `hashchange`, so this only
+  // reacts to real navigation — our own navigateToFramework/navigateHome set state directly.)
   useEffect(() => {
-    const onHashChange = () => setRoute(getRoute())
+    const onHashChange = () => {
+      setRoute(getRoute())
+      const id = getFrameworkIdFromHash()
+      if (id) {
+        setActiveFrameworkId(id)
+        setScreen('editor')
+      } else if (getRoute() === 'app') {
+        setScreen('home')
+        setActiveFrameworkId(null)
+      }
+    }
     globalThis.addEventListener('hashchange', onHashChange)
     return () => globalThis.removeEventListener('hashchange', onHashChange)
   }, [getRoute])
@@ -167,8 +192,12 @@ function AppInner() {
   }, [completeSignIn, getRoute])
 
   // Force unauthenticated users onto the login route.
+  // Skip while the initial session check is still in flight (authStatus starts as
+  // 'loading' on every mount) — otherwise a refresh or back-navigation gets bounced to
+  // login before the persisted session has had a chance to load.
   useEffect(() => {
     if (route === 'authCallback') return
+    if (authStatus === 'loading') return
     if (authStatus === 'authenticated') return
     if (globalThis.location?.hash?.startsWith('#/login')) return
     globalThis.history?.replaceState(null, '', '/#/login')
@@ -223,6 +252,19 @@ function AppInner() {
     return () => { cancelled = true }
   }, [authStatus, tenantId, api])
 
+  // Fetch server framework list so tree-view crosswalk selector can show all tenant frameworks.
+  useEffect(() => {
+    if (authStatus !== 'authenticated') return
+    let cancelled = false
+    api.listCfDocuments({ caseVersion: 'v1p1' }).then((docs) => {
+      if (cancelled) return
+      setServerCfDocuments(docs)
+    }).catch((err) => {
+      console.warn('[App] Failed to load server framework list:', err)
+    })
+    return () => { cancelled = true }
+  }, [authStatus, api])
+
   const activeFramework = useMemo(() => {
     if (!activeFrameworkId) return null
     return frameworks.find((f) => f.id === activeFrameworkId) ?? null
@@ -234,10 +276,40 @@ function AppInner() {
     [frameworks, publishedFrameworkIds],
   )
 
-  const openFramework = useCallback((id: string) => {
+  // Summaries of server frameworks passed to the crosswalk target selector (excludes alignment frameworks)
+  const serverFrameworkSummaries = useMemo(
+    () => serverCfDocuments
+      .filter((d) => d.frameworkType !== 'Alignment')
+      .map((d) => ({ id: d.identifier, title: d.title ?? d.identifier })),
+    [serverCfDocuments],
+  )
+
+  // Push/replace the `#/framework/<id>` route alongside the screen state change, so browser
+  // back/forward and refresh reflect which framework (if any) is open.
+  const navigateToFramework = useCallback((id: string, opts?: { replace?: boolean }) => {
+    const url = `/#/framework/${encodeURIComponent(id)}`
+    if (opts?.replace) {
+      globalThis.history?.replaceState(null, '', url)
+    } else {
+      globalThis.history?.pushState(null, '', url)
+    }
     setActiveFrameworkId(id)
     setScreen('editor')
   }, [])
+
+  const navigateHome = useCallback((opts?: { replace?: boolean }) => {
+    if (opts?.replace) {
+      globalThis.history?.replaceState(null, '', '/#/')
+    } else {
+      globalThis.history?.pushState(null, '', '/#/')
+    }
+    setActiveFrameworkId(null)
+    setScreen('home')
+  }, [])
+
+  const openFramework = useCallback((id: string) => {
+    navigateToFramework(id)
+  }, [navigateToFramework])
 
   const deleteDraft = useCallback((id: string) => {
     setFrameworks((prev) => {
@@ -247,10 +319,9 @@ function AppInner() {
     })
     // If we're deleting the active framework, go back to home
     if (activeFrameworkId === id) {
-      setActiveFrameworkId(null)
-      setScreen('home')
+      navigateHome({ replace: true })
     }
-  }, [activeFrameworkId])
+  }, [activeFrameworkId, navigateHome])
 
   /** Remove a framework from localStorage (used after archive or hard delete) */
   const removeFrameworkFromStorage = useCallback((docId: string) => {
@@ -265,10 +336,9 @@ function AppInner() {
       return next
     })
     if (activeFrameworkId === docId) {
-      setActiveFrameworkId(null)
-      setScreen('home')
+      navigateHome({ replace: true })
     }
-  }, [activeFrameworkId])
+  }, [activeFrameworkId, navigateHome])
 
   const createNew = useCallback((draft: CreateFrameworkDraft) => {
     const fw = createNewFrameworkDraft(draft)
@@ -277,9 +347,8 @@ function AppInner() {
       saveFrameworks(next)
       return next
     })
-    setActiveFrameworkId(fw.id)
-    setScreen('editor')
-  }, [])
+    navigateToFramework(fw.id)
+  }, [navigateToFramework])
 
   /** Create a HomeFramework from a pre-populated domain Framework (e.g. from spreadsheet upload). */
   const createFromFramework = useCallback((framework: Framework) => {
@@ -289,12 +358,11 @@ function AppInner() {
       saveFrameworks(next)
       return next
     })
-    setActiveFrameworkId(fw.id)
-    setScreen('editor')
-  }, [])
+    navigateToFramework(fw.id)
+  }, [navigateToFramework])
 
   const openRemoteFramework = useCallback(
-    async (docId: string) => {
+    async (docId: string, opts?: { replace?: boolean }) => {
       setRemoteOpenState('loading')
       try {
         // Fetch the CASE package from the API
@@ -314,8 +382,18 @@ function AppInner() {
           throw new Error('Failed to load framework from CASE package')
         }
 
+        // Extract mirror/fork status from the CFDocument's ext:opencase
+        // extension (always present in this response — the editor's HTTP
+        // client sends X-CASE-EDITOR, which asks the backend to include it).
+        const opencaseExt = (pkg.CFDocument?.extensions as Record<string, unknown> | undefined)?.['ext:opencase'] as
+          | { isModifiedFromSource?: boolean; sourcePackageURI?: string }
+          | undefined
+        const mirrorStatus = opencaseExt?.isModifiedFromSource !== undefined
+          ? { isModifiedFromSource: opencaseExt.isModifiedFromSource, sourcePackageURI: opencaseExt.sourcePackageURI }
+          : undefined
+
         // Create a HomeFramework entry from the domain Framework
-        const fw = createHomeFrameworkFromDomain(framework)
+        const fw = createHomeFrameworkFromDomain(framework, mirrorStatus)
         if (pkg.CFDocument?.extensions) {
           fw.cfDocument = { ...fw.cfDocument, extensions: pkg.CFDocument.extensions }
         }
@@ -349,11 +427,50 @@ function AppInner() {
         // Mark as published since it was loaded from OpenCASE
         setPublishedFrameworkIds((prev) => new Set(prev).add(fw.id))
 
-        setActiveFrameworkId(fw.id)
-        setScreen('editor')
+        navigateToFramework(fw.id, opts)
       } finally {
         setRemoteOpenState('idle')
       }
+    },
+    [api, mergeCfDefinitions, navigateToFramework],
+  )
+
+  // If the URL points at a framework that isn't in the local cache yet (e.g. a hard refresh,
+  // or a deep link to a framework never opened on this device), fetch it from the server.
+  // Falls back to home if it can't be loaded (deleted, no access, etc.).
+  useEffect(() => {
+    if (!activeFrameworkId) return
+    if (authStatus !== 'authenticated') return
+    if (frameworks.some((f) => f.id === activeFrameworkId)) return
+    let cancelled = false
+    openRemoteFramework(activeFrameworkId, { replace: true }).catch((err: unknown) => {
+      if (cancelled) return
+      console.warn('[App] Failed to restore framework from URL:', err)
+      navigateHome({ replace: true })
+    })
+    return () => { cancelled = true }
+  }, [activeFrameworkId, authStatus, frameworks, openRemoteFramework, navigateHome])
+
+  // Load a framework from the server into the local session without navigating to it.
+  // Used by TreePanelView when the user selects a crosswalk target that isn't loaded locally yet.
+  const handleLoadTargetFramework = useCallback(
+    async (docId: string) => {
+      const pkg = await api.getCfPackage({ docId, caseVersion: 'v1p1' })
+      mergeCfDefinitions(pkg)
+      const layout = extractLayoutFromCfPackage(pkg)
+      const editorSettings = extractEditorSettingsFromCfPackage(pkg)
+      const framework = loadFrameworkFromCfPackage(pkg)
+      if (!framework) throw new Error('Failed to load framework from CASE package')
+      const fw = createHomeFrameworkFromDomain(framework)
+      if (layout) setFrameworkLayouts((prev) => ({ ...prev, [fw.id]: layout }))
+      if (editorSettings?.edgeType) setFrameworkEdgeTypes((prev) => ({ ...prev, [fw.id]: editorSettings.edgeType! }))
+      setFrameworks((prev) => {
+        if (prev.some((f) => f.id === fw.id)) return prev
+        const next = [...prev, fw]
+        saveFrameworks(next)
+        return next
+      })
+      setPublishedFrameworkIds((prev) => new Set(prev).add(fw.id))
     },
     [api, mergeCfDefinitions],
   )
@@ -426,27 +543,159 @@ function AppInner() {
   // Handler to save the CFPackage to the server
   // Must be defined before early returns (React hooks rules)
   const handleSaveToServer = useCallback(
-    async (openCasePackage: unknown) => {
+    async (openCasePackage: unknown, framework: Framework) => {
       if (!tenantId) {
         throw new Error('Not signed in to a tenant. Please sign in to save.')
       }
-      
+
       console.log('[App] Saving to server:', { tenantId, caseApiVersion })
-      
-      await api.saveCfPackage({
+
+      const result = await api.saveCfPackage({
         tenantId,
         cfPackage: openCasePackage,
         caseVersion: caseApiVersion,
       })
-      
+
       // Mark this framework as published to OpenCASE
       if (activeFrameworkId) {
         setPublishedFrameworkIds((prev) => new Set(prev).add(activeFrameworkId))
       }
-      
+
+      // A fork mints new identifiers server-side for the document AND every
+      // item/association in it — not just the document. Patching the local
+      // session by hand would mean re-deriving that whole remap ourselves and
+      // risk resubmitting stale, already-freed identifiers on the next save.
+      // Instead, treat this exactly like opening a freshly-saved framework:
+      // re-fetch the authoritative post-fork state from the server (reusing
+      // the same path a normal "open" uses), then drop the superseded
+      // pre-fork local record.
+      if (activeFrameworkId && result.docId && result.docId !== activeFrameworkId) {
+        const oldId = activeFrameworkId
+        await openRemoteFramework(result.docId, { replace: true })
+        setFrameworks((prev) => {
+          const next = prev.filter((f) => f.id !== oldId)
+          saveFrameworks(next)
+          return next
+        })
+        setPublishedFrameworkIds((prev) => {
+          const next = new Set(prev)
+          next.delete(oldId)
+          return next
+        })
+        setFrameworkLayouts((prev) => {
+          const { [oldId]: _dropped, ...rest } = prev
+          return rest
+        })
+        setFrameworkEdgeTypes((prev) => {
+          const { [oldId]: _dropped, ...rest } = prev
+          return rest
+        })
+      } else if (activeFrameworkId) {
+        // Refresh the local cache with the just-saved Framework (items, associations,
+        // metadata) so a hard refresh reflects the server state instead of the
+        // pre-save snapshot. Without this, edits made and saved in this session
+        // (e.g. a newly added item) would vanish on F5 until the framework was
+        // reopened from the Home screen, which always re-fetches from the server.
+        setFrameworks((prev) => {
+          const existingIdx = prev.findIndex((f) => f.id === activeFrameworkId)
+          if (existingIdx < 0) return prev
+          const mirrorStatus = result.isModifiedFromSource !== undefined
+            ? { isModifiedFromSource: result.isModifiedFromSource, sourcePackageURI: result.sourcePackageURI }
+            : prev[existingIdx].mirrorStatus
+          const next = [...prev]
+          next[existingIdx] = createHomeFrameworkFromDomain(framework, mirrorStatus)
+          saveFrameworks(next)
+          return next
+        })
+      }
+
       console.log('[App] Saved successfully')
     },
-    [api, tenantId, caseApiVersion, activeFrameworkId],
+    [api, tenantId, caseApiVersion, activeFrameworkId, openRemoteFramework],
+  )
+
+  const handleSaveAlignments = useCallback(
+    async (cfPackage: unknown) => {
+      if (!tenantId) throw new Error('Not signed in to a tenant. Please sign in to save.')
+      const pkg = cfPackage as { CFAssociations?: unknown[]; CFDocument?: { identifier?: string } }
+      const docId = pkg.CFDocument?.identifier
+      if (!pkg.CFAssociations?.length && docId) {
+        // No associations remain — delete the alignment doc so it won't resurface on reload.
+        // If the doc never existed on the server (new target, never saved) the 404 is harmless.
+        try {
+          await api.deleteCfPackage({ tenantId, docId, hardDelete: true })
+        } catch {
+          // ignore — doc may not exist on the server yet
+        }
+      } else {
+        await api.saveCfPackage({ tenantId, cfPackage, caseVersion: caseApiVersion })
+      }
+    },
+    [api, tenantId, caseApiVersion],
+  )
+
+  const handleDiscoverAlignedTargets = useCallback(
+    async (sourceId: string): Promise<Array<{ targetId: string; alignmentDocId: string }>> => {
+      if (!tenantId) return []
+      try {
+        const alignmentDocs = await api.listAlignmentFrameworks({ tenantId, participantId: sourceId })
+        return alignmentDocs.flatMap((doc) => {
+          const participants = doc.alignmentParticipants ?? []
+          const other = participants.find((p) => p.identifier !== sourceId)
+          // No distinct "other" participant means this is a self (intra-framework) alignment doc.
+          const targetIdentifier = other?.identifier ?? (participants.some((p) => p.identifier === sourceId) ? sourceId : undefined)
+          if (!targetIdentifier) return []
+          return [{ targetId: targetIdentifier, alignmentDocId: doc.sourcedId }]
+        })
+      } catch (err) {
+        console.warn('[App] Failed to discover aligned targets:', err)
+        return []
+      }
+    },
+    [api, tenantId],
+  )
+
+  const handleLoadAlignmentsForTarget = useCallback(
+    async (targetId: string): Promise<{
+      docId: string
+      associations: Array<{ id: string; fromItemId: string; toItemId: string; toFrameworkId: string; associationType: string; originUri: string; destinationUri: string }>
+    }> => {
+      const newDocId = () => globalThis.crypto?.randomUUID?.() ?? `align-${Date.now()}`
+      if (!tenantId || !activeFrameworkId) return { docId: newDocId(), associations: [] }
+      try {
+        const alignmentDocs = await api.listAlignmentFrameworks({ tenantId, participantId: activeFrameworkId })
+        // Every doc here already has activeFrameworkId as a participant (that's the query filter), so
+        // for a self-alignment (targetId === activeFrameworkId) matching "any participant === targetId"
+        // would match the first cross-framework doc too — instead require ALL participants to be self.
+        const matchingDoc = alignmentDocs.find((doc) => {
+          const participants = doc.alignmentParticipants ?? []
+          if (targetId === activeFrameworkId) {
+            return participants.length > 0 && participants.every((p) => p.identifier === activeFrameworkId)
+          }
+          return participants.some((p) => p.identifier === targetId)
+        })
+        if (!matchingDoc) return { docId: newDocId(), associations: [] }
+
+        const pkg = await api.getCfPackage({ docId: matchingDoc.sourcedId, caseVersion: 'v1p1' })
+        const cfAssociations = pkg.CFAssociations ?? []
+        const associations = cfAssociations
+          .map((a) => ({
+            id: a.identifier,
+            fromItemId: a.originNodeURI?.identifier ?? '',
+            toItemId: a.destinationNodeURI?.identifier ?? '',
+            toFrameworkId: targetId,
+            associationType: a.associationType ?? 'isRelatedTo',
+            originUri: a.originNodeURI?.uri ?? '',
+            destinationUri: a.destinationNodeURI?.uri ?? '',
+          }))
+          .filter((a) => a.fromItemId && a.toItemId)
+        return { docId: matchingDoc.sourcedId, associations }
+      } catch (err) {
+        console.warn('[App] Failed to load alignment associations:', err)
+        return { docId: newDocId(), associations: [] }
+      }
+    },
+    [api, tenantId, activeFrameworkId],
   )
 
   if (authCallbackState === 'processing') {
@@ -515,13 +764,18 @@ function AppInner() {
       initialCfAssociationGroupings={tenantCfAssociationGroupings}
     >
       <EditorCanvas
-        onBack={() => {
-          setScreen('home')
-        }}
+        onBack={() => navigateHome()}
         onSaveToServer={tenantId ? handleSaveToServer : undefined}
         isPublishedToOpenCase={activeFrameworkId ? publishedFrameworkIds.has(activeFrameworkId) : false}
         onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
         onFetchCfPackage={activeFrameworkId ? handleFetchCfPackage : undefined}
+        availableFrameworks={frameworks}
+        serverFrameworks={serverFrameworkSummaries}
+        onLoadTargetFramework={handleLoadTargetFramework}
+        onSaveAlignments={tenantId ? handleSaveAlignments : undefined}
+        onLoadAlignmentsForTarget={tenantId ? handleLoadAlignmentsForTarget : undefined}
+        onDiscoverAlignedTargets={tenantId ? handleDiscoverAlignedTargets : undefined}
+        mirrorStatus={activeFramework.mirrorStatus}
       />
     </EditorProvider>
   )

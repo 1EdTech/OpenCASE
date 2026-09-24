@@ -29,7 +29,7 @@ export class CFDocumentsControllerV1p0 {
       }
 
       // Access control: unauthenticated requests only see public frameworks
-      if (!(req as any).isAuthenticated && !this.store.isDocumentPublic(resolved.tenantId, resolved.version, sourcedId)) {
+      if (!(req as any).isAuthenticated && !this.store.isDocumentPublic(resolved.tenantId, resolved.version, resolved.storageKey)) {
         return res.status(401).json(StatusInfoFormatter.unauthorized('Authentication required to access this framework.'))
       }
 

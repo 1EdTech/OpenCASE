@@ -155,7 +155,7 @@ export function TagComboboxInput({
   }
 
   return (
-    <div ref={wrapperRef} className={cn('', className)}>
+    <div ref={wrapperRef} className={cn('relative', className)}>
       {/* Tags + input area */}
       <div
         className="flex min-h-[36px] flex-wrap items-center gap-1 rounded-md border border-input bg-background px-2 py-1 shadow-xs transition-colors focus-within:ring-[3px] focus-within:ring-ring/50"
@@ -254,7 +254,7 @@ export function TagComboboxInput({
           ref={listboxRef}
           id={listboxId}
           role="listbox"
-          className="mt-1 max-h-[280px] w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-sm"
+          className="absolute z-50 mt-1 max-h-[280px] w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-sm"
         >
           {filtered.map((opt, idx) => {
             const highlighted = idx === highlightIdx

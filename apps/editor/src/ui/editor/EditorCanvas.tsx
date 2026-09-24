@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import type { ReactFlowInstance, Connection, Edge, NodeChange, EdgeChange } from '@xyflow/react'
 import type { OnBeforeDelete } from '@xyflow/react'
 import type { OnSelectionChangeFunc } from '@xyflow/react'
@@ -18,6 +18,7 @@ import CgeFrameworkSearchPanel from '@/ui/editor/components/CgeFrameworkSearchPa
 import RemoteFrameworkItemsPanel from '@/ui/editor/components/RemoteFrameworkItemsPanel'
 import AssociationTypePickerDialog from '@/ui/editor/components/AssociationTypePickerDialog'
 import ViewCFPackageDialog from '@/ui/editor/components/ViewCFPackageDialog'
+import TreePanelView from '@/ui/editor/treePanel/TreePanelView'
 import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient, formatApiErrorMessage } from '@/infrastructure/caseApi/http'
 import { getAppConfig } from '@/app/config'
@@ -28,21 +29,190 @@ import {
   remoteLinkIdFromEdgeId,
 } from '@/ui/editor/remoteFramework/buildRemoteLinkGraph'
 import { useEditor } from '@/ui/editor/state/EditorContext'
+import { isFrameworkNode, getNodeSize } from '@/ui/editor/state/helpers/nodeGeometry'
 import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/types'
 import type { CFDocument, CFItem, CFPackage } from '@/domain/case/types'
+import type { HomeFramework } from '@/ui/home/frameworkStore'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
 import { absolutizeCaseUris, frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
+import type { Framework } from '@/domain/framework/model/types'
+import { hasFrameworkDataChanged } from '@/domain/framework/hasFrameworkDataChanged'
+
+// ── Stable ReactFlow config (module scope — never recreated) ──────────────
+//
+// A fresh object/array/function literal passed as a prop to <ReactFlow> on
+// every EditorCanvas render defeats any attempt to keep it from doing work
+// while hidden behind Tree View: CPU profiling showed React Flow's internal
+// store (setState/shallow-equality selectors) re-syncing on every keystroke
+// even when node/edge DATA was unchanged, because other props (these) were
+// still fresh references each render.
+const REACT_FLOW_DEFAULT_EDGE_OPTIONS = {
+  interactionWidth: 20,
+  style: { strokeWidth: 1.5, stroke: '#94a3b8' },
+  focusable: true,
+  reconnectable: true,
+}
+const REACT_FLOW_PRO_OPTIONS = { hideAttribution: true }
+const REACT_FLOW_BACKGROUND_STYLE = { backgroundColor: '#f0f0f2' }
+const minimapNodeColor = (node: CaseEditorNodeType) => (node.selected ? '#8b5cf6' : '#e2e8f0') // violet-500 if selected, slate-200 otherwise
+const minimapNodeStrokeColor = (node: CaseEditorNodeType) => (node.selected ? '#7c3aed' : '#cbd5e1') // violet-600 if selected, slate-300 otherwise
+
+type ReactFlowGraphProps = {
+  wrapRef: React.RefObject<HTMLDivElement | null>
+  visible: boolean
+  nodes: CaseEditorNodeType[]
+  edges: CaseEditorEdge[]
+  /** Cross-framework links — drive handle-position resyncs via RemoteLinkInternalsSync */
+  remoteLinks: RemoteItemLink[]
+  onNodesChange: (changes: NodeChange<CaseEditorNodeType>[]) => void
+  onEdgesChange: (changes: EdgeChange[]) => void
+  onConnect: (connection: Connection) => void
+  onNodeClick: (event: ReactMouseEvent, node: CaseEditorNodeType) => void
+  onNodeDoubleClick: (event: ReactMouseEvent, node: CaseEditorNodeType) => void
+  onNodeDragStart: (event: ReactMouseEvent, node: CaseEditorNodeType) => void
+  onNodeDragStop: () => void
+  onEdgeClick: (event: ReactMouseEvent, edge: Edge) => void
+  onPaneClick: (event: ReactMouseEvent) => void
+  isValidConnection: (connection: Connection) => boolean
+  onSelectionChange: OnSelectionChangeFunc<CaseEditorNodeType>
+  onBeforeDelete: OnBeforeDelete<CaseEditorNodeType>
+  nodesDraggable: boolean
+  onReconnectStart: () => void
+  onReconnect: (oldEdge: Edge, newConnection: Connection) => void
+  onReconnectEnd: (_: unknown, edge: Edge) => void
+  onInit: (instance: ReactFlowInstance<CaseEditorNodeType>) => void
+  onPointerDownCapture: (event: ReactPointerEvent<HTMLDivElement>) => void
+  onDragOver: (event: React.DragEvent) => void
+  onDrop: (event: React.DragEvent) => void
+}
+
+/**
+ * Isolated in its own `React.memo`'d component (rather than inline JSX in
+ * EditorCanvas) so that when every prop here is referentially stable —
+ * which is the case while Tree View is active, since `nodes`/`edges` are
+ * frozen and every handler is `useCallback`'d — React skips calling this
+ * component's render function entirely, instead of merely receiving
+ * unchanged props. That's what actually stops React Flow's internal effects
+ * from re-running on every keystroke while the canvas is invisible.
+ */
+const ReactFlowGraph = memo(function ReactFlowGraph({
+  wrapRef,
+  visible,
+  nodes,
+  edges,
+  remoteLinks,
+  onNodesChange,
+  onEdgesChange,
+  onConnect,
+  onNodeClick,
+  onNodeDoubleClick,
+  onNodeDragStart,
+  onNodeDragStop,
+  onEdgeClick,
+  onPaneClick,
+  isValidConnection,
+  onSelectionChange,
+  onBeforeDelete,
+  nodesDraggable,
+  onReconnectStart,
+  onReconnect,
+  onReconnectEnd,
+  onInit,
+  onPointerDownCapture,
+  onDragOver,
+  onDrop,
+}: ReactFlowGraphProps) {
+  return (
+    <div
+      ref={wrapRef}
+      className={visible ? 'h-full w-full' : 'hidden'}
+      onPointerDownCapture={onPointerDownCapture}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <ReactFlow<CaseEditorNodeType>
+        nodes={nodes}
+        edges={edges}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDragStop={onNodeDragStop}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={onPaneClick}
+        isValidConnection={isValidConnection}
+        onSelectionChange={onSelectionChange}
+        onBeforeDelete={onBeforeDelete}
+        selectionMode={SelectionMode.Full}
+        multiSelectionKeyCode="Meta"
+        selectionOnDrag={false}
+        selectionKeyCode="Shift"
+        panOnDrag
+        nodesDraggable={nodesDraggable}
+        nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        edgesFocusable
+        elevateEdgesOnSelect
+        edgesReconnectable
+        onReconnectStart={onReconnectStart}
+        onReconnect={onReconnect}
+        onReconnectEnd={onReconnectEnd}
+        connectOnClick={true}
+        connectionMode={ConnectionMode.Loose}
+        onlyRenderVisibleElements
+        defaultEdgeOptions={REACT_FLOW_DEFAULT_EDGE_OPTIONS}
+        proOptions={REACT_FLOW_PRO_OPTIONS}
+        onInit={onInit}
+      >
+        <RemoteLinkInternalsSync remoteLinks={remoteLinks} nodes={nodes} />
+        <Background color="#c8c8ca" gap={20} size={1.5} variant={BackgroundVariant.Dots} style={REACT_FLOW_BACKGROUND_STYLE} />
+        <Controls />
+        <MiniMap
+          position="bottom-left"
+          className="!bottom-1 !left-12"
+          pannable
+          zoomable
+          nodeStrokeWidth={2}
+          nodeColor={minimapNodeColor}
+          nodeStrokeColor={minimapNodeStrokeColor}
+          maskColor="rgba(240, 240, 245, 0.7)"
+        />
+      </ReactFlow>
+    </div>
+  )
+})
+
+type MirrorStatus = { isModifiedFromSource?: boolean; sourcePackageURI?: string }
 
 type EditorCanvasProps = {
   onBack?: () => void
-  onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>) => Promise<void>
+  onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework) => Promise<void>
   /** Whether the current framework has been published to OpenCASE (loaded from or saved to server) */
   isPublishedToOpenCase?: boolean
   /** Archive the current framework on the server and navigate home */
   onArchiveFramework?: () => Promise<void>
   /** Fetch the published CFPackage from the server (returns CASE JSON with absolute URIs) */
   onFetchCfPackage?: () => Promise<CFPackage>
+  /** All locally-available frameworks — used to populate the crosswalk target selector in tree view */
+  availableFrameworks?: HomeFramework[]
+  /** Server-side framework summaries not yet loaded locally — shown in crosswalk target selector for auto-load */
+  serverFrameworks?: Array<{ id: string; title: string }>
+  /** Load a framework from the server into the local session (called when a server-only crosswalk target is selected) */
+  onLoadTargetFramework?: (id: string) => Promise<void>
+  /** Save a serialized alignment CFPackage to the server */
+  onSaveAlignments?: (cfPackage: unknown) => Promise<void>
+  /** Load existing alignment associations for a target framework pairing */
+  onLoadAlignmentsForTarget?: (targetId: string) => Promise<{
+    docId: string
+    associations: Array<{ id: string; fromItemId: string; toItemId: string; toFrameworkId: string; associationType: string; originUri: string; destinationUri: string }>
+  }>
+  /** Discover all frameworks that already have saved alignment docs with the given source framework */
+  onDiscoverAlignedTargets?: (sourceId: string) => Promise<Array<{ targetId: string; alignmentDocId: string }>>
+  /** Mirror/fork status of the open framework, if it was ever imported */
+  mirrorStatus?: MirrorStatus
 }
 
 function RemoteLinkInternalsSync({
@@ -74,7 +244,7 @@ function RemoteLinkInternalsSync({
   return null
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onFetchCfPackage }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -145,6 +315,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const reactFlowRef = useRef<ReactFlowInstance<CaseEditorNodeType> | null>(null)
   const [rfReady, setRfReady] = useState(false)
   const didInitialViewportRef = useRef(false)
+  const prevLayoutVersionRef = useRef<number | null>(null)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [pendingRemoteDrop, setPendingRemoteDrop] = useState<{ localItemId: string; payload: ReturnType<typeof parseRemoteItemDragPayload> } | null>(null)
@@ -166,9 +337,23 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     [editorEdges, remoteLinkEdges],
   )
 
+  const [activeView, setActiveView] = useState<'canvas' | 'tree'>('tree')
+  const [forkWarningOpen, setForkWarningOpen] = useState(false)
+
+  // Baseline Framework snapshot for fork-detection — captured once when this
+  // session's graph first loads, and refreshed after every successful save.
+  // Only ever needs to change mid-session for a fork itself, and once forked
+  // mirrorStatus.isModifiedFromSource flips true, permanently disabling the
+  // gate below — so a single per-mount baseline is sufficient.
+  const baselineFrameworkRef = useRef<Framework | null>(null)
+  if (baselineFrameworkRef.current === null) {
+    baselineFrameworkRef.current = fromEditorGraph({ graph: { nodes, edges: editorEdges } }).framework
+  }
+  const pendingSaveRef = useRef<{ openCasePackage: ReturnType<typeof toOpenCaseFormat>; framework: Framework } | null>(null)
+
   // Available licenses from context (loaded via App.tsx definitions pipeline)
   const availableLicenses = cfLicenses
-  
+
   // Track Shift key for selection cursor styling only (DOM class, no React state).
   const shiftHeldRef = useRef(false)
   const [shiftHeldForInteractions, setShiftHeldForInteractions] = useState(false)
@@ -230,7 +415,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       const ctx = saveCtxRef.current
       const { framework, layout, remoteEditorData } = fromEditorGraph({ graph: { nodes: n, edges: e, remoteLinks: rl } })
       const cfPackage = frameworkToCfPackage({
-        framework, layout, incrementVersion: false,
+        framework, layout,
         caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
         cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
         cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
@@ -242,13 +427,42 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     }
   }, [isPublishedToOpenCase, onFetchCfPackage])
 
-  // Save: Generate CFPackage with version increment and POST to server
+  // Actually perform the save (network call). Split out from `handleSave` so
+  // the fork-warning dialog can defer this until the user confirms.
+  const doSave = useCallback(async (openCasePackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework) => {
+    if (onSaveToServer) {
+      setSaveStatus('saving')
+      setSaveError(null)
+      try {
+        await onSaveToServer(openCasePackage, framework)
+        baselineFrameworkRef.current = framework
+        setSaveStatus('success')
+        clearDirty()
+        setTimeout(() => setSaveStatus('idle'), 2000)
+      } catch (err) {
+        console.error('[Save] Failed to save to server:', err)
+        setSaveStatus('error')
+        setSaveError(err instanceof Error ? err.message : 'Failed to save')
+        // Don't open the CFPackage viewer here — it has nothing to show for a
+        // failed save and previously opened with stale/empty content, which
+        // just displayed a misleading "No CFPackage data" placeholder instead
+        // of the real error (shown via saveError, next to the Save button).
+      }
+    } else {
+      setCfPackageDialogOpen(true)
+    }
+  }, [onSaveToServer, clearDirty])
+
+  // Save: Generate CFPackage and POST to server — unless this framework is
+  // still a pristine mirror and the pending edits touch actual framework
+  // data (not just canvas layout), in which case warn first: saving will
+  // fork it into an independent local copy.
   const handleSave = useCallback(async () => {
     const { nodes: n, edges: e, remoteLinks: rl } = graphRef.current
     const ctx = saveCtxRef.current
     const { framework, layout, remoteEditorData } = fromEditorGraph({ graph: { nodes: n, edges: e, remoteLinks: rl } })
     const cfPackage = frameworkToCfPackage({
-      framework, layout, incrementVersion: true,
+      framework, layout,
       caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
       cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
       cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
@@ -257,24 +471,18 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     const openCasePackage = toOpenCaseFormat(cfPackage)
     console.log('[Save] Generated OpenCASE package:', openCasePackage)
 
-    if (onSaveToServer) {
-      setSaveStatus('saving')
-      setSaveError(null)
-      try {
-        await onSaveToServer(openCasePackage)
-        setSaveStatus('success')
-        clearDirty()
-        setTimeout(() => setSaveStatus('idle'), 2000)
-      } catch (err) {
-        console.error('[Save] Failed to save to server:', err)
-        setSaveStatus('error')
-        setSaveError(err instanceof Error ? err.message : 'Failed to save')
-        setCfPackageDialogOpen(true)
-      }
-    } else {
-      setCfPackageDialogOpen(true)
+    const willFork = mirrorStatus?.isModifiedFromSource === false &&
+      baselineFrameworkRef.current !== null &&
+      hasFrameworkDataChanged(baselineFrameworkRef.current, framework)
+
+    if (willFork) {
+      pendingSaveRef.current = { openCasePackage, framework }
+      setForkWarningOpen(true)
+      return
     }
-  }, [onSaveToServer, clearDirty])
+
+    await doSave(openCasePackage, framework)
+  }, [mirrorStatus, doSave])
 
   // Compute in-use groupings from actual edges (for filter dropdown)
   const inUseGroupings = useMemo(() => {
@@ -403,7 +611,32 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     edgesCacheRef.current = next
     return result
   }, [allEditorEdges, settings.edgeType, effectiveGroupingFilter])
-  
+
+  // React Flow stays MOUNTED (just CSS-hidden) while Tree View is active, so
+  // that pan/zoom/selection state survives switching views. But feeding it a
+  // fresh `nodes`/`edges` array reference on every keystroke — even while
+  // invisible — makes it redo internal store diffing across the whole graph
+  // for nothing (confirmed via CPU profile: React Flow's internal selectors/
+  // shallow-equality checks dominate keystroke cost at ~7,500 nodes). Freeze
+  // the props actually delivered to <ReactFlow> while hidden, and only catch
+  // up to the latest data the moment the canvas becomes visible again.
+  const frozenCanvasGraphRef = useRef<{ nodes: CaseEditorNodeType[]; edges: CaseEditorEdge[] }>({
+    nodes: nodesWithCallbacks,
+    edges: edgesWithType,
+  })
+  if (activeView !== 'tree') {
+    frozenCanvasGraphRef.current = { nodes: nodesWithCallbacks, edges: edgesWithType }
+  }
+  const canvasNodes = activeView === 'tree' ? frozenCanvasGraphRef.current.nodes : nodesWithCallbacks
+  const canvasEdges = activeView === 'tree' ? frozenCanvasGraphRef.current.edges : edgesWithType
+
+  // Stable identity (see comment above) — an inline arrow function here would
+  // itself defeat the freeze the same way defaultEdgeOptions/proOptions did.
+  const onReactFlowInit = useCallback((instance: ReactFlowInstance<CaseEditorNodeType>) => {
+    reactFlowRef.current = instance
+    setRfReady(true)
+  }, [])
+
   // Validate connections - prevent framework-to-framework connections
   const nodesWithCallbacksRef = useRef(nodesWithCallbacks)
   nodesWithCallbacksRef.current = nodesWithCallbacks
@@ -411,35 +644,35 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const isValidConnection = useCallback((connection: Connection) => {
     const sourceNode = nodesWithCallbacksRef.current.find((n) => n.id === connection.source)
     const targetNode = nodesWithCallbacksRef.current.find((n) => n.id === connection.target)
-    
-    const isSourceFramework = 
-      sourceNode?.type === 'caseFrameworkNode' || 
+
+    const isSourceFramework =
+      sourceNode?.type === 'caseFrameworkNode' ||
       sourceNode?.type === 'externalFrameworkNode'
-    const isTargetFramework = 
-      targetNode?.type === 'caseFrameworkNode' || 
+    const isTargetFramework =
+      targetNode?.type === 'caseFrameworkNode' ||
       targetNode?.type === 'externalFrameworkNode'
-    
+
     if (isSourceFramework && isTargetFramework) {
       return false
     }
-    
+
     return true
   }, [])
-  
+
   // Handle edge reconnection - when user drags an edge endpoint to a new handle/node
   const onReconnectStart = useCallback(() => {
     edgeReconnectSuccessful.current = false
   }, [])
-  
+
   const onReconnect = useCallback((oldEdge: Edge, newConnection: Connection) => {
     edgeReconnectSuccessful.current = true
-    
+
     // Use our dedicated reconnect action to update the edge in place
     const newSource = newConnection.source ?? oldEdge.source
     const newTarget = newConnection.target ?? oldEdge.target
     const newSourceHandle = newConnection.sourceHandle ?? undefined
     const newTargetHandle = newConnection.targetHandle ?? undefined
-    
+
     reconnectEdgeAction(
       oldEdge.id,
       newSource,
@@ -448,7 +681,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       newTargetHandle
     )
   }, [reconnectEdgeAction])
-  
+
   const onReconnectEnd = useCallback((_: unknown, _edge: Edge) => {
     // If reconnection wasn't successful (dropped in empty space), optionally remove the edge
     // For now, we'll keep the edge if reconnection fails (user just cancels)
@@ -649,7 +882,10 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
           const flowX = (pointer.clientX - rect.left - viewport.x) / viewport.zoom
           const flowY = (pointer.clientY - rect.top - viewport.y) / viewport.zoom
           const hitSelectedNodeId = selectedNodeIds.find((id) => {
-            const node = nodes.find((n) => n.id === id)
+            // Read via graphRef, not the closed-over `nodes`, so this callback's
+            // identity doesn't change on every keystroke (nodes' reference
+            // changes on every dispatch, even ones that don't touch positions).
+            const node = graphRef.current.nodes.find((n) => n.id === id)
             if (!node) return false
             const anyNode = node as unknown as {
               measured?: { width?: number; height?: number }
@@ -730,7 +966,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
 
     onNodesChange(changes)
     logSelectionDebug('onNodesChange/forwarded', { changeCount: changes.length })
-  }, [logSelectionDebug, nodes, onNodesChange, selectedNodeIds])
+  }, [logSelectionDebug, onNodesChange, selectedNodeIds])
 
   const handleRemoteEdgeChanges = useCallback((changes: EdgeChange[]) => {
     for (const change of changes) {
@@ -905,14 +1141,14 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     const instance = reactFlowRef.current
     const wrap = reactFlowWrapRef.current
     if (!instance || !wrap) return undefined
-    
+
     const viewport = instance.getViewport()
     const wrapRect = wrap.getBoundingClientRect()
-    
+
     // Convert screen center to flow coordinates
     const centerX = (wrapRect.width / 2 - viewport.x) / viewport.zoom
     const centerY = (wrapRect.height / 2 - viewport.y) / viewport.zoom
-    
+
     return { x: centerX, y: centerY }
   }, [])
 
@@ -1039,6 +1275,19 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     if (nodeId) removeRemoteFramework(nodeId)
   }, [activeRemoteFrameworkNodeId, selectedNode?.id, removeRemoteFramework])
 
+  // Double-clicking a linked CASE Global framework opens its item browser once
+  // its cache has downloaded, or its settings panel when the download failed /
+  // hasn't happened yet. `useCallback` keeps ReactFlowGraph's memo intact.
+  const onNodeDoubleClick = useCallback((_: ReactMouseEvent, node: CaseEditorNodeType) => {
+    if (node.type !== 'externalFrameworkNode') return
+    const ext = node.data
+    if (ext.cacheDocId && !ext.cacheError) {
+      openRemoteItemsPanel(node.id)
+    } else {
+      openExternalFrameworkSettings(node.id)
+    }
+  }, [openRemoteItemsPanel, openExternalFrameworkSettings])
+
   const handleRemoteDrop = useCallback((localItemId: string, raw: string) => {
     const payload = parseRemoteItemDragPayload(raw)
     if (!payload) return
@@ -1086,7 +1335,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       handleRemoteDrop(targetNode.id, raw)
     }
   }, [handleRemoteDrop])
-  
+
   // Keyboard shortcuts for adding items and remote frameworks
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1099,11 +1348,11 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       ) {
         return
       }
-      
+
       // Check for Cmd/Ctrl modifier
       const isMod = e.metaKey || e.ctrlKey
       if (!isMod) return
-      
+
       // Cmd/Ctrl + C: Add new item
       if (e.key.toLowerCase() === 'c') {
         e.preventDefault()
@@ -1111,7 +1360,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         addDetachedItem(viewportCenter)
         return
       }
-      
+
       // Cmd/Ctrl + F: Search CASE Global frameworks
       if (e.key.toLowerCase() === 'f') {
         e.preventDefault()
@@ -1119,24 +1368,30 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         return
       }
     }
-    
+
     globalThis.addEventListener('keydown', handleKeyDown)
     return () => globalThis.removeEventListener('keydown', handleKeyDown)
   }, [addDetachedItem, getViewportCenter, openCgeSearchPanel])
 
   const onBeforeDelete: OnBeforeDelete<CaseEditorNodeType> = useCallback(
     async ({ nodes, edges: deletedEdges }) => {
+      // Read via refs, not the closed-over nodesWithCallbacks/editorEdges, so
+      // this callback's identity doesn't change on every keystroke (both
+      // change reference on every dispatch, even ones that don't affect
+      // what's deletable) — see graphRef/nodesWithCallbacksRef above.
+      const allNodes = nodesWithCallbacksRef.current
+      const allEdges = graphRef.current.edges
       const includesFramework = nodes.some((n) => n.type === 'caseFrameworkNode')
 
-      const nodeIds = includesFramework ? nodesWithCallbacks.map((n) => n.id) : nodes.map((n) => n.id)
-      const edgeIds = includesFramework ? editorEdges.map((e) => e.id) : deletedEdges.map((e) => e.id)
+      const nodeIds = includesFramework ? allNodes.map((n) => n.id) : nodes.map((n) => n.id)
+      const edgeIds = includesFramework ? allEdges.map((e) => e.id) : deletedEdges.map((e) => e.id)
 
       const nodeIdSet = new Set(nodeIds)
       const deletedItemIdSet = new Set(
-        (includesFramework ? nodesWithCallbacks : nodes).filter((n) => n.type === 'caseItemNode').map((n) => n.id),
+        (includesFramework ? allNodes : nodes).filter((n) => n.type === 'caseItemNode').map((n) => n.id),
       )
 
-      const childItemCount = nodesWithCallbacks.filter(
+      const childItemCount = allNodes.filter(
         (n) =>
           n.type === 'caseItemNode' &&
           !nodeIdSet.has(n.id) &&
@@ -1158,7 +1413,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         })
       })
     },
-    [nodesWithCallbacks, editorEdges],
+    [],
   )
 
   const closeActionDialog = useCallback(() => {
@@ -1309,6 +1564,67 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     [ensureNodeVisible, logSelectionDebug, selectedNodeIds.length, selectedEdgeIds.length],
   )
 
+  // Center on the framework's root node, at a fixed, comfortable zoom —
+  // regardless of framework size — so the user lands oriented on the root
+  // instead of a fit-to-everything view that can shrink the root to a speck
+  // in a large framework. Runs on the very first paint AND whenever the user
+  // switches layout mode (Hierarchy/Star "views"), since a layout switch
+  // moves every node and should re-orient the same way a fresh load does.
+  const centerOnRoot = useCallback(() => {
+    const instance = reactFlowRef.current
+    const wrap = reactFlowWrapRef.current
+    if (!instance || !wrap) return
+
+    const DEFAULT_ROOT_ZOOM = 1
+    const animate = didInitialViewportRef.current
+    const duration = animate ? 200 : 0
+
+    const center = () => {
+      const instance2 = reactFlowRef.current
+      if (!instance2) return
+      const root = instance2.getNodes().find(isFrameworkNode)
+      if (!root) return
+      const { w, h } = getNodeSize(root)
+      instance2.setCenter(root.position.x + w / 2, root.position.y + h / 2, {
+        zoom: DEFAULT_ROOT_ZOOM,
+        duration,
+      })
+      didInitialViewportRef.current = true
+    }
+
+    // Switching back from Tree View unhides this container (display:none →
+    // visible) in the same tick that triggers this effect, but the browser
+    // doesn't recompute layout — and React Flow's own ResizeObserver doesn't
+    // refresh its cached container size — until a later frame. Centering
+    // immediately would compute pan/zoom against a stale 0x0 size, so poll
+    // until the container actually has a measurable size (bounded, in case
+    // it's genuinely hidden for some other reason).
+    const MAX_ATTEMPTS = 30
+    let attempts = 0
+    let rafId: number
+
+    const waitForSizeThenCenter = () => {
+      const { width, height } = reactFlowWrapRef.current?.getBoundingClientRect() ?? { width: 0, height: 0 }
+      if ((width > 0 && height > 0) || attempts >= MAX_ATTEMPTS) {
+        center()
+        return
+      }
+      attempts += 1
+      rafId = globalThis.requestAnimationFrame(waitForSizeThenCenter)
+    }
+
+    // One rAF to let React Flow apply any pending node measurements/positions
+    // before the size-polling loop starts.
+    const id = globalThis.requestAnimationFrame(() => {
+      rafId = globalThis.requestAnimationFrame(waitForSizeThenCenter)
+    })
+
+    return () => {
+      globalThis.cancelAnimationFrame(id)
+      globalThis.cancelAnimationFrame(rafId)
+    }
+  }, [])
+
   const fitToContents = useCallback(() => {
     const instance = reactFlowRef.current
     const wrap = reactFlowWrapRef.current
@@ -1397,10 +1713,17 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
     }
   }, [])
 
-  // Make the initial viewport leave room for the floating header so the top-most node isn't hidden behind it.
+  // First paint, and any explicit layout-mode switch (Hierarchy/Star "reset"),
+  // center on the root node. A layout switch moves every node, so it should
+  // re-orient the same way a fresh load does. Node-count-only changes (items
+  // added/removed without a layout switch) instead fall back to fitting the
+  // whole graph, leaving room for the floating header so the top-most node
+  // isn't hidden behind it.
   useEffect(() => {
     if (!rfReady) return
-    const cleanup = fitToContents()
+    const layoutChanged = prevLayoutVersionRef.current === null || prevLayoutVersionRef.current !== layoutVersion
+    prevLayoutVersionRef.current = layoutVersion
+    const cleanup = layoutChanged ? centerOnRoot() : fitToContents()
     const onResize = () => {
       fitToContents()
     }
@@ -1409,7 +1732,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
       cleanup?.()
       globalThis.removeEventListener('resize', onResize)
     }
-  }, [rfReady, nodesWithCallbacks.length, layoutVersion, fitToContents])
+  }, [rfReady, nodesWithCallbacks.length, layoutVersion, fitToContents, centerOnRoot])
 
   return (
     <div className="relative h-screen w-screen">
@@ -1442,86 +1765,62 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
             : undefined
         }
         onOpenSettings={() => setSettingsOpen(true)}
-        onResetHierarchy={applyHierarchyLayout}
-        onResetStar={applyStarLayout}
+        onResetHierarchy={() => { setActiveView('canvas'); applyHierarchyLayout() }}
+        onResetStar={() => { setActiveView('canvas'); applyStarLayout() }}
+        onSwitchTreeView={() => setActiveView(activeView === 'tree' ? 'canvas' : 'tree')}
+        activeView={activeView}
         cfAssociationGroupings={inUseGroupings}
         activeGroupingFilter={activeGroupingFilter}
         onSetGroupingFilter={setActiveGroupingFilter}
       />
 
-      <div ref={reactFlowWrapRef} className="h-full w-full" onPointerDownCapture={onCanvasPointerDownCapture} onDragOver={onPaneDragOver} onDrop={onPaneDrop}>
-        <ReactFlow<CaseEditorNodeType>
-          nodes={nodesWithCallbacks}
-          edges={edgesWithType}
-          onNodesChange={onNodesChangeWithSelectionGuard}
-          onEdgesChange={onEdgesChangeWithSelectionGuard}
-          onConnect={onConnect}
-          onNodeClick={onNodeClick}
-          onNodeDoubleClick={(_, node) => {
-            if (node.type === 'externalFrameworkNode') {
-              const ext = node.data
-              if (ext.cacheDocId && !ext.cacheError) {
-                openRemoteItemsPanel(node.id)
-              } else {
-                openExternalFrameworkSettings(node.id)
-              }
-            }
-          }}
-          onNodeDragStart={onNodeDragStart}
-          onNodeDragStop={onNodeDragStop}
-          onEdgeClick={onEdgeClick}
-          onPaneClick={onPaneClick}
-          isValidConnection={isValidConnection}
-          onSelectionChange={onSelectionChangeWithPan}
-          onBeforeDelete={onBeforeDelete}
-          selectionMode={SelectionMode.Full}
-          multiSelectionKeyCode="Meta"
-          selectionOnDrag={false}
-          selectionKeyCode="Shift"
-          panOnDrag
-          nodesDraggable={!shiftHeldForInteractions}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          edgesFocusable
-          elevateEdgesOnSelect
-          edgesReconnectable
-          onReconnectStart={onReconnectStart}
-          onReconnect={onReconnect}
-          onReconnectEnd={onReconnectEnd}
-          connectOnClick={true}
-          connectionMode={ConnectionMode.Loose}
-          defaultEdgeOptions={{
-            interactionWidth: 20,
-            style: { strokeWidth: 1.5, stroke: '#94a3b8' },
-            focusable: true,
-            reconnectable: true,
-          }}
-          proOptions={{ hideAttribution: true }}
-          onInit={(instance) => {
-            reactFlowRef.current = instance as unknown as ReactFlowInstance<CaseEditorNodeType>
-            setRfReady(true)
-          }}
-        >
-          <RemoteLinkInternalsSync remoteLinks={remoteLinks} nodes={nodesWithCallbacks} />
-          <Background color="#c8c8ca" gap={20} size={1.5} variant={BackgroundVariant.Dots} style={{ backgroundColor: '#f0f0f2' }} />
-          <Controls />
-          <MiniMap
-            position="bottom-left"
-            className="!bottom-1 !left-12"
-            pannable
-            zoomable
-            nodeStrokeWidth={2}
-            nodeColor={(node) => (node.selected ? '#8b5cf6' : '#e2e8f0')} // violet-500 if selected, slate-200 otherwise
-            nodeStrokeColor={(node) => (node.selected ? '#7c3aed' : '#cbd5e1')} // violet-600 if selected, slate-300 otherwise
-            maskColor="rgba(240, 240, 245, 0.7)"
+      {activeView === 'tree' ? (
+        <div className="h-full w-full pt-16">
+          <TreePanelView
+            availableFrameworks={availableFrameworks}
+            serverFrameworks={serverFrameworks}
+            onLoadTargetFramework={onLoadTargetFramework}
+            isSourcePublished={isPublishedToOpenCase}
+            onSaveAlignments={onSaveAlignments}
+            onLoadAlignmentsForTarget={onLoadAlignmentsForTarget}
+            onDiscoverAlignedTargets={onDiscoverAlignedTargets}
           />
-        </ReactFlow>
-      </div>
+        </div>
+      ) : null}
+
+      <ReactFlowGraph
+        wrapRef={reactFlowWrapRef}
+        visible={activeView !== 'tree'}
+        nodes={canvasNodes}
+        edges={canvasEdges}
+        remoteLinks={remoteLinks}
+        onNodesChange={onNodesChangeWithSelectionGuard}
+        onEdgesChange={onEdgesChangeWithSelectionGuard}
+        onConnect={onConnect}
+        onNodeClick={onNodeClick}
+        onNodeDoubleClick={onNodeDoubleClick}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDragStop={onNodeDragStop}
+        onEdgeClick={onEdgeClick}
+        onPaneClick={onPaneClick}
+        isValidConnection={isValidConnection}
+        onSelectionChange={onSelectionChangeWithPan}
+        onBeforeDelete={onBeforeDelete}
+        nodesDraggable={!shiftHeldForInteractions}
+        onReconnectStart={onReconnectStart}
+        onReconnect={onReconnect}
+        onReconnectEnd={onReconnectEnd}
+        onInit={onReactFlowInit}
+        onPointerDownCapture={onCanvasPointerDownCapture}
+        onDragOver={onPaneDragOver}
+        onDrop={onPaneDrop}
+      />
 
       <NodePropertiesPanel
         node={showPropertiesPanel ? selectedNode : null}
         onClose={() => { clearSelection(); closeSidePanel() }}
         onChangeNode={updateNodeData}
+        hideColorBand={activeView === 'tree'}
         onViewCFPackage={handleViewCFPackage}
         isPublishedToOpenCase={isPublishedToOpenCase}
         availableLicenses={availableLicenses}
@@ -1627,6 +1926,23 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onLeave={() => {
           setLeaveOpen(false)
           onBack?.()
+        }}
+      />
+
+      <ConfirmActionDialog
+        open={forkWarningOpen}
+        title="Fork this mirrored framework?"
+        description="You are making changes to a mirrored framework. Saving will turn this mirror into an independent local copy with new identifiers."
+        confirmLabel="Save & fork"
+        onCancel={() => {
+          setForkWarningOpen(false)
+          pendingSaveRef.current = null
+        }}
+        onConfirm={() => {
+          setForkWarningOpen(false)
+          const pending = pendingSaveRef.current
+          pendingSaveRef.current = null
+          if (pending) void doSave(pending.openCasePackage, pending.framework)
         }}
       />
 

@@ -30,7 +30,7 @@ export class CFAssociationsControllerV1p0 {
 
       // Access control: check parent framework's license
       if (!(req as any).isAuthenticated) {
-        if (!this.store.isDocumentPublic(resolved.tenantId, resolved.version, resolved.docSourcedId)) {
+        if (!this.store.isDocumentPublic(resolved.tenantId, resolved.version, resolved.docStorageKey)) {
           return res.status(401).json(StatusInfoFormatter.unauthorized('Authentication required to access this association.'))
         }
       }

@@ -52,7 +52,7 @@ function pickUserName(user: User | null): string | null {
   return candidates[0] ?? null
 }
 
-function createUserManager(params: { authority: string; clientId: string; redirectUri: string; tenantId: string }) {
+export function createUserManager(params: { authority: string; clientId: string; redirectUri: string; tenantId: string }) {
   // Use per-tenant prefixes to avoid mixing tokens/state across tenant client_ids.
   const prefix = `case-editor:oidc:${params.tenantId}:`
   const postLogoutRedirectUri = `${globalThis.location?.origin ?? ''}/#/login`
@@ -66,7 +66,28 @@ function createUserManager(params: { authority: string; clientId: string; redire
     // The Keycloak client-per-tenant model means we need clean tenant switching.
     userStore: new WebStorageStateStore({ store: globalThis.localStorage, prefix }),
     stateStore: new WebStorageStateStore({ store: globalThis.sessionStorage, prefix }),
+    // Renew the access token in a hidden iframe shortly before it expires, using the
+    // IdP's own SSO session cookie — no refresh_token / offline_access scope needed.
+    automaticSilentRenew: true,
+    silent_redirect_uri: `${globalThis.location?.origin ?? ''}/#/auth/silent-callback`,
   })
+}
+
+/**
+ * Entry point for the hidden iframe oidc-client-ts navigates to for silent renewal
+ * (see `silent_redirect_uri` above). Forwards the auth response back to the parent
+ * window's UserManager; must not mount the app or touch auth state itself.
+ */
+export async function runSilentRenewCallback(): Promise<void> {
+  const cfg = getAppConfig()
+  const tenantId = readTenantId()
+  const mgr = createUserManager({
+    authority: cfg.oidcAuthority,
+    clientId: `${cfg.oidcClientIdPrefix}${tenantId}`,
+    redirectUri: `${globalThis.location?.origin ?? ''}/#/auth/callback`,
+    tenantId,
+  })
+  await mgr.signinSilentCallback()
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -118,15 +139,23 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       setUser(null)
       setStatus('anonymous')
     }
+    const onSilentRenewError = (e: Error) => {
+      // Automatic renewal failed (e.g. IdP session expired, third-party cookies blocked).
+      // Leave the user signed in with their current token — `addAccessTokenExpired` is
+      // still the fallback that logs them out once that token actually expires.
+      console.warn('[Auth] Silent token renewal failed:', e)
+    }
 
     userManager.events.addUserLoaded(onLoaded)
     userManager.events.addUserUnloaded(onUnloaded)
     userManager.events.addAccessTokenExpired(onUnloaded)
+    userManager.events.addSilentRenewError(onSilentRenewError)
 
     return () => {
       userManager.events.removeUserLoaded(onLoaded)
       userManager.events.removeUserUnloaded(onUnloaded)
       userManager.events.removeAccessTokenExpired(onUnloaded)
+      userManager.events.removeSilentRenewError(onSilentRenewError)
     }
   }, [userManager])
 

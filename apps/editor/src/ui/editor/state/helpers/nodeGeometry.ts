@@ -140,11 +140,22 @@ export function findNonOverlappingPosition(
 
 // ── Graph adjacency ────────────────────────────────────────────────────
 
-/** Build parent → children map and edge-lookup map from edges. */
+/**
+ * Build parent → children map and edge-lookup map from edges.
+ *
+ * Only hierarchical edges (isChildOf/isPartOf/framework-root, i.e.
+ * `data.isHierarchical`) are considered. Non-hierarchical associations
+ * (isRelatedTo, precedes, exactMatchOf, etc.) are NOT parent/child
+ * relationships — including them here can introduce cycles (e.g. a
+ * reciprocal isRelatedTo pair) into what tree/star layout assume is a DAG
+ * rooted at the framework node, which previously caused unbounded
+ * recursion ("Maximum Call Stack Size Exceeded") in calcWidth/layoutNode.
+ */
 export function buildAdjacency(edges: CaseEditorEdge[]) {
   const childrenOf = new Map<string, string[]>()
   const edgeBySourceTarget = new Map<string, CaseEditorEdge>()
   for (const e of edges) {
+    if (!e.data?.isHierarchical) continue
     const kids = childrenOf.get(e.source) ?? []
     kids.push(e.target)
     childrenOf.set(e.source, kids)
@@ -158,7 +169,10 @@ export function sortChildrenRecursive(
   parentId: string,
   childrenOf: Map<string, string[]>,
   edgeBySourceTarget: Map<string, CaseEditorEdge>,
+  visited: Set<string> = new Set(),
 ) {
+  if (visited.has(parentId)) return // cycle guard: malformed/cyclic hierarchical data
+  visited.add(parentId)
   const kids = childrenOf.get(parentId)
   if (!kids) return
   kids.sort((a, b) => {
@@ -168,7 +182,7 @@ export function sortChildrenRecursive(
     const seqB = eB?.data?.cfAssociation?.sequenceNumber ?? eB?.data?.sequenceNumber ?? Infinity
     return seqA - seqB
   })
-  for (const kid of kids) sortChildrenRecursive(kid, childrenOf, edgeBySourceTarget)
+  for (const kid of kids) sortChildrenRecursive(kid, childrenOf, edgeBySourceTarget, visited)
 }
 
 // ── Shared layout result type ──────────────────────────────────────────

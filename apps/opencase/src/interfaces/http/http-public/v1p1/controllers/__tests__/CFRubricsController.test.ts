@@ -18,7 +18,7 @@ describe('CFRubricsControllerV1p1', () => {
     } as any
 
     mockStore = {
-      resolveRubricGlobal: jest.fn().mockReturnValue({ tenantId: 'test-tenant', version: '1.1', docSourcedId: 'doc-123' }),
+      resolveRubricGlobal: jest.fn().mockReturnValue({ tenantId: 'test-tenant', version: '1.1', docStorageKey: 'doc-123' }),
       isDocumentPublic: jest.fn().mockReturnValue(true),
     }
     controller = new CFRubricsControllerV1p1(mockGetCFRubric, mockStore)

@@ -17,9 +17,9 @@ describe('DeleteCFAssociation', () => {
     } as any
 
     mockStore = {
-      getDocumentIdForAssociation: jest.fn(),
+      getStorageKeyForAssociation: jest.fn(),
       removeAssociationFromIndex: jest.fn(),
-      getDocumentMetadata: jest.fn().mockReturnValue(null),
+      getDocumentMetadata: jest.fn().mockReturnValue(null)
     } as any
 
     deleteCFAssociation = new DeleteCFAssociation(mockRepository, mockStore)
@@ -32,7 +32,7 @@ describe('DeleteCFAssociation', () => {
     const assocId = 'assoc-123'
 
     it('should delete association successfully', async () => {
-      mockStore.getDocumentIdForAssociation.mockReturnValue(docId)
+      mockStore.getStorageKeyForAssociation.mockReturnValue(docId)
 
       const existingDocument = CFDocument.create({
         tenantId,
@@ -97,7 +97,7 @@ describe('DeleteCFAssociation', () => {
         sourcedId: assocId
       })
 
-      expect(mockStore.getDocumentIdForAssociation).toHaveBeenCalledWith(tenantId, caseVersion, assocId)
+      expect(mockStore.getStorageKeyForAssociation).toHaveBeenCalledWith(tenantId, caseVersion, assocId)
       expect(mockRepository.load).toHaveBeenCalledWith(tenantId, caseVersion, docId)
       expect(mockStore.removeAssociationFromIndex).toHaveBeenCalledWith(tenantId, caseVersion, assocId)
       expect(mockRepository.saveNewVersion).toHaveBeenCalledTimes(1)
@@ -108,7 +108,7 @@ describe('DeleteCFAssociation', () => {
     })
 
     it('should throw error when association not found in index', async () => {
-      mockStore.getDocumentIdForAssociation.mockReturnValue(null)
+      mockStore.getStorageKeyForAssociation.mockReturnValue(null)
 
       await expect(
         deleteCFAssociation.execute({
@@ -120,7 +120,7 @@ describe('DeleteCFAssociation', () => {
     })
 
     it('should throw error when association not found in package', async () => {
-      mockStore.getDocumentIdForAssociation.mockReturnValue(docId)
+      mockStore.getStorageKeyForAssociation.mockReturnValue(docId)
 
       const existingDocument = CFDocument.create({
         tenantId,

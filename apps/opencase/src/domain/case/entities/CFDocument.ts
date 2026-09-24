@@ -39,13 +39,18 @@ export class CFDocument {
     return new CFDocument(props);
   }
 
-  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any): CFDocument {
+  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any, options?: { preserveUris?: boolean }): CFDocument {
     // Extract identifier from URN if present (priority over sourcedId/identifier)
     let identifier = raw.sourcedId || raw.identifier
     let uri = raw.uri
-    
-    // If URI is a URN, extract identifier and transform URI
-    if (uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+
+    if (options?.preserveUris) {
+      // Mirrored framework: keep the source's identifiers and URIs exactly as supplied.
+      if (!identifier && uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+        identifier = UrnCaseUriHelper.parseUrnCaseUri(uri)?.identifier || identifier
+      }
+    } else if (uri && UrnCaseUriHelper.isUrnCaseUri(uri)) {
+      // If URI is a URN, extract identifier and transform URI
       const parsed = UrnCaseUriHelper.parseUrnCaseUri(uri)
       if (parsed) {
         identifier = parsed.identifier || identifier
@@ -55,20 +60,25 @@ export class CFDocument {
       // If not a URN, generate URI based on identifier (existing behavior)
       uri = this.generateURI(tenantId, caseVersion, identifier)
     }
-    
-    // Transform LinkData URIs if they are URNs
-    const licenseURI = this.transformLinkData(raw.licenseURI, caseVersion)
-    const CFPackageURI = this.transformLinkData(raw.CFPackageURI, caseVersion)
+
+    // Rebase reference URIs onto the local host — these point at per-tenant
+    // definition entities (licenses, packages, subjects) that OpenCASE serves
+    // itself, so they must resolve locally rather than to the source host.
+    // Mirrored frameworks skip this and keep the source's reference URIs as-is.
+    const licenseURI = options?.preserveUris ? raw.licenseURI : LinkDataHelper.rebaseLinkData(raw.licenseURI, caseVersion, 'CFLicenses')
+    const CFPackageURI = options?.preserveUris ? raw.CFPackageURI : LinkDataHelper.rebaseLinkData(raw.CFPackageURI, caseVersion, 'CFPackages')
     // subjectURI must use LinkURI format (UUID identifier required)
-    const subjectURI = Array.isArray(raw.subjectURI)
-      ? raw.subjectURI.map((s: any) => {
-          const transformed = this.transformLinkData(s, caseVersion)
-          if (transformed) {
-            LinkDataHelper.validateLinkURI(transformed, 'CFDocument.subjectURI')
-          }
-          return transformed
-        }).filter((s: any): s is LinkData => s !== undefined)
-      : undefined
+    const subjectURI = options?.preserveUris
+      ? raw.subjectURI
+      : Array.isArray(raw.subjectURI)
+        ? raw.subjectURI.map((s: any) => {
+            const transformed = LinkDataHelper.rebaseLinkData(s, caseVersion, 'CFSubjects')
+            if (transformed) {
+              LinkDataHelper.validateLinkURI(transformed, 'CFDocument.subjectURI')
+            }
+            return transformed
+          }).filter((s: any): s is LinkData => s !== undefined)
+        : undefined
     
     return CFDocument.create({
       tenantId,
@@ -95,45 +105,6 @@ export class CFDocument {
       CFPackageURI,
       extensions: raw.extensions
     });
-  }
-
-  /**
-   * Transforms a LinkData object's URI if it's a URN, otherwise returns it unchanged
-   */
-  private static transformLinkData(linkData: any, caseVersion: CaseVersion): LinkData | undefined {
-    if (!linkData) return undefined
-    
-    // If it's already a LinkData object with a URI
-    if (typeof linkData === 'object' && linkData.uri) {
-      const transformedUri = UrnCaseUriHelper.transformUrnIfPresent(linkData.uri, caseVersion)
-      // If URI was a URN, also extract identifier from it
-      let identifier = linkData.identifier
-      if (linkData.uri && UrnCaseUriHelper.isUrnCaseUri(linkData.uri)) {
-        const parsed = UrnCaseUriHelper.parseUrnCaseUri(linkData.uri)
-        if (parsed) {
-          identifier = parsed.identifier || identifier
-        }
-      }
-      return {
-        ...linkData,
-        uri: transformedUri || linkData.uri,
-        identifier: identifier || linkData.identifier
-      }
-    }
-    
-    // If it's a string URI, transform it
-    if (typeof linkData === 'string') {
-      const transformedUri = UrnCaseUriHelper.transformUrnIfPresent(linkData, caseVersion)
-      const parsed = UrnCaseUriHelper.parseUrnCaseUri(linkData)
-      const identifier = parsed?.identifier || LinkDataHelper.extractIdFromURI(linkData)
-      return {
-        title: identifier || linkData,
-        identifier: identifier || linkData,
-        uri: transformedUri || linkData
-      }
-    }
-    
-    return linkData
   }
 
   private static generateURI(tenantId: TenantId, caseVersion: CaseVersion, identifier: string): string {
@@ -170,13 +141,15 @@ export class CFDocument {
       };
     }
 
-    // CASE 1.0 strictness: do not emit CASE 1.1-only fields
-    if (effectiveVersion === '1.0') {
+    // CASE 1.1: include caseVersion (spec best practice). CASE 1.0: strip 1.1-only fields.
+    if (effectiveVersion === '1.1') {
+      result.caseVersion = effectiveVersion
+    } else {
       delete result.frameworkType
       delete result.subjectURI
       delete result.extensions
     }
-    
+
     return result;
   }
 }

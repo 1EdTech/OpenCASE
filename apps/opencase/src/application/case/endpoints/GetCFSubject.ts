@@ -18,7 +18,18 @@ export class GetCFSubject {
   async execute (query: GetCFSubjectQuery) {
     const entry = this.store.getDefinitionById(query.tenantId, query.caseVersion, 'CFSubjects', query.sourcedId)
     if (!entry) return null
-    return entry.value
+
+    // Per spec, the response is the CFSubject plus the set of children as
+    // determined by their place in the 'hierarchyCode' of the CFSubject.
+    const hierarchyCode = entry.value?.hierarchyCode as string | undefined
+    const allSubjects = this.store.getTenantDefinitions(query.tenantId, query.caseVersion).CFSubjects
+    const children = hierarchyCode
+      ? allSubjects
+        .filter((s: any) => s.identifier !== entry.value.identifier && typeof s.hierarchyCode === 'string' && s.hierarchyCode.startsWith(`${hierarchyCode}.`))
+        .sort((a: any, b: any) => a.hierarchyCode.localeCompare(b.hierarchyCode))
+      : []
+
+    return { CFSubjects: [entry.value, ...children] }
   }
 }
 

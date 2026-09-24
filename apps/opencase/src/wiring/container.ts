@@ -266,7 +266,7 @@ export async function buildContainer(): Promise<Container> {
   
   // Initialize CASE endpoints
   const getCFPackage = new GetCFPackage(pkgRepo, store)
-  const getCFDocument = new GetCFDocument(pkgRepo)
+  const getCFDocument = new GetCFDocument(pkgRepo, store)
   const getAllCFDocuments = new GetAllCFDocuments(store)
   const getCFItem = new GetCFItem(pkgRepo, store)
   const getCFAssociation = new GetCFAssociation(pkgRepo, store)

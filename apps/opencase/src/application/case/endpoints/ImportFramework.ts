@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { CFPackageRepository } from '../ports/CFPackageRepository'
 import { CaseApiClient } from '../../../infrastructure/http/CaseApiClient'
 import { normalizeCfPackageData, type CFPackageResponse } from '../cfPackageShape'
@@ -33,11 +34,12 @@ export interface ImportFrameworkResult {
 
 /**
  * Merge or create the `ext:opencase` extension on a CFDocument payload,
- * setting sourcePackageURI and marking it as a pristine import.
+ * marking it as a pristine mirror of the source. `endpointUrl` is only known
+ * when the framework was imported by URL (as opposed to a pasted JSON payload).
  */
 function injectSourceProvenance (
   docPayload: any,
-  endpointUrl: string,
+  endpointUrl?: string,
   documentFlags?: ImportDocumentFlags
 ): any {
   const existing = docPayload.extensions ?? {}
@@ -47,7 +49,10 @@ function injectSourceProvenance (
 
   const extPatch: Record<string, unknown> = {
     ...existingOpencase,
-    sourcePackageURI: endpointUrl,
+    // Only record a source URL when one is known — pasted JSON has no
+    // publisher endpoint, so the field is left off entirely rather than
+    // written as undefined.
+    ...(endpointUrl ? { sourcePackageURI: endpointUrl } : {}),
     isModifiedFromSource: false,
     importedAt: new Date().toISOString(),
   }
@@ -64,33 +69,6 @@ function injectSourceProvenance (
   if (documentFlags?.cgeCachedAt) {
     extPatch.cgeCachedAt = documentFlags.cgeCachedAt
   }
-
-  return {
-    ...docPayload,
-    extensions: {
-      ...existing,
-      'ext:opencase': extPatch
-    }
-  }
-}
-
-function applyDocumentFlags (docPayload: any, documentFlags?: ImportDocumentFlags): any {
-  if (!documentFlags) return docPayload
-  const endpointUrl = docPayload?.extensions?.['ext:opencase']?.sourcePackageURI as string | undefined
-  if (endpointUrl) {
-    return injectSourceProvenance(docPayload, endpointUrl, documentFlags)
-  }
-
-  const existing = docPayload.extensions ?? {}
-  const existingOpencase = (existing['ext:opencase'] && typeof existing['ext:opencase'] === 'object')
-    ? existing['ext:opencase']
-    : {}
-
-  const extPatch: Record<string, unknown> = { ...existingOpencase, importedAt: new Date().toISOString() }
-  if (documentFlags.readOnly === true) extPatch.readOnly = true
-  if (documentFlags.cgeFrameworkId) extPatch.cgeFrameworkId = documentFlags.cgeFrameworkId
-  if (documentFlags.linkedFromDocId) extPatch.linkedFromDocId = documentFlags.linkedFromDocId
-  if (documentFlags.cgeCachedAt) extPatch.cgeCachedAt = documentFlags.cgeCachedAt
 
   return {
     ...docPayload,
@@ -129,9 +107,7 @@ export class ImportFramework {
       const provenanceUri = (sourcePackageUri ?? endpointUrl ?? '').trim()
       sourceCFPackage = {
         ...normalized,
-        CFDocument: provenanceUri
-          ? injectSourceProvenance(normalized.CFDocument, provenanceUri, documentFlags)
-          : applyDocumentFlags(normalized.CFDocument, documentFlags)
+        CFDocument: injectSourceProvenance(normalized.CFDocument, provenanceUri || undefined, documentFlags)
       }
     }
 
@@ -160,24 +136,33 @@ export class ImportFramework {
       }
     }
 
-    // Create domain entities from CFPackage format
-    const document = CFDocument.fromRaw(tenantId, caseVersion, payload.CFDocument)
+    // Create domain entities from CFPackage format. Mirrored imports preserve the
+    // source's identifiers/URIs as-is rather than rewriting them onto this instance —
+    // they're only regenerated once the framework is edited and forked (a later task).
+    const preserveUris = { preserveUris: true }
+    const document = CFDocument.fromRaw(tenantId, caseVersion, payload.CFDocument, preserveUris)
     const docId = document.sourcedId
     const docJSON = document.toJSON()
     const docURI = docJSON.uri
-    const items = (payload.CFItems ?? []).map(i => CFItem.fromRaw(tenantId, caseVersion, i, docId, docURI))
+    const items = (payload.CFItems ?? []).map(i => CFItem.fromRaw(tenantId, caseVersion, i, docId, docURI, preserveUris))
     const associations = (payload.CFAssociations ?? []).map(a =>
-      CFAssociation.fromRaw(tenantId, caseVersion, a)
+      CFAssociation.fromRaw(tenantId, caseVersion, a, preserveUris)
     )
     const rubrics = (payload.CFRubrics ?? []).map(r =>
-      CFRubric.fromRaw(tenantId, caseVersion, r)
+      CFRubric.fromRaw(tenantId, caseVersion, r, preserveUris)
     )
     const definitions = payload.CFDefinitions ?? null
 
     const pkg = new CFPackage({ document, items, associations, rubrics, definitions })
 
-    // Save the framework
-    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, pkg)
+    // Every new document gets a storage key that's independent of any
+    // CASE identifier from the moment it's created — never inferred from
+    // the (possibly foreign, possibly reused-on-a-later-re-import)
+    // sourcedId. This is what lets a fork reassign the document's public
+    // identifier later without colliding with a future re-import of the
+    // same original source under its original identifier.
+    const storageKey = randomUUID()
+    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, pkg, storageKey)
 
     logger.info(
       { tenantId, caseVersion, docId: document.sourcedId, warnings: validationWarnings.length },

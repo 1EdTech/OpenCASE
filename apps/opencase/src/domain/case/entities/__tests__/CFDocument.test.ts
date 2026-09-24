@@ -108,6 +108,36 @@ describe('CFDocument', () => {
 
       expect(json.lastChangeDateTime).toBe('2024-01-01T12:30:45.000Z');
     });
+
+    it('should rewrite licenseURI/CFPackageURI/subjectURI to the local host on import (POR-730)', () => {
+      const raw = {
+        sourcedId: 'doc-123',
+        title: 'Test Document',
+        lastChangeDateTime: '2024-01-01T00:00:00Z',
+        licenseURI: {
+          title: 'License',
+          identifier: 'c0c0c0c0-0000-4000-a000-000000000002',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFLicenses/c0c0c0c0-0000-4000-a000-000000000002'
+        },
+        CFPackageURI: {
+          title: 'Package',
+          identifier: 'doc-123',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFPackages/doc-123'
+        },
+        subjectURI: [{
+          title: 'Subject',
+          identifier: 'c0c0c0c0-0000-4000-a000-000000000012',
+          uri: 'https://standards.example.org/ims/case/v1p0/CFSubjects/c0c0c0c0-0000-4000-a000-000000000012'
+        }]
+      };
+
+      const doc = CFDocument.fromRaw(tenantId, caseVersion, raw);
+      const json = doc.toJSON();
+
+      expect(json.licenseURI.uri).toBe('/ims/case/v1p1/CFLicenses/c0c0c0c0-0000-4000-a000-000000000002');
+      expect(json.CFPackageURI.uri).toBe('/ims/case/v1p1/CFPackages/doc-123');
+      expect(json.subjectURI[0].uri).toBe('/ims/case/v1p1/CFSubjects/c0c0c0c0-0000-4000-a000-000000000012');
+    });
   });
 
   describe('toJSON', () => {
@@ -130,7 +160,6 @@ describe('CFDocument', () => {
       expect(json.title).toBe('Test Document');
       expect(json.lastChangeDateTime).toBe('2024-01-01T12:30:45.000Z');
       expect(json.tenantId).toBeUndefined();
-      expect(json.caseVersion).toBeUndefined();
       expect(json.sourcedId).toBeUndefined();
     });
 
@@ -165,6 +194,98 @@ describe('CFDocument', () => {
       expect(json.adoptionStatus).toBe('adopted');
       expect(json.notes).toBe('Test notes');
       expect(json.extensions).toEqual({ custom: { key: 'value' } });
+    });
+
+    it('should include caseVersion when the document is CASE 1.1', () => {
+      const props = {
+        tenantId,
+        caseVersion: '1.1' as CaseVersion,
+        sourcedId: 'doc-123',
+        uri: '/ims/case/v1p1/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      };
+
+      const doc = CFDocument.create(props);
+      const json = doc.toJSON();
+
+      expect(json.caseVersion).toBe('1.1');
+    });
+
+    it('should not include caseVersion when the document is CASE 1.0', () => {
+      const props = {
+        tenantId,
+        caseVersion: '1.0' as CaseVersion,
+        sourcedId: 'doc-123',
+        uri: '/ims/case/v1p0/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      };
+
+      const doc = CFDocument.create(props);
+      const json = doc.toJSON();
+
+      expect(json.caseVersion).toBeUndefined();
+    });
+
+    it('should honor serializeAs override when downconverting a 1.1 document to 1.0', () => {
+      const props = {
+        tenantId,
+        caseVersion: '1.1' as CaseVersion,
+        sourcedId: 'doc-123',
+        uri: '/ims/case/v1p1/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        frameworkType: 'Competency',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      };
+
+      const doc = CFDocument.create(props);
+      const json = doc.toJSON('1.0');
+
+      expect(json.caseVersion).toBeUndefined();
+      expect(json.frameworkType).toBeUndefined();
+    });
+
+    it('should honor serializeAs override when serving a 1.0 document via v1p1', () => {
+      const props = {
+        tenantId,
+        caseVersion: '1.0' as CaseVersion,
+        sourcedId: 'doc-123',
+        uri: '/ims/case/v1p0/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      };
+
+      const doc = CFDocument.create(props);
+      const json = doc.toJSON('1.1');
+
+      expect(json.caseVersion).toBe('1.1');
+    });
+
+    it('should strip 1.1-only fields (frameworkType, subjectURI, extensions) for CASE 1.0', () => {
+      const props = {
+        tenantId,
+        caseVersion: '1.1' as CaseVersion,
+        sourcedId: 'doc-123',
+        uri: '/ims/case/v1p1/CFDocuments/doc-123',
+        creator: 'Test Creator',
+        title: 'Test Document',
+        frameworkType: 'Competency',
+        subjectURI: [{ identifier: 'subj-1', uri: '/ims/case/v1p1/CFItems/subj-1', title: 'Subject' }],
+        extensions: { custom: { key: 'value' } },
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z')
+      };
+
+      const doc = CFDocument.create(props);
+      const json = doc.toJSON('1.0');
+
+      expect(json.frameworkType).toBeUndefined();
+      expect(json.subjectURI).toBeUndefined();
+      expect(json.extensions).toBeUndefined();
     });
   });
 });

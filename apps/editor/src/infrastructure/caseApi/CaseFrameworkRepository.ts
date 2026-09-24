@@ -8,13 +8,13 @@ import type { CaseApiClient } from './CaseApiClient'
 export class CaseFrameworkRepository implements FrameworkRepository {
   constructor(private readonly _client: CaseApiClient) {}
 
-  private mapItemType(cfItem: CFItem): ItemType {
+  private mapItemType(cfItem: CFItem): ItemType | undefined {
     const raw = (cfItem.CFItemType ?? '').toLowerCase()
     if (raw.includes('skill')) return 'Skill'
     if (raw.includes('learning') || raw.includes('outcome')) return 'LearningOutcome'
     if (raw.includes('standard')) return 'Standard'
     if (raw.includes('compet')) return 'Competency'
-    return 'Competency'
+    return undefined
   }
 
   private mapAssociationType(assoc: CFAssociation): AssociationType {

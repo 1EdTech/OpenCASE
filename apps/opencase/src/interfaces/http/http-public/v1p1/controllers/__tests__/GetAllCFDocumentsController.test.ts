@@ -65,7 +65,8 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
         orderBy: undefined,
         filter: undefined,
         fields: undefined,
-        includeArchived: false
+        includeArchived: false,
+        includeOpenCaseExtensions: false
       })
       expect(responseStatus).toHaveBeenCalledWith(200)
       expect(responseJson).toHaveBeenCalledWith(absolutizeCaseUris(result as any, 'http://localhost'))
@@ -102,9 +103,26 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
         orderBy: 'asc',
         filter: 'test',
         fields: ['title', 'identifier'],
-        includeArchived: false
+        includeArchived: false,
+        includeOpenCaseExtensions: false
       })
       expect(responseStatus).toHaveBeenCalledWith(200)
+    })
+
+    it('should pass includeOpenCaseExtensions=true when X-CASE-EDITOR header is present', async () => {
+      const result = { CFDocuments: [] }
+      mockGetAllCFDocuments.execute.mockResolvedValue(result)
+      ;(mockRequest as any).tenantId = 'test-tenant'
+      ;(mockRequest as any).isAuthenticated = true
+      ;(mockRequest.header as jest.Mock).mockImplementation((name: string) =>
+        name === 'X-CASE-EDITOR' ? 'true' : undefined
+      )
+
+      await controller.getAll(mockRequest as Request, mockResponse as Response)
+
+      expect(mockGetAllCFDocuments.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ includeOpenCaseExtensions: true })
+      )
     })
 
     it('should return 400 for invalid limit', async () => {

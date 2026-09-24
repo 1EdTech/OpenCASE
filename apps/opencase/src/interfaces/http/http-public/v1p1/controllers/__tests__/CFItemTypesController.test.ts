@@ -41,14 +41,16 @@ describe('CFItemTypesControllerV1p1', () => {
   })
 
   describe('getById', () => {
-    it('should return CFItemType when found', async () => {
+    it('should return CFItemTypeSet when found', async () => {
       const result = {
-        identifier: 'itemtype-123',
-        uri: '/ims/case/v1p1/CFItemTypes/itemtype-123',
-        title: 'Test Item Type',
-        description: 'Test Description',
-        hierarchyCode: '01',
-        lastChangeDateTime: '2024-01-01T00:00:00.000Z'
+        CFItemTypes: [{
+          identifier: 'itemtype-123',
+          uri: '/ims/case/v1p1/CFItemTypes/itemtype-123',
+          title: 'Test Item Type',
+          description: 'Test Description',
+          hierarchyCode: '01',
+          lastChangeDateTime: '2024-01-01T00:00:00.000Z'
+        }]
       }
 
       mockGetCFItemType.execute.mockResolvedValue(result)

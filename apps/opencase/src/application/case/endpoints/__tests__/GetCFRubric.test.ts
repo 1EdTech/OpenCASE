@@ -17,7 +17,9 @@ describe('GetCFRubric', () => {
     } as any
 
     mockStore = {
-      getAllDocuments: jest.fn()
+      getAllDocuments: jest.fn(),
+      // Identifier === storage key for these tests (no mirror/fork scenario).
+      resolveStorageKey: jest.fn((_t, _v, identifier) => identifier)
     } as any
 
     getCFRubric = new GetCFRubric(mockRepository, mockStore)

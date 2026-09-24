@@ -123,7 +123,7 @@ export function ComboboxInput({ value, onChange, onCommit, options, placeholder,
   }
 
   return (
-    <div ref={wrapperRef} className={cn('', className)}>
+    <div ref={wrapperRef} className={cn('relative', className)}>
       <div className="relative">
         <input
           ref={inputRef}
@@ -192,7 +192,7 @@ export function ComboboxInput({ value, onChange, onCommit, options, placeholder,
           ref={listboxRef}
           id={listboxId}
           role="listbox"
-          className="mt-1 max-h-[280px] w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-sm"
+          className="absolute z-50 mt-1 max-h-[280px] w-full overflow-auto rounded-lg border border-slate-200 bg-white py-1 shadow-sm"
         >
           {filtered.map((opt, idx) => {
             const selected = opt.value === value

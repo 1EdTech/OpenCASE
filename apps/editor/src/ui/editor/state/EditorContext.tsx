@@ -19,6 +19,7 @@ import type {
 import type { SidePanelMode, RemoteItemLink } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
 import { nextRemoteFrameworkColor } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
 import type { CFAssociationGrouping, CFDocument, CFItem, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
+import type { FrameworkEdgeRecord } from '@/domain/framework/treeDerivation'
 import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
 import type { EditorSettings } from '@/ui/editor/components/SettingsModal'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
@@ -111,6 +112,11 @@ type EditorContextValue = {
   deleteElements: (_params: { nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }) => void
   applyHierarchyLayout: () => void
   applyStarLayout: () => void
+  cfDocument: CFDocument | undefined
+  frameworkNodeId: string | null
+  cfItems: CFItem[]
+  frameworkEdges: FrameworkEdgeRecord[]
+  rootItemIds: string[]
 }
 
 const EditorContext = createContext<EditorContextValue | null>(null)
@@ -462,14 +468,17 @@ export function EditorProvider({
   const applyHierarchyLayout = useCallback(() => {
     const { positions, edgeHandles } = computeHierarchyLayout(state.nodes, state.edges)
     dispatch({ type: 'layout/applyHierarchy', positions, edgeHandles })
-    updateSettings({ ...settings, edgeType: 'smoothstep' })
-  }, [state.nodes, state.edges, settings, updateSettings])
+    // Edge style here is a byproduct of the chosen layout/view, not a deliberate
+    // settings edit — set it directly so it doesn't dirty the document (matches
+    // position/handle changes from the same action, and 'star' below).
+    setSettings((prev) => ({ ...prev, edgeType: 'smoothstep' }))
+  }, [state.nodes, state.edges])
 
   const applyStarLayout = useCallback(() => {
     const { positions, edgeHandles } = computeStarLayout(state.nodes, state.edges)
     dispatch({ type: 'layout/applyHierarchy', positions, edgeHandles })
-    updateSettings({ ...settings, edgeType: 'default' })
-  }, [state.nodes, state.edges, settings, updateSettings])
+    setSettings((prev) => ({ ...prev, edgeType: 'default' }))
+  }, [state.nodes, state.edges])
 
   // ── CRUD callbacks ───────────────────────────────────────────────────
 
@@ -741,6 +750,64 @@ export function EditorProvider({
 
   const clearDirty = useCallback(() => dispatch({ type: 'dirty/clear' }), [])
 
+  // ── Domain accessors (memoized, always in sync with reducer state) ────
+
+  const cfDocument = useMemo(
+    () => state.nodes.find(isFrameworkNode)?.data.cfDocument,
+    [state.nodes],
+  )
+
+  const frameworkNodeId = useMemo(
+    () => state.nodes.find(isFrameworkNode)?.id ?? null,
+    [state.nodes],
+  )
+
+  // Cached derivation (same pattern as `nodesWithCallbacks` below): if every
+  // item node is referentially unchanged from the previous render (e.g. a
+  // dispatch only touched the framework node or selection state), reuse the
+  // previous `cfItems` array instead of allocating a new one. This keeps
+  // `cfItems`'s identity stable across non-item edits, which matters because
+  // downstream consumers (Tree Panel's `buildFrameworkTree`) key expensive
+  // recomputation off this array's reference.
+  const cfItemsCacheRef = useRef<{ inputs: CaseItemNodeType[]; output: CFItem[] }>({ inputs: [], output: [] })
+  const cfItems = useMemo(() => {
+    const itemNodes = state.nodes.filter(isItemNode)
+    const prev = cfItemsCacheRef.current
+    if (itemNodes.length === prev.inputs.length && itemNodes.every((n, i) => n === prev.inputs[i])) {
+      return prev.output
+    }
+    const output = itemNodes.map((n) => n.data.cfItem)
+    cfItemsCacheRef.current = { inputs: itemNodes, output }
+    return output
+  }, [state.nodes])
+
+  const frameworkEdges = useMemo(
+    (): FrameworkEdgeRecord[] =>
+      state.edges
+        // Only hierarchical item-to-item edges (isChildOf/isPartOf) represent
+        // parent/child structure — non-hierarchical associations (isRelatedTo,
+        // precedes, etc.) must NOT be treated as tree edges here, or a
+        // reciprocal/cross-type association can introduce a cycle into what
+        // buildFrameworkTree assumes is a DAG rooted at the framework node
+        // (mirrors the isHierarchical filtering in nodeGeometry.ts buildAdjacency).
+        .filter((e) => !e.data?.isFrameworkRootConnection && e.data?.isHierarchical)
+        .map((e) => ({
+          parentId: e.source,
+          childId: e.target,
+          sequenceNumber: e.data?.sequenceNumber,
+        })),
+    [state.edges],
+  )
+
+  const rootItemIds = useMemo(
+    () =>
+      state.edges
+        .filter((e) => e.data?.isFrameworkRootConnection)
+        .sort((a, b) => (a.data?.sequenceNumber ?? Infinity) - (b.data?.sequenceNumber ?? Infinity))
+        .map((e) => e.target),
+    [state.edges],
+  )
+
   // ── Context value ────────────────────────────────────────────────────
 
   const value: EditorContextValue = useMemo(
@@ -810,6 +877,11 @@ export function EditorProvider({
       deleteElements,
       applyHierarchyLayout,
       applyStarLayout,
+      cfDocument,
+      frameworkNodeId,
+      cfItems,
+      frameworkEdges,
+      rootItemIds,
     }),
     [
       state.nodes, state.edges, state.remoteLinks, selectedNodeIds, selectedEdgeIds,
@@ -830,6 +902,7 @@ export function EditorProvider({
       openCgeSearchPanel, openRemoteItemsPanel, closeSidePanel, openExternalFrameworkSettings,
       addItemDialog, setAddItemDraft, cancelAddItem, confirmAddItem,
       deleteElements, applyHierarchyLayout, applyStarLayout,
+      cfDocument, frameworkNodeId, cfItems, frameworkEdges, rootItemIds,
     ],
   )
 

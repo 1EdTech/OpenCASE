@@ -36,12 +36,13 @@ export class UpdateCFDocument {
     }
 
     // Load existing package
-    const existingPkg = await this.pkgRepo.load(tenantId, caseVersion, sourcedId)
-    if (!existingPkg) {
+    const storageKey = this.store.resolveStorageKey(tenantId, caseVersion, sourcedId)
+    const existingPkg = storageKey ? await this.pkgRepo.load(tenantId, caseVersion, storageKey) : null
+    if (!existingPkg || !storageKey) {
       throw new Error(`CFDocument with sourcedId ${sourcedId} not found`)
     }
 
-    assertDocumentMutable(this.store, tenantId, caseVersion, sourcedId)
+    assertDocumentMutable(this.store, tenantId, caseVersion, storageKey)
 
     // Create updated document from payload
     const updatedDocument = CFDocument.fromRaw(tenantId, caseVersion, payload)
@@ -79,7 +80,7 @@ export class UpdateCFDocument {
       definitions
     })
 
-    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg)
+    await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg, storageKey)
   }
 }
 

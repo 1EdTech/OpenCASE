@@ -64,6 +64,23 @@ describe('ImportFramework', () => {
       )
     })
 
+    it('mints a storage key independent of the document identifier — never inferred from the (possibly reused-later) sourcedId', async () => {
+      mockApiClient.fetchCFPackage.mockResolvedValue({
+        CFPackage: { CFDocument: cfDocument, CFItems: [], CFAssociations: [], CFRubrics: [] }
+      })
+
+      await importFramework.execute({
+        tenantId,
+        caseVersion,
+        endpointUrl: 'https://example.org/ims/case/v1p1/CFPackages/doc-123'
+      })
+
+      const storageKey = mockRepository.saveNewVersion.mock.calls[0][3]
+      expect(storageKey).toBeDefined()
+      expect(storageKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+      expect(storageKey).not.toBe('doc-123')
+    })
+
     it('imports from a directly provided CFPackage payload (v1.1 wrapped shape)', async () => {
       const result = await importFramework.execute({
         tenantId,
@@ -89,7 +106,7 @@ describe('ImportFramework', () => {
       expect(mockRepository.saveNewVersion).toHaveBeenCalledTimes(1)
     })
 
-    it('does not inject source provenance when importing from pasted JSON', async () => {
+    it('marks pasted JSON as a pristine mirror without a sourcePackageURI (no known source URL)', async () => {
       await importFramework.execute({
         tenantId,
         caseVersion,
@@ -99,6 +116,42 @@ describe('ImportFramework', () => {
       const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
       const savedExtensions = savedPkg.document.toJSON().extensions
       expect(savedExtensions?.['ext:opencase']?.sourcePackageURI).toBeUndefined()
+      expect(savedExtensions?.['ext:opencase']?.isModifiedFromSource).toBe(false)
+    })
+
+    it('preserves the source uri as-is (does not rewrite it onto this instance) when importing from a URL', async () => {
+      const foreignDocument = {
+        ...cfDocument,
+        uri: 'https://source.example.org/ims/case/v1p1/CFDocuments/doc-123'
+      }
+      mockApiClient.fetchCFPackage.mockResolvedValue({
+        CFPackage: { CFDocument: foreignDocument, CFItems: [], CFAssociations: [], CFRubrics: [] }
+      })
+
+      await importFramework.execute({
+        tenantId,
+        caseVersion,
+        endpointUrl: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123'
+      })
+
+      const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
+      expect(savedPkg.document.toJSON().uri).toBe('https://source.example.org/ims/case/v1p1/CFDocuments/doc-123')
+    })
+
+    it('preserves the source uri as-is when importing from pasted JSON', async () => {
+      const foreignDocument = {
+        ...cfDocument,
+        uri: 'https://source.example.org/ims/case/v1p1/CFDocuments/doc-123'
+      }
+
+      await importFramework.execute({
+        tenantId,
+        caseVersion,
+        cfPackage: { CFDocument: foreignDocument }
+      })
+
+      const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
+      expect(savedPkg.document.toJSON().uri).toBe('https://source.example.org/ims/case/v1p1/CFDocuments/doc-123')
     })
 
     it('throws when neither endpointUrl nor cfPackage is provided', async () => {

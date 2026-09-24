@@ -8,9 +8,6 @@ const nowIso = () => new Date().toISOString()
 /** OpenCASE extension namespace for editor-specific data */
 const OPENCASE_EXT_KEY = 'ext:opencase'
 
-/** Default version format: major.minor.build */
-const DEFAULT_VERSION = '1.0.0'
-
 /** UUID v4 pattern */
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -82,30 +79,6 @@ function makePackageUri(uuid: string): string {
   return `/ims/case/v1p1/CFPackages/${uuid}`
 }
 
-/**
- * Increment the build number of a version string (format: major.minor.build).
- * If the version doesn't match the expected format, returns the default version.
- */
-function incrementVersion(currentVersion?: string): string {
-  if (!currentVersion) return DEFAULT_VERSION
-  
-  const parts = currentVersion.split('.')
-  if (parts.length !== 3) {
-    // If current version exists but doesn't match format, try to preserve major.minor
-    if (parts.length === 2) {
-      return `${parts[0]}.${parts[1]}.0`
-    }
-    return DEFAULT_VERSION
-  }
-  
-  const build = Number.parseInt(parts[2], 10)
-  if (Number.isNaN(build)) {
-    return `${parts[0]}.${parts[1]}.0`
-  }
-  
-  return `${parts[0]}.${parts[1]}.${build + 1}`
-}
-
 type OpencaseExtension = {
   layout?: NodeLayout
   notes?: string
@@ -146,16 +119,11 @@ function frameworkToCfDocument(
   framework: Framework,
   caseVersion: CaseVersion,
   layout?: NodeLayout,
-  options?: { incrementVersion?: boolean; edgeType?: string; linkedFrameworks?: unknown[]; remoteItemLinks?: unknown[] }
+  options?: { edgeType?: string; linkedFrameworks?: unknown[]; remoteItemLinks?: unknown[] }
 ): CFDocument {
   const meta = framework.metadata
   const fwId = String(framework.id)
   const effectiveVersion = caseVersion === 'unknown' ? '1.1' : caseVersion
-  
-  // Handle version: either use current, increment, or set default
-  const documentVersion = options?.incrementVersion 
-    ? incrementVersion(meta.version)
-    : (meta.version ?? DEFAULT_VERSION)
 
   const docTitle = meta.title ?? 'Untitled Framework'
 
@@ -169,7 +137,7 @@ function frameworkToCfDocument(
     publisher: meta.publisher,
     notes: meta.notes,
     language: meta.language,
-    version: documentVersion,
+    version: meta.version,
     adoptionStatus: meta.adoptionStatus,
     frameworkType: meta.frameworkType,
     officialSourceURL: meta.officialSourceURL,
@@ -367,13 +335,11 @@ function associationToCfAssociation(
  * @param framework - The domain Framework (source of truth)
  * @param caseVersion - Target CASE version for serialization ('1.0' or '1.1')
  * @param layout - Optional layout state to store in extensions
- * @param incrementVersion - If true, increment the build number of the version (for saves)
  */
 export function frameworkToCfPackage(params: {
   framework: Framework
   caseVersion: CaseVersion
   layout?: LayoutState
-  incrementVersion?: boolean
   /** Edge rendering style to persist with this framework */
   edgeType?: string
   /** CFItemType definitions to include in CFDefinitions (from editor state) */
@@ -389,13 +355,12 @@ export function frameworkToCfPackage(params: {
   /** Remote framework editor data from canvas */
   remoteEditorData?: { linkedFrameworks: unknown[]; remoteItemLinks: unknown[] }
 }): CFPackage {
-  const { framework, caseVersion, layout, incrementVersion, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses, remoteEditorData } = params
+  const { framework, caseVersion, layout, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses, remoteEditorData } = params
   const fwId = String(framework.id)
 
   // Build CFDocument
   const documentLayout = layout?.byNodeId?.[fwId]
   const document = frameworkToCfDocument(framework, caseVersion, documentLayout, {
-    incrementVersion,
     edgeType,
     linkedFrameworks: remoteEditorData?.linkedFrameworks,
     remoteItemLinks: remoteEditorData?.remoteItemLinks,
@@ -637,27 +602,46 @@ export type OpenCaseAssociation = CaseV1p1Association
 export type OpenCaseCFPackage = CaseV1p1Package
 
 /**
+ * A `uri` is only trustworthy as a real, previously-assigned identity if it's
+ * not the placeholder `frameworkToCfDocument`/`itemToCfItem`/`associationToCfAssociation`
+ * synthesize for an entity that has never been saved before. Preserving a real
+ * uri (whether a prior local OpenCASE uri, or a foreign uri carried through
+ * from a mirrored import) keeps the frontend a faithful pass-through instead
+ * of prematurely localizing it — mirror/fork detection depends on this.
+ */
+function resolveUri(uri: string | undefined, placeholder: string, fallback: () => string): string {
+  return uri && uri !== placeholder ? uri : fallback()
+}
+
+/**
  * Convert internal CFPackage to official CASE v1p1 format for POST requests.
  * Uses identifier (not sourcedId) and official property names (CFDocument, CFItems, CFAssociations).
  * All IDs are converted to valid UUIDs.
  */
 export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
   const doc = cfPackage.CFDocument as CFDocument & { sourcedId?: string }
-  const docId = ensureUuid(doc.sourcedId ?? doc.identifier)
+  const docInternalId = doc.sourcedId ?? doc.identifier
+  const docId = ensureUuid(docInternalId)
   const docTitle = doc.title
-  
-  // Build a mapping from internal item IDs to normalized UUIDs
-  // This ensures consistent URIs across items and associations
+  const docUri = resolveUri(doc.uri, `urn:case:document:${docInternalId}`, () => makeDocumentUri(docId))
+
+  // Build mappings from internal item IDs to normalized UUIDs and to their
+  // resolved (preserved-if-real) URIs. Associations reference items by these
+  // same values, so both maps must stay consistent with what each item itself
+  // reports below.
   const itemIdMap = new Map<string, string>()
+  const itemUriMap = new Map<string, string>()
   for (const item of cfPackage.CFItems ?? []) {
     const it = item as CFItem & { sourcedId?: string }
     const internalId = it.sourcedId ?? it.identifier
-    itemIdMap.set(internalId, ensureUuid(internalId))
+    const resolvedId = ensureUuid(internalId)
+    itemIdMap.set(internalId, resolvedId)
+    itemUriMap.set(internalId, resolveUri(it.uri, `urn:case:item:${internalId}`, () => makeItemUri(resolvedId)))
   }
-  
+
   const document: CaseV1p1Document = {
     identifier: docId,
-    uri: makeDocumentUri(docId),
+    uri: docUri,
     title: docTitle,
     creator: doc.creator,
     lastChangeDateTime: doc.lastChangeDateTime,
@@ -697,13 +681,13 @@ export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
     const itemId = itemIdMap.get(internalId) ?? ensureUuid(internalId)
     return {
       identifier: itemId,
-      uri: makeItemUri(itemId),
+      uri: itemUriMap.get(internalId) ?? makeItemUri(itemId),
       fullStatement: it.fullStatement,
       lastChangeDateTime: it.lastChangeDateTime,
       CFDocumentURI: {
         title: docTitle,
         identifier: docId,
-        uri: makeDocumentUri(docId),
+        uri: docUri,
       },
       humanCodingScheme: it.humanCodingScheme,
       listEnumeration: it.listEnumeration,
@@ -727,27 +711,47 @@ export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
 
   const associations: CaseV1p1Association[] | undefined = cfPackage.CFAssociations?.map((assoc) => {
     const a = assoc as CFAssociation & { sourcedId?: string }
-    const assocId = ensureUuid(a.sourcedId ?? a.identifier)
-    
-    // Get normalized UUIDs for origin and destination items
+    const assocInternalId = a.sourcedId ?? a.identifier
+    const assocId = ensureUuid(assocInternalId)
+    const assocUri = resolveUri(a.uri, `urn:case:association:${assocInternalId}`, () => makeAssociationUri(assocId))
+
+    // Get normalized UUIDs (and preserved-if-real URIs) for origin and destination
+    // nodes. A node is usually another CFItem, but CASE also allows an
+    // association to reference the framework's own CFDocument directly (e.g. a
+    // top-level competency's "isChildOf" edge back to the framework) — that
+    // node must resolve to the document's own id/uri, not fall through to the
+    // item-not-found branch and fabricate a brand-new CFItems-shaped uri.
     const originInternalId = a.originNodeURI.identifier ?? ''
     const destInternalId = a.destinationNodeURI.identifier ?? ''
-    const originId = itemIdMap.get(originInternalId) ?? ensureUuid(originInternalId)
-    const destId = itemIdMap.get(destInternalId) ?? ensureUuid(destInternalId)
-    
+    const resolveNodeId = (internalId: string): string =>
+      internalId === docInternalId ? docId : (itemIdMap.get(internalId) ?? ensureUuid(internalId))
+    const resolveNodeUri = (internalId: string, resolvedId: string): string =>
+      internalId === docInternalId ? docUri : (itemUriMap.get(internalId) ?? makeItemUri(resolvedId))
+    const originId = resolveNodeId(originInternalId)
+    const destId = resolveNodeId(destInternalId)
+    // Prefer whatever real (non-placeholder) uri this association already
+    // recorded for each node — a mirrored source's own node-reference uri
+    // shape can legitimately disagree with how this instance would otherwise
+    // reconstruct it (e.g. some sources point a document-as-node reference at
+    // a `/CFItems/{id}` path instead of `/CFDocuments/{id}`), and re-deriving
+    // it in that case would falsely look like an edit on every single save.
+    // Only fall back to reconstruction for a genuinely new/placeholder value.
+    const originUri = resolveUri(a.originNodeURI.uri, `urn:case:item:${originInternalId}`, () => resolveNodeUri(originInternalId, originId))
+    const destUri = resolveUri(a.destinationNodeURI.uri, `urn:case:item:${destInternalId}`, () => resolveNodeUri(destInternalId, destId))
+
     return {
       identifier: assocId,
-      uri: makeAssociationUri(assocId),
+      uri: assocUri,
       associationType: a.associationType,
       originNodeURI: {
         title: a.originNodeURI.title ?? 'Origin',
         identifier: originId,
-        uri: makeItemUri(originId),
+        uri: originUri,
       },
       destinationNodeURI: {
         title: a.destinationNodeURI.title ?? 'Destination',
         identifier: destId,
-        uri: makeItemUri(destId),
+        uri: destUri,
       },
       lastChangeDateTime: a.lastChangeDateTime,
       sequenceNumber: a.sequenceNumber,
@@ -760,7 +764,7 @@ export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
       CFDocumentURI: {
         title: docTitle,
         identifier: docId,
-        uri: makeDocumentUri(docId),
+        uri: docUri,
       },
       extensions: a.extensions,
     }
@@ -808,5 +812,4 @@ export type FrameworkExportParams = {
   framework: Framework
   caseVersion: CaseVersion
   layout?: LayoutState
-  incrementVersion?: boolean
 }

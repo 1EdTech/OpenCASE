@@ -6,6 +6,15 @@ export { normalizeCgeFrameworkList, normalizeCgeSubscriptionList } from './cgeTy
 
 export type OpenCaseCfPackageResponse = { CFPackage: CFPackage }
 
+export type AlignmentFrameworkSummary = {
+  sourcedId: string
+  title: string
+  caseVersion: string
+  frameworkType?: string
+  alignmentParticipants?: Array<{ identifier?: string; uri: string }>
+  lastChangeDateTime?: string
+}
+
 export type OpenCaseManagementCfPackageSummary = {
   sourcedId?: string
   identifier?: string
@@ -31,9 +40,9 @@ export type CfDocumentSummary = {
   adoptionStatus?: string
   lastChangeDateTime?: string
   caseVersion?: string
-  /** URL the framework was imported from (set during import via backend). */
+  /** URL the framework was imported from, if known (set during import via backend). */
   sourcePackageURI?: string
-  /** True when an imported framework has been locally modified after import. */
+  /** Set (true or false) once a framework has been imported/mirrored; true once it's been locally modified (forked). */
   isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
@@ -139,20 +148,23 @@ export class CaseApiClient {
     tenantId: string
     cfPackage: unknown // OpenCaseCFPackage format
     caseVersion?: 'v1p0' | 'v1p1'
-  }): Promise<{ docId: string; version: string }> {
+  }): Promise<{ docId: string; version: string; forked?: boolean; isModifiedFromSource?: boolean; sourcePackageURI?: string }> {
     const v = params.caseVersion ?? 'v1p1'
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages`
-    
+
     const res = (await this._http.post(url, params.cfPackage)) as unknown
-    
+
     if (res && typeof res === 'object') {
-      const obj = res as { docId?: string; version?: string; identifier?: string }
+      const obj = res as { docId?: string; version?: string; identifier?: string; forked?: boolean; isModifiedFromSource?: boolean; sourcePackageURI?: string }
       return {
         docId: obj.docId ?? obj.identifier ?? '',
         version: obj.version ?? '',
+        forked: obj.forked,
+        isModifiedFromSource: obj.isModifiedFromSource,
+        sourcePackageURI: obj.sourcePackageURI,
       }
     }
-    
+
     throw new Error('Unexpected save response shape')
   }
 
@@ -320,6 +332,27 @@ export class CaseApiClient {
       }
     }
 
+    return []
+  }
+
+  /**
+   * List alignment frameworks for a tenant that include a specific framework as a participant.
+   *
+   * Uses the management endpoint:
+   *   GET /management/tenants/{tenantId}/CFPackages?frameworkType=Alignment&participantId={participantId}
+   */
+  async listAlignmentFrameworks(params: {
+    tenantId: string
+    participantId: string
+  }): Promise<AlignmentFrameworkSummary[]> {
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/CFPackages?frameworkType=Alignment&participantId=${encodeURIComponent(params.participantId)}`
+    const res = (await this._http.get(url)) as unknown
+
+    if (res && typeof res === 'object' && 'frameworks' in res) {
+      const obj = res as { frameworks?: unknown }
+      if (Array.isArray(obj.frameworks)) return obj.frameworks as AlignmentFrameworkSummary[]
+    }
+    if (Array.isArray(res)) return res as AlignmentFrameworkSummary[]
     return []
   }
 

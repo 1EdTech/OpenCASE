@@ -15,11 +15,12 @@ export class RestoreFramework {
   async execute (cmd: RestoreFrameworkCommand): Promise<void> {
     const { tenantId, caseVersion, sourcedId } = cmd
 
-    if (!this.store.isDocumentArchived(tenantId, caseVersion, sourcedId)) {
+    const storageKey = this.store.resolveStorageKey(tenantId, caseVersion, sourcedId)
+    if (!storageKey || !this.store.isDocumentArchived(tenantId, caseVersion, storageKey)) {
       throw new Error(`CFDocument with sourcedId ${sourcedId} is not archived`)
     }
 
-    this.store.setDocumentArchived(tenantId, caseVersion, sourcedId, false)
+    this.store.setDocumentArchived(tenantId, caseVersion, storageKey, false)
     await this.store.writeIndexesToDisk(tenantId, caseVersion)
   }
 }

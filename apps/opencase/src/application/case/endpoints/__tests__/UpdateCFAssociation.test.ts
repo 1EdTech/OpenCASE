@@ -17,8 +17,8 @@ describe('UpdateCFAssociation', () => {
     } as any
 
     mockStore = {
-      getDocumentIdForAssociation: jest.fn(),
-      getDocumentMetadata: jest.fn().mockReturnValue(null),
+      getStorageKeyForAssociation: jest.fn(),
+      getDocumentMetadata: jest.fn().mockReturnValue(null)
     } as any
 
     updateCFAssociation = new UpdateCFAssociation(mockRepository, mockStore)
@@ -31,7 +31,7 @@ describe('UpdateCFAssociation', () => {
     const assocId = 'assoc-123'
 
     it('should update association successfully', async () => {
-      mockStore.getDocumentIdForAssociation.mockReturnValue(docId)
+      mockStore.getStorageKeyForAssociation.mockReturnValue(docId)
 
       const existingDocument = CFDocument.create({
         tenantId,
@@ -94,7 +94,7 @@ describe('UpdateCFAssociation', () => {
         payload: updatedPayload
       })
 
-      expect(mockStore.getDocumentIdForAssociation).toHaveBeenCalledWith(tenantId, caseVersion, assocId)
+      expect(mockStore.getStorageKeyForAssociation).toHaveBeenCalledWith(tenantId, caseVersion, assocId)
       expect(mockRepository.load).toHaveBeenCalledWith(tenantId, caseVersion, docId)
       expect(mockRepository.saveNewVersion).toHaveBeenCalledTimes(1)
 
@@ -104,7 +104,7 @@ describe('UpdateCFAssociation', () => {
     })
 
     it('should throw error when association not found in index', async () => {
-      mockStore.getDocumentIdForAssociation.mockReturnValue(null)
+      mockStore.getStorageKeyForAssociation.mockReturnValue(null)
 
       await expect(
         updateCFAssociation.execute({
@@ -117,7 +117,7 @@ describe('UpdateCFAssociation', () => {
     })
 
     it('should throw error when sourcedId mismatch', async () => {
-      mockStore.getDocumentIdForAssociation.mockReturnValue(docId)
+      mockStore.getStorageKeyForAssociation.mockReturnValue(docId)
 
       const existingDocument = CFDocument.create({
         tenantId,

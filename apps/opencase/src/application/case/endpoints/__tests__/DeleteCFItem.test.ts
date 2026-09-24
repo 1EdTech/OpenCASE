@@ -18,7 +18,7 @@ describe('DeleteCFItem', () => {
     } as any
 
     mockStore = {
-      getDocumentIdForItem: jest.fn(),
+      getStorageKeyForItem: jest.fn(),
       removeItemFromIndex: jest.fn(),
       removeAssociationFromIndex: jest.fn(),
       getDocumentMetadata: jest.fn().mockReturnValue(null),
@@ -34,7 +34,7 @@ describe('DeleteCFItem', () => {
     const itemId = 'item-123'
 
     it('should delete item and related associations', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
 
       const existingDocument = CFDocument.create({
         tenantId,
@@ -127,7 +127,7 @@ describe('DeleteCFItem', () => {
         sourcedId: itemId
       })
 
-      expect(mockStore.getDocumentIdForItem).toHaveBeenCalledWith(tenantId, caseVersion, itemId)
+      expect(mockStore.getStorageKeyForItem).toHaveBeenCalledWith(tenantId, caseVersion, itemId)
       expect(mockRepository.load).toHaveBeenCalledWith(tenantId, caseVersion, docId)
       expect(mockStore.removeItemFromIndex).toHaveBeenCalledWith(tenantId, caseVersion, itemId)
       expect(mockStore.removeAssociationFromIndex).toHaveBeenCalledWith(tenantId, caseVersion, 'assoc-1')
@@ -141,7 +141,7 @@ describe('DeleteCFItem', () => {
     })
 
     it('should throw error when item not found in index', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(null)
+      mockStore.getStorageKeyForItem.mockReturnValue(null)
 
       await expect(
         deleteCFItem.execute({
@@ -153,7 +153,7 @@ describe('DeleteCFItem', () => {
     })
 
     it('should throw error when item not found in package', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
 
       const existingDocument = CFDocument.create({
         tenantId,

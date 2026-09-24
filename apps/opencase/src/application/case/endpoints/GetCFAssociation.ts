@@ -23,11 +23,11 @@ export class GetCFAssociation {
     const storageVersion = query.loadVersion ?? query.caseVersion
 
     // Find which document contains this association
-    const docId = this.store.getDocumentIdForAssociation(query.tenantId, storageVersion, query.sourcedId)
-    if (!docId) return null
+    const storageKey = this.store.getStorageKeyForAssociation(query.tenantId, storageVersion, query.sourcedId)
+    if (!storageKey) return null
 
     // Load the package containing this association
-    const pkg = await this.pkgRepo.load(query.tenantId, storageVersion, docId)
+    const pkg = await this.pkgRepo.load(query.tenantId, storageVersion, storageKey)
     if (!pkg) return null
 
     // Find the specific association

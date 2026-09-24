@@ -1,5 +1,6 @@
 import { CreateFramework } from '../CreateFramework'
 import { CFPackageRepository } from '../../ports/CFPackageRepository'
+import { FileFrameworkStore } from '../../../../infrastructure/persistence/file/FileFrameworkStore'
 import { CFDocument } from '../../../../domain/case/entities/CFDocument'
 import { CFItem } from '../../../../domain/case/entities/CFItem'
 import { CFAssociation } from '../../../../domain/case/entities/CFAssociation'
@@ -8,6 +9,7 @@ import { CFPackage } from '../../../../domain/case/entities/CFPackage'
 
 describe('CreateFramework', () => {
   let mockRepository: jest.Mocked<CFPackageRepository>
+  let mockStore: jest.Mocked<FileFrameworkStore>
   let createFramework: CreateFramework
 
   beforeEach(() => {
@@ -16,7 +18,15 @@ describe('CreateFramework', () => {
       saveNewVersion: jest.fn().mockResolvedValue(undefined)
     } as any
 
-    createFramework = new CreateFramework(mockRepository)
+    // Default: no document currently exists with any identifier (the
+    // "created" scenario most tests below exercise). Individual tests that
+    // need an "existing document" scenario override resolveStorageKey.
+    mockStore = {
+      resolveStorageKey: jest.fn().mockReturnValue(null),
+      getDocumentMetadata: jest.fn().mockReturnValue(null)
+    } as any
+
+    createFramework = new CreateFramework(mockRepository, undefined, mockStore)
   })
 
   describe('execute', () => {
@@ -95,6 +105,25 @@ describe('CreateFramework', () => {
       expect(savedPkg.associations[0].sourcedId).toBe('assoc-1')
       expect(savedPkg.rubrics).toHaveLength(1)
       expect(savedPkg.rubrics[0].identifier).toBe('rubric-1')
+    })
+
+    it('mints a storage key independent of the document identifier for a brand-new document', async () => {
+      const payload = {
+        CFDocument: {
+          identifier: 'doc-123',
+          uri: '/ims/case/v1p1/CFDocuments/doc-123',
+          title: 'Test Document',
+          creator: 'Test Creator',
+          lastChangeDateTime: '2024-01-01T00:00:00Z'
+        }
+      }
+
+      await createFramework.execute({ tenantId, caseVersion, payload })
+
+      const storageKey = mockRepository.saveNewVersion.mock.calls[0][3]
+      expect(storageKey).toBeDefined()
+      expect(storageKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+      expect(storageKey).not.toBe('doc-123')
     })
 
     it('should handle missing optional arrays', async () => {
@@ -182,6 +211,7 @@ describe('CreateFramework', () => {
       const rubrics = payload.CFRubrics.map(r => CFRubric.fromRaw(tenantId, caseVersion as any, r))
       const existingPkg = new CFPackage({ document: doc, items, associations, rubrics, definitions: null })
       mockRepository.load.mockResolvedValueOnce(existingPkg as any)
+      mockStore.resolveStorageKey.mockReturnValue('doc-123')
 
       const result = await createFramework.execute({ tenantId, caseVersion: caseVersion as any, payload })
 

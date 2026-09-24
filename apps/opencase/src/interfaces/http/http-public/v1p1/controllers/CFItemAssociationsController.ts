@@ -36,7 +36,7 @@ export class CFItemAssociationsControllerV1p1 {
 
       // Access control: check parent framework's license
       if (!(req as any).isAuthenticated) {
-        if (!this.store.isDocumentPublic(resolved.tenantId, '1.1', resolved.docSourcedId)) {
+        if (!this.store.isDocumentPublic(resolved.tenantId, '1.1', resolved.docStorageKey)) {
           return res.status(401).json(StatusInfoFormatter.unauthorized('Authentication required to access this item.'))
         }
       }

@@ -44,7 +44,7 @@ describe('GetCFLicense', () => {
       }
 
       mockStore.getDefinitionById.mockReturnValue({
-        docSourcedId: 'doc-123',
+        docStorageKey: 'doc-123',
         value: license,
         lastChangeDateTime: '2024-01-01T00:00:00.000Z'
       } as any)

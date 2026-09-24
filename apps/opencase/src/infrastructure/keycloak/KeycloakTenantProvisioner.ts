@@ -37,53 +37,13 @@ export class KeycloakTenantProvisioner {
     })
 
     const tenantId = 'system'
-    const clientId = OidcJwtVerifier.computeTenantClientId(this.cfg.clientIdPrefix, tenantId)
-    const { id: clientUuid } = await this.admin.ensureClient({
-      clientId,
-      publicClient: true,
-      standardFlowEnabled: true,
-      redirectUris: this.cfg.spaRedirectUris,
-      webOrigins: this.cfg.spaWebOrigins
-    })
-
-    await this.admin.ensureClientRole(clientUuid, 'case.admin')
-    // Also provision membership roles so system-admin can use Members / API Keys on the system tenant
-    await this.admin.ensureTenantMemberRoles(clientUuid)
-
-    await this.admin.ensureProtocolMapper(clientUuid, {
-      name: 'tenantId',
-      protocol: 'openid-connect',
-      protocolMapper: 'oidc-hardcoded-claim-mapper',
-      config: {
-        'claim.name': 'tenantId',
-        'claim.value': tenantId,
-        'jsonType.label': 'String',
-        'id.token.claim': 'true',
-        'access.token.claim': 'true',
-        'userinfo.token.claim': 'true'
-      }
-    })
-
-    await this.admin.ensureProtocolMapper(clientUuid, {
-      name: 'scope',
-      protocol: 'openid-connect',
-      protocolMapper: 'oidc-usermodel-client-role-mapper',
-      config: {
-        'clientId': clientId,
-        'rolePrefix': '',
-        'claim.name': 'scope',
-        'jsonType.label': 'String',
-        'multivalued': 'true',
-        'access.token.claim': 'true',
-        'id.token.claim': 'true',
-        'userinfo.token.claim': 'true'
-      }
-    })
+    const roles = ['case.read', 'case.write', 'case.owner', 'case.admin']
+    const { clientId, clientUuid } = await this.ensureTenantClient(tenantId, roles)
 
     const { id: userId } = await this.admin.ensureUser({ username: email, email, enabled: true })
     await this.admin.setUserPassword(userId, password, false)
-    await this.admin.assignClientRoles(userId, clientUuid, ['case.admin'])
-    // Tenant-admin capabilities on the system tenant (Members, API keys, framework authoring)
+    await this.admin.assignClientRoles(userId, clientUuid, roles)
+    // Tenant-admin membership so system-admin can use Members / API Keys on the system tenant
     await this.admin.setMemberRole(userId, clientUuid, [
       'case.read', 'case.write', 'case.owner', 'admin'
     ])
@@ -94,6 +54,21 @@ export class KeycloakTenantProvisioner {
   async provisionTenant (tenantId: string): Promise<{ adminEmail: string, adminPassword: string }> {
     await this.admin.ensureRealmExists()
 
+    const roles = ['case.read', 'case.write', 'case.owner']
+    const { clientId, clientUuid } = await this.ensureTenantClient(tenantId, roles)
+
+    const adminEmail = `admin@${tenantId}.local`
+    const { id: userId } = await this.admin.ensureUser({ username: adminEmail, email: adminEmail, enabled: true })
+    const adminPassword = randomBytes(18).toString('base64url')
+    await this.admin.setUserPassword(userId, adminPassword, true)
+    // Assign admin membership (human-readable label + case.* scopes)
+    await this.admin.setMemberRole(userId, clientUuid, [...roles, 'admin'])
+
+    logger.info({ tenantId, clientId, adminEmail }, 'Provisioned tenant client and admin user in Keycloak')
+    return { adminEmail, adminPassword }
+  }
+
+  private async ensureTenantClient (tenantId: string, roles: string[]): Promise<{ clientId: string, clientUuid: string }> {
     const clientId = OidcJwtVerifier.computeTenantClientId(this.cfg.clientIdPrefix, tenantId)
     const { id: clientUuid } = await this.admin.ensureClient({
       clientId,
@@ -103,7 +78,12 @@ export class KeycloakTenantProvisioner {
       webOrigins: this.cfg.spaWebOrigins
     })
 
-    // Scope roles + human-readable membership roles (viewer/author/admin)
+    // Scope roles requested by the caller (e.g. case.admin on the system tenant)…
+    for (const role of roles) {
+      await this.admin.ensureClientRole(clientUuid, role)
+    }
+    // …plus the human-readable membership roles (viewer/author/admin) the Members
+    // UI assigns, which are composites of the corresponding case.* scopes.
     await this.admin.ensureTenantMemberRoles(clientUuid)
 
     await this.admin.ensureProtocolMapper(clientUuid, {
@@ -136,17 +116,7 @@ export class KeycloakTenantProvisioner {
       }
     })
 
-    const adminEmail = `admin@${tenantId}.local`
-    const { id: userId } = await this.admin.ensureUser({ username: adminEmail, email: adminEmail, enabled: true })
-    const adminPassword = randomBytes(18).toString('base64url')
-    await this.admin.setUserPassword(userId, adminPassword, true)
-    // Assign admin membership (label + case.* scopes)
-    await this.admin.setMemberRole(userId, clientUuid, [
-      'case.read', 'case.write', 'case.owner', 'admin'
-    ])
-
-    logger.info({ tenantId, clientId, adminEmail }, 'Provisioned tenant client and admin user in Keycloak')
-    return { adminEmail, adminPassword }
+    return { clientId, clientUuid }
   }
 }
 

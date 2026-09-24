@@ -15,7 +15,8 @@ describe('FileCFPackageRepository', () => {
       loadDocumentBundle: jest.fn(),
       assertNoEntityIdReuse: jest.fn(),
       writeBundleFile: jest.fn(),
-      updateIndexesForBundle: jest.fn().mockResolvedValue(undefined)
+      updateIndexesForBundle: jest.fn().mockResolvedValue(undefined),
+      resolveStorageKey: jest.fn().mockReturnValue(null)
     } as any;
 
     repository = new FileCFPackageRepository(mockStore);
@@ -90,6 +91,60 @@ describe('FileCFPackageRepository', () => {
       expect(result?.items).toEqual([]);
       expect(result?.associations).toEqual([]);
       expect(result?.rubrics).toEqual([]);
+    });
+
+    it('preserves a pristine mirror\'s original uri across reloads (isModifiedFromSource: false)', async () => {
+      const bundle = {
+        document: {
+          sourcedId: docId,
+          title: 'Test Document',
+          uri: 'https://source.example.org/ims/case/v1p1/CFDocuments/doc-123',
+          lastChangeDateTime: '2024-01-01T00:00:00Z',
+          extensions: {
+            'ext:opencase': {
+              sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
+              isModifiedFromSource: false
+            }
+          }
+        },
+        items: [
+          {
+            sourcedId: 'item-1',
+            uri: 'https://source.example.org/ims/case/v1p1/CFItems/item-1',
+            fullStatement: 'Statement 1'
+          }
+        ]
+      };
+
+      mockStore.loadDocumentBundle.mockResolvedValue(bundle);
+
+      const result = await repository.load(tenantId, version, docId);
+
+      expect(result?.document.toJSON().uri).toBe('https://source.example.org/ims/case/v1p1/CFDocuments/doc-123');
+      expect(result?.items[0].toJSON().uri).toBe('https://source.example.org/ims/case/v1p1/CFItems/item-1');
+    });
+
+    it('regenerates local uris for a forked framework (isModifiedFromSource: true)', async () => {
+      const bundle = {
+        document: {
+          sourcedId: docId,
+          title: 'Test Document',
+          uri: 'https://source.example.org/ims/case/v1p1/CFDocuments/doc-123',
+          lastChangeDateTime: '2024-01-01T00:00:00Z',
+          extensions: {
+            'ext:opencase': {
+              sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
+              isModifiedFromSource: true
+            }
+          }
+        }
+      };
+
+      mockStore.loadDocumentBundle.mockResolvedValue(bundle);
+
+      const result = await repository.load(tenantId, version, docId);
+
+      expect(result?.document.toJSON().uri).toBe(`/ims/case/v1p1/CFDocuments/${docId}`);
     });
 
     it('should handle null/undefined items and associations', async () => {
@@ -178,7 +233,7 @@ describe('FileCFPackageRepository', () => {
       const relativePath = 'frameworks/doc-123/doc-123_v0001.json';
       mockStore.writeBundleFile.mockResolvedValue({ relativePath });
 
-      await repository.saveNewVersion(tenantId, version, pkg);
+      await repository.saveNewVersion(tenantId, version, pkg, 'doc-123');
 
       expect(mockStore.writeBundleFile).toHaveBeenCalledWith(
         tenantId,
@@ -194,6 +249,7 @@ describe('FileCFPackageRepository', () => {
       expect(mockStore.updateIndexesForBundle).toHaveBeenCalledWith(
         tenantId,
         version,
+        'doc-123',
         {
           document: document.toJSON(),
           items: [item.toJSON()],
@@ -225,7 +281,7 @@ describe('FileCFPackageRepository', () => {
       const relativePath = 'frameworks/doc-123/doc-123_v0001.json';
       mockStore.writeBundleFile.mockResolvedValue({ relativePath });
 
-      await repository.saveNewVersion(tenantId, version, pkg);
+      await repository.saveNewVersion(tenantId, version, pkg, 'doc-123');
 
       expect(mockStore.writeBundleFile).toHaveBeenCalledWith(
         tenantId,
@@ -241,6 +297,7 @@ describe('FileCFPackageRepository', () => {
       expect(mockStore.updateIndexesForBundle).toHaveBeenCalledWith(
         tenantId,
         version,
+        'doc-123',
         {
           document: document.toJSON(),
           items: [],
@@ -273,7 +330,7 @@ describe('FileCFPackageRepository', () => {
       mockStore.writeBundleFile.mockRejectedValue(error);
 
       await expect(
-        repository.saveNewVersion(tenantId, version, pkg)
+        repository.saveNewVersion(tenantId, version, pkg, 'doc-123')
       ).rejects.toThrow('File system error');
     });
   });

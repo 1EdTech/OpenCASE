@@ -21,7 +21,9 @@ export class GetCFPackage {
   async execute(query: GetCFPackageQuery) {
     const storageVersion = query.loadVersion ?? query.caseVersion
     logger.info({ query, storageVersion }, 'Executing GetCFPackage')
-    const pkg = await this.pkgRepo.load(query.tenantId, storageVersion, query.docId)
+    const storageKey = this.store.resolveStorageKey(query.tenantId, storageVersion, query.docId)
+    if (!storageKey) return null
+    const pkg = await this.pkgRepo.load(query.tenantId, storageVersion, storageKey)
     logger.info({ pkg }, 'Loaded CFPackage')
     if (!pkg) return null
 

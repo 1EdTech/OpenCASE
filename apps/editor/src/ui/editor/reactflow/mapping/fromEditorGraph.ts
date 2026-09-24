@@ -10,13 +10,13 @@ const isFrameworkNode = (n: EditorGraph['nodes'][number]) => n.type === 'caseFra
 const isItemNode = (n: EditorGraph['nodes'][number]) => n.type === 'caseItemNode'
 const isExternalFrameworkNode = (n: EditorGraph['nodes'][number]) => n.type === 'externalFrameworkNode'
 
-function mapItemType(rawType?: string): ItemType {
+function mapItemType(rawType?: string): ItemType | undefined {
   const raw = (rawType ?? '').toLowerCase()
   if (raw.includes('skill')) return 'Skill'
   if (raw.includes('learning') || raw.includes('outcome')) return 'LearningOutcome'
   if (raw.includes('standard')) return 'Standard'
   if (raw.includes('compet')) return 'Competency'
-  return 'Competency'
+  return undefined
 }
 
 function edgeToAssociationType(edgeId: string, edgeData?: { associationType?: string; cfAssociation?: { associationType?: string } }): AssociationType {
@@ -117,7 +117,18 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     const edgeData = e.data as {
       associationType?: string
       sequenceNumber?: number
-      cfAssociation?: { identifier?: string; uri?: string; sequenceNumber?: number; associationType?: string; CFAssociationGroupingURI?: { identifier?: string; title?: string; uri?: string }; notes?: string; lastChangeDateTime?: string; extensions?: Record<string, unknown> }
+      cfAssociation?: {
+        identifier?: string
+        uri?: string
+        sequenceNumber?: number
+        associationType?: string
+        originNodeURI?: { uri?: string }
+        destinationNodeURI?: { uri?: string }
+        CFAssociationGroupingURI?: { identifier?: string; title?: string; uri?: string }
+        notes?: string
+        lastChangeDateTime?: string
+        extensions?: Record<string, unknown>
+      }
     } | undefined
 
     // Framework→item edges represent top-level isChildOf associations (item isChildOf document).
@@ -140,6 +151,8 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
         associationType: 'isChildOf',
         metadata: {
           caseUri: edgeData?.cfAssociation?.uri,
+          originUri: edgeData?.cfAssociation?.originNodeURI?.uri,
+          destinationUri: edgeData?.cfAssociation?.destinationNodeURI?.uri,
           sequenceNumber: edgeData?.sequenceNumber ?? edgeData?.cfAssociation?.sequenceNumber,
           originHandle,
           destinationHandle,
@@ -180,6 +193,8 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
       associationType,
       metadata: {
         caseUri: edgeData?.cfAssociation?.uri,
+        originUri: edgeData?.cfAssociation?.originNodeURI?.uri,
+        destinationUri: edgeData?.cfAssociation?.destinationNodeURI?.uri,
         sequenceNumber: edgeData?.cfAssociation?.sequenceNumber,
         originHandle,
         destinationHandle,

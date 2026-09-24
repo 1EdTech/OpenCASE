@@ -6,6 +6,12 @@ export interface ListFrameworksQuery {
   tenantId: TenantId
   caseVersion?: CaseVersion
   includeArchived?: boolean
+  /** When set, only frameworks with this frameworkType are returned */
+  frameworkType?: string
+  /** When set, only alignment frameworks listing this docId as a participant are returned */
+  participantId?: string
+  /** When true, include OpenCASE-proprietary fields derived from ext:opencase (e.g. alignmentParticipants). Set when the request carries the X-CASE-EDITOR header. */
+  includeOpenCaseExtensions?: boolean
 }
 
 export class ListFrameworks {
@@ -27,18 +33,19 @@ export class ListFrameworks {
       readOnly?: boolean
       cgeFrameworkId?: string
       sourcePackageURI?: string
+      alignmentParticipants?: Array<{ identifier?: string; uri: string }>
     }> = []
 
     for (const version of versions) {
       const documents = this.store.getAllDocuments(query.tenantId, version)
       for (const doc of documents) {
-        // Filter server-level archived documents unless includeArchived is true
-        if (!query.includeArchived) {
-          if (doc.archived === true) {
-            continue // Skip archived documents
-          }
+        if (!query.includeArchived && doc.archived === true) continue
+        if (query.frameworkType && doc.frameworkType !== query.frameworkType) continue
+        if (query.participantId) {
+          const participates = doc.alignmentParticipants?.some(p => p.identifier === query.participantId)
+          if (!participates) continue
         }
-        
+
         frameworks.push({
           sourcedId: doc.sourcedId,
           title: doc.title,
@@ -51,6 +58,9 @@ export class ListFrameworks {
           readOnly: doc.readOnly === true,
           cgeFrameworkId: doc.cgeFrameworkId,
           sourcePackageURI: doc.sourcePackageURI,
+          // alignmentParticipants is derived from the ext:opencase extension and is
+          // OpenCASE-proprietary — only surface it to callers that requested extensions.
+          ...(query.includeOpenCaseExtensions && doc.alignmentParticipants ? { alignmentParticipants: doc.alignmentParticipants } : {})
         })
       }
     }

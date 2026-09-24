@@ -32,8 +32,13 @@ export function makeAuthMiddleware (verifier: OidcJwtVerifier) {
 
 /**
  * Optional auth middleware — attempts JWT verification but passes through
- * even if the token is missing or invalid. Used for CASE Provider API routes
- * where public-licensed frameworks are accessible without auth.
+ * unauthenticated if no token is supplied at all. Used for CASE Provider API
+ * routes where public-licensed frameworks are accessible without auth.
+ *
+ * If a Bearer token IS supplied but fails verification, this rejects with 401
+ * rather than silently falling back to anonymous access — an explicitly
+ * presented credential that doesn't verify should not be indistinguishable
+ * from "no credential was offered" (see RFC 6750 §3, invalid_token).
  *
  * Sets `req.isAuthenticated` to true/false so controllers can decide.
  *
@@ -63,12 +68,13 @@ export function makeOptionalAuthMiddleware (verifier: OidcJwtVerifier) {
       ;(req as any).tenantId = tokenTenantId
       ;(req as any).user = payload
       ;(req as any).isAuthenticated = true
-    } catch {
-      // Token was invalid — treat as unauthenticated
-      ;(req as any).isAuthenticated = false
+      return next()
+    } catch (err: any) {
+      // A token was explicitly presented but failed verification — reject
+      // rather than treating this the same as an anonymous request.
+      res.setHeader('WWW-Authenticate', 'Bearer error="invalid_token"')
+      return res.status(401).json({ error: 'Invalid token', message: err?.message })
     }
-
-    return next()
   }
 }
 

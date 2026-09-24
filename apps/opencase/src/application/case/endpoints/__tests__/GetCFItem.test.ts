@@ -17,7 +17,7 @@ describe('GetCFItem', () => {
     } as any
 
     mockStore = {
-      getDocumentIdForItem: jest.fn(),
+      getStorageKeyForItem: jest.fn(),
       getAllDocuments: jest.fn()
     } as any
 
@@ -31,7 +31,7 @@ describe('GetCFItem', () => {
     const itemId = 'item-123'
 
     it('should return null when item is not found in index', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(null)
+      mockStore.getStorageKeyForItem.mockReturnValue(null)
 
       const result = await getCFItem.execute({ tenantId, caseVersion, sourcedId: itemId })
 
@@ -40,7 +40,7 @@ describe('GetCFItem', () => {
     })
 
     it('should return null when package is not found', async () => {
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
       mockRepository.load.mockResolvedValue(null)
 
       const result = await getCFItem.execute({ tenantId, caseVersion, sourcedId: itemId })
@@ -66,7 +66,7 @@ describe('GetCFItem', () => {
         rubrics: []
       })
 
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
       mockRepository.load.mockResolvedValue(pkg)
 
       const result = await getCFItem.execute({ tenantId, caseVersion, sourcedId: itemId })
@@ -108,7 +108,7 @@ describe('GetCFItem', () => {
         rubrics: []
       })
 
-      mockStore.getDocumentIdForItem.mockReturnValue(docId)
+      mockStore.getStorageKeyForItem.mockReturnValue(docId)
       mockRepository.load.mockResolvedValue(pkg)
 
       const result = await getCFItem.execute({ tenantId, caseVersion, sourcedId: itemId })
