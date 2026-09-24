@@ -20,14 +20,34 @@ export type CaseFrameworkNodeType = Node<CaseFrameworkNodeData, 'caseFrameworkNo
 
 /** Data for external/remote framework reference nodes */
 export type ExternalFrameworkNodeData = {
+  /** Stable ref id for persistence (linkedFrameworks[].id) */
+  refId: string
   /** Title of the external framework */
   title: string
   /** URI or identifier of the external framework */
   uri?: string
   /** Description or notes about this external reference */
   description?: string
-  /** Source system or origin (e.g., "OpenCASE", "State Standards") */
+  /** Source system or origin (e.g., publisher name) */
   source?: string
+  /** CASE Global coalition registry ID */
+  cgeFrameworkId?: string
+  /** OpenCASE doc id of the read-only cached CFPackage */
+  cacheDocId?: string
+  /** Theme color for this framework (border, link bars) */
+  color: string
+  sourceUri?: string
+  itemCount?: number
+  cachedAt?: string
+  /** When true, refresh/import fetches omit the CGE bearer token on the publisher host. */
+  skipPublisherAuth?: boolean
+  /** User-facing message when publisher cache download or refresh failed. */
+  cacheError?: string | null
+  /** Transient UI flag while a cache download/refresh is in progress. */
+  cacheLoading?: boolean
+  /** Injected by EditorContext — avoids useEditor() inside React Flow node components. */
+  onRemoveRemoteFramework?: (_nodeId: string) => void
+  onOpenExternalFrameworkSettings?: (_nodeId: string) => void
 }
 
 export type ExternalFrameworkNodeType = Node<ExternalFrameworkNodeData, 'externalFrameworkNode'>
@@ -123,6 +143,10 @@ export type CaseEdgeData = {
    * Used only for rendering (not persisted into CASE semantics).
    */
   parallelCount?: number
+  /** True when this edge is a derived projection of a remoteItemLink */
+  isRemoteLink?: boolean
+  /** Underlying remote link id (for delete / properties) */
+  remoteLinkId?: string
 }
 
 export type CaseEditorEdge = Edge<CaseEdgeData>

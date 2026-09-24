@@ -10,6 +10,7 @@ import { CFAssociation } from '../../../domain/case/entities/CFAssociation'
 import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { logger } from '../../../infrastructure/logging/Logger'
+import type { ImportDocumentFlags } from '../types/ImportDocumentFlags'
 
 export interface ImportFrameworkCommand {
   tenantId: TenantId
@@ -19,6 +20,10 @@ export interface ImportFrameworkCommand {
   cfPackage?: any
   validateSchema?: boolean
   schemaName?: string
+  /** Optional import flags — omit for standard editable imports (default). */
+  documentFlags?: ImportDocumentFlags
+  /** Publisher CFPackage URL — used for provenance when importing from cfPackage JSON. */
+  sourcePackageUri?: string
 }
 
 export interface ImportFrameworkResult {
@@ -32,22 +37,44 @@ export interface ImportFrameworkResult {
  * marking it as a pristine mirror of the source. `endpointUrl` is only known
  * when the framework was imported by URL (as opposed to a pasted JSON payload).
  */
-function injectSourceProvenance (docPayload: any, endpointUrl?: string): any {
+function injectSourceProvenance (
+  docPayload: any,
+  endpointUrl?: string,
+  documentFlags?: ImportDocumentFlags
+): any {
   const existing = docPayload.extensions ?? {}
   const existingOpencase = (existing['ext:opencase'] && typeof existing['ext:opencase'] === 'object')
     ? existing['ext:opencase']
     : {}
 
+  const extPatch: Record<string, unknown> = {
+    ...existingOpencase,
+    // Only record a source URL when one is known — pasted JSON has no
+    // publisher endpoint, so the field is left off entirely rather than
+    // written as undefined.
+    ...(endpointUrl ? { sourcePackageURI: endpointUrl } : {}),
+    isModifiedFromSource: false,
+    importedAt: new Date().toISOString(),
+  }
+
+  if (documentFlags?.readOnly === true) {
+    extPatch.readOnly = true
+  }
+  if (documentFlags?.cgeFrameworkId) {
+    extPatch.cgeFrameworkId = documentFlags.cgeFrameworkId
+  }
+  if (documentFlags?.linkedFromDocId) {
+    extPatch.linkedFromDocId = documentFlags.linkedFromDocId
+  }
+  if (documentFlags?.cgeCachedAt) {
+    extPatch.cgeCachedAt = documentFlags.cgeCachedAt
+  }
+
   return {
     ...docPayload,
     extensions: {
       ...existing,
-      'ext:opencase': {
-        ...existingOpencase,
-        ...(endpointUrl ? { sourcePackageURI: endpointUrl } : {}),
-        isModifiedFromSource: false,
-        importedAt: new Date().toISOString(),
-      }
+      'ext:opencase': extPatch
     }
   }
 }
@@ -60,7 +87,7 @@ export class ImportFramework {
   ) {}
 
   async execute (cmd: ImportFrameworkCommand): Promise<ImportFrameworkResult> {
-    const { tenantId, caseVersion, endpointUrl, accessToken, cfPackage, validateSchema, schemaName } = cmd
+    const { tenantId, caseVersion, endpointUrl, accessToken, cfPackage, validateSchema, schemaName, documentFlags, sourcePackageUri } = cmd
 
     if (!endpointUrl && !cfPackage) {
       throw new Error('Either endpointUrl or cfPackage must be provided')
@@ -72,14 +99,15 @@ export class ImportFramework {
       const response = await this.apiClient.fetchCFPackage(endpointUrl, accessToken)
       sourceCFPackage = {
         ...response.CFPackage,
-        CFDocument: injectSourceProvenance(response.CFPackage.CFDocument, endpointUrl)
+        CFDocument: injectSourceProvenance(response.CFPackage.CFDocument, endpointUrl, documentFlags)
       }
     } else {
       logger.info({ tenantId, caseVersion }, 'Importing framework from provided JSON')
       const normalized = normalizeCfPackageData(cfPackage)
+      const provenanceUri = (sourcePackageUri ?? endpointUrl ?? '').trim()
       sourceCFPackage = {
         ...normalized,
-        CFDocument: injectSourceProvenance(normalized.CFDocument)
+        CFDocument: injectSourceProvenance(normalized.CFDocument, provenanceUri || undefined, documentFlags)
       }
     }
 

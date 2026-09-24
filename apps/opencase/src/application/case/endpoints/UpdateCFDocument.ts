@@ -6,6 +6,7 @@ import { CFAssociation } from '../../../domain/case/entities/CFAssociation'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { JsonSchemaValidator } from '../../../infrastructure/validation/JsonSchemaValidator'
 import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
+import { assertDocumentMutable } from '../services/assertDocumentMutable'
 
 export interface UpdateCFDocumentCommand {
   tenantId: TenantId
@@ -40,6 +41,8 @@ export class UpdateCFDocument {
     if (!existingPkg || !storageKey) {
       throw new Error(`CFDocument with sourcedId ${sourcedId} not found`)
     }
+
+    assertDocumentMutable(this.store, tenantId, caseVersion, storageKey)
 
     // Create updated document from payload
     const updatedDocument = CFDocument.fromRaw(tenantId, caseVersion, payload)

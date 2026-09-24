@@ -1,10 +1,17 @@
 import { Handle, Position, type NodeProps, NodeResizer, useReactFlow, useConnection } from '@xyflow/react'
 import { PlusIcon, XMarkIcon } from '@heroicons/react/24/solid'
+import { useState } from 'react'
 import type { CaseItemNodeType } from '../types'
 import type { CaseEditorNodeType } from '@/ui/editor/reactflow/types'
+import { useEditor } from '@/ui/editor/state/EditorContext'
+import RemoteLinkPopover from '@/ui/editor/components/RemoteLinkPopover'
 
 export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemNodeType>) {
   const rf = useReactFlow<CaseEditorNodeType>()
+  const { remoteLinks, removeRemoteLink } = useEditor()
+  const itemRemoteLinks = remoteLinks.filter((l) => l.localItemId === id)
+  const [activePopover, setActivePopover] = useState<{ linkId: string; rect: DOMRect } | null>(null)
+  const popoverLink = activePopover ? itemRemoteLinks.find((l) => l.id === activePopover.linkId) : undefined
   
   // Get connection state to show visual feedback during drag (React Flow v12+)
   const connection = useConnection()
@@ -231,6 +238,51 @@ export default function CaseItemNode({ id, data, selected }: NodeProps<CaseItemN
             : 'border-gray-300! bg-gray-100! hover:border-[#662F90]! hover:bg-[#662F90]/10!'
         }`}
       />
+
+      {itemRemoteLinks.length > 0 ? (
+        <div className="flex w-full flex-col gap-px rounded-b-lg overflow-hidden">
+          {itemRemoteLinks.map((link) => {
+            const itemTitle = link.remoteLabel || link.remoteHumanCodingScheme || 'Remote item'
+            const itemCode = link.remoteHumanCodingScheme
+            const showCode = Boolean(itemCode && itemCode !== itemTitle)
+            return (
+              <div key={link.id} className="relative">
+                <button
+                  type="button"
+                  className="nodrag nopan flex min-h-5 w-full items-center gap-1.5 px-2 py-0.5 text-left text-[10px] leading-tight text-white hover:brightness-95"
+                  style={{ backgroundColor: link.remoteFrameworkColor ?? '#64748b' }}
+                  title={`${itemTitle}${showCode ? ` (${itemCode})` : ''}${link.remoteFrameworkTitle ? ` — ${link.remoteFrameworkTitle}` : ''} (${link.associationType})`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    setActivePopover({ linkId: link.id, rect })
+                  }}
+                >
+                  <span className="min-w-0 flex-1 truncate font-semibold">{itemTitle}</span>
+                  {showCode ? (
+                    <>
+                      <span className="shrink-0 opacity-70">·</span>
+                      <span className="shrink-0 truncate font-mono font-medium">{itemCode}</span>
+                    </>
+                  ) : null}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      ) : null}
+
+      {popoverLink && activePopover ? (
+        <RemoteLinkPopover
+          link={popoverLink}
+          anchorRect={activePopover.rect}
+          onClose={() => setActivePopover(null)}
+          onRemove={() => {
+            removeRemoteLink(popoverLink.id)
+            setActivePopover(null)
+          }}
+        />
+      ) : null}
 
       <div className="pointer-events-none absolute bottom-2 right-3 text-[10px] font-medium text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
         Select to edit

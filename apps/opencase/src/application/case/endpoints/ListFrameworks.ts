@@ -30,6 +30,9 @@ export class ListFrameworks {
       subject?: string
       version?: string
       lastChangeDateTime: string
+      readOnly?: boolean
+      cgeFrameworkId?: string
+      sourcePackageURI?: string
       alignmentParticipants?: Array<{ identifier?: string; uri: string }>
     }> = []
 
@@ -52,6 +55,9 @@ export class ListFrameworks {
           subject: doc.subject,
           version: doc.version,
           lastChangeDateTime: doc.lastChangeDateTime.toISOString(),
+          readOnly: doc.readOnly === true,
+          cgeFrameworkId: doc.cgeFrameworkId,
+          sourcePackageURI: doc.sourcePackageURI,
           // alignmentParticipants is derived from the ext:opencase extension and is
           // OpenCASE-proprietary — only surface it to callers that requested extensions.
           ...(query.includeOpenCaseExtensions && doc.alignmentParticipants ? { alignmentParticipants: doc.alignmentParticipants } : {})
