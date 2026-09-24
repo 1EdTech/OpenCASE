@@ -34,8 +34,10 @@ services:
       - KC_HTTP_ENABLED=true
       - KC_HEALTH_ENABLED=true
       - KC_METRICS_ENABLED=true
-      # Hostname configuration - tell Keycloak its external URL
-      - KC_HOSTNAME=${OPENCASE_HOSTNAME:-localhost}
+      # Hostname configuration - full public URL (scheme + host + optional port)
+      # Required so login form actions match the browser URL when TLS is terminated
+      # upstream of Traefik (e.g. ngrok https → local http :3000).
+      - KC_HOSTNAME=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-}
       - KC_HOSTNAME_STRICT=false
       # Proxy settings for running behind Traefik
       - KC_PROXY_HEADERS=xforwarded
