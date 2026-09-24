@@ -193,7 +193,7 @@ export class CgeApiClient {
     tenantId: string,
     frameworkId: string,
     registryId?: string
-  ): Promise<any | null> {
+  ): Promise<Record<string, unknown> | null> {
     const pageLimit = 100
     let page = 1
     let totalPages = 1

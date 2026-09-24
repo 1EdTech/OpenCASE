@@ -130,7 +130,7 @@ export class KeycloakAdminClient {
     })
   }
 
-  async getClientRole (clientUuid: string, roleName: string): Promise<any | null> {
+  async getClientRole (clientUuid: string, roleName: string): Promise<Record<string, unknown> | null> {
     const realm = this.cfg.realm
     const res = await this.requestRaw(
       'GET',

@@ -46,7 +46,7 @@ export function extractCoalitionPagination (data: unknown): { page: number, tota
 }
 
 /** Match a coalition list row by CASE frameworkId or registry entry id. */
-export function matchFrameworkEntry (entries: any[], frameworkId: string, registryId?: string): any | null {
+export function matchFrameworkEntry (entries: any[], frameworkId: string, registryId?: string): Record<string, unknown> | null {
   const needle = frameworkId.trim()
   const registryNeedle = registryId?.trim()
   if (!needle && !registryNeedle) return null
