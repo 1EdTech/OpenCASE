@@ -30,6 +30,14 @@ export interface DocumentMetadata {
   archived?: boolean
   /** Participant frameworks in an alignment document (extracted from ext:opencase.alignmentParticipants) */
   alignmentParticipants?: Array<{ identifier?: string; uri: string }>
+  /**
+   * The complete, untransformed `extensions['ext:opencase']` object as stored on the document,
+   * verbatim. Callers that request extensions (X-CASE-EDITOR) should see this whole object as-is —
+   * the other typed fields above (sourcePackageURI, isModifiedFromSource, alignmentParticipants)
+   * are a lossy subset kept separately because internal logic (fork-on-edit detection, alignment
+   * filtering) depends on them as structured values, not because they're the full extension data.
+   */
+  openCaseExtensions?: Record<string, unknown>
 }
 
 export interface DocumentVersionInfo {
@@ -178,6 +186,7 @@ export class FileFrameworkStore {
           isModifiedFromSource: d.isModifiedFromSource,
           archived: d.archived,
           alignmentParticipants: d.alignmentParticipants,
+          openCaseExtensions: d.openCaseExtensions,
         })
       }
     } catch {
@@ -463,6 +472,7 @@ export class FileFrameworkStore {
       sourcePackageURI,
       isModifiedFromSource,
       alignmentParticipants,
+      openCaseExtensions: extOpencase && typeof extOpencase === 'object' ? extOpencase as Record<string, unknown> : undefined,
     })
   }
 
@@ -668,6 +678,7 @@ export class FileFrameworkStore {
       isModifiedFromSource: meta.isModifiedFromSource,
       archived: meta.archived,
       alignmentParticipants: meta.alignmentParticipants,
+      openCaseExtensions: meta.openCaseExtensions,
     }))
 
     await fs.writeFile(

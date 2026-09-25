@@ -268,15 +268,23 @@ describe('GetAllCFDocuments', () => {
       expect(result.CFDocuments).toHaveLength(2)
     })
 
-    it('should nest sourcePackageURI and isModifiedFromSource under extensions.ext:opencase for CASE 1.1', async () => {
+    it('should nest the complete, untransformed ext:opencase object under extensions for CASE 1.1', async () => {
+      // Includes fields (importedAt, layout, edgeType) that are NOT modeled as their own
+      // DocumentMetadata properties — they must still be served verbatim, unmodified.
+      const openCaseExtensions = {
+        sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
+        isModifiedFromSource: true,
+        importedAt: '2026-09-17T14:55:51.931Z',
+        layout: { x: -200, y: -80, w: 400, h: 160 },
+        edgeType: 'default'
+      }
       const documents = [
         {
           sourcedId: 'doc-1',
           title: 'Mirrored Document',
           lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
           currentFile: 'file1.json',
-          sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
-          isModifiedFromSource: true
+          openCaseExtensions
         }
       ]
 
@@ -284,14 +292,7 @@ describe('GetAllCFDocuments', () => {
 
       const result = await getAllCFDocuments.execute({ tenantId, caseVersion })
 
-      expect(result.CFDocuments[0]).not.toHaveProperty('sourcePackageURI')
-      expect(result.CFDocuments[0]).not.toHaveProperty('isModifiedFromSource')
-      expect(result.CFDocuments[0].extensions).toEqual({
-        'ext:opencase': {
-          sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
-          isModifiedFromSource: true
-        }
-      })
+      expect(result.CFDocuments[0].extensions).toEqual({ 'ext:opencase': openCaseExtensions })
     })
 
     it('should omit the extensions block entirely for CASE 1.0', async () => {
@@ -301,8 +302,7 @@ describe('GetAllCFDocuments', () => {
           title: 'Mirrored Document',
           lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
           currentFile: 'file1.json',
-          sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
-          isModifiedFromSource: true
+          openCaseExtensions: { sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc' }
         }
       ]
 

@@ -28,7 +28,7 @@ export class ListFrameworks {
       subject?: string
       version?: string
       lastChangeDateTime: string
-      extensions?: { 'ext:opencase': { alignmentParticipants: Array<{ identifier?: string; uri: string }> } }
+      extensions?: { 'ext:opencase': Record<string, unknown> }
     }> = []
 
     for (const version of versions) {
@@ -50,10 +50,10 @@ export class ListFrameworks {
           subject: doc.subject,
           version: doc.version,
           lastChangeDateTime: doc.lastChangeDateTime.toISOString(),
-          // alignmentParticipants is derived from the ext:opencase extension — keep it nested
-          // under `extensions` (not a flat top-level field) so the caller (management controller)
-          // can strip it the same way the public API strips `extensions` when X-CASE-EDITOR is absent.
-          ...(doc.alignmentParticipants ? { extensions: { 'ext:opencase': { alignmentParticipants: doc.alignmentParticipants } } } : {})
+          // Serve the complete, untransformed ext:opencase object verbatim (not a hand-picked
+          // subset), nested under `extensions` so the caller (management controller) can strip
+          // it the same way the public API strips `extensions` when X-CASE-EDITOR is absent.
+          ...(doc.openCaseExtensions ? { extensions: { 'ext:opencase': doc.openCaseExtensions } } : {})
         })
       }
     }
