@@ -212,7 +212,6 @@ describe('ListFrameworks', () => {
           title: 'Alignment Framework',
           lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
           currentFile: 'frameworks/doc-1/doc-1_v0001.json',
-          alignmentParticipants: [{ identifier: 'participant-1', uri: '/ims/case/v1p1/CFDocuments/participant-1' }],
           openCaseExtensions: { alignmentParticipants: [{ identifier: 'participant-1', uri: '/ims/case/v1p1/CFDocuments/participant-1' }] }
         }
       ]
@@ -239,7 +238,6 @@ describe('ListFrameworks', () => {
           title: 'Alignment Framework',
           lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
           currentFile: 'frameworks/doc-1/doc-1_v0001.json',
-          alignmentParticipants: openCaseExtensions.alignmentParticipants,
           openCaseExtensions
         }
       ]

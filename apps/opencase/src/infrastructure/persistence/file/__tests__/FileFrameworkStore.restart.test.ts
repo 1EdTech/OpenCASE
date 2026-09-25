@@ -106,4 +106,59 @@ describe('FileFrameworkStore — index survives a server restart', () => {
 
     await fs.rm(baseDataDir, { recursive: true, force: true })
   })
+
+  it('backfills openCaseExtensions on load for a documents.json entry written before that field existed', async () => {
+    const baseDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'case-store-restart-backfill-'))
+    const storageKey = 'doc-1'
+    const versionDir = path.join(baseDataDir, 'tenants', tenantId, 'v1p1')
+    const idxDir = path.join(versionDir, 'indexes')
+    const frameworksDir = path.join(versionDir, 'frameworks', storageKey)
+    await fs.mkdir(idxDir, { recursive: true })
+    await fs.mkdir(frameworksDir, { recursive: true })
+
+    const extOpencase = {
+      sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
+      isModifiedFromSource: true,
+      importedAt: '2026-07-28T16:37:03.784Z'
+    }
+    const relativePath = 'frameworks/doc-1/doc-1_v0001.json'
+    await fs.writeFile(
+      path.join(versionDir, relativePath),
+      JSON.stringify({
+        document: { sourcedId: storageKey, title: 'A framework', lastChangeDateTime: '2024-01-01T00:00:00Z', extensions: { 'ext:opencase': extOpencase } },
+        items: [],
+        associations: [],
+        rubrics: [],
+      }),
+      'utf8'
+    )
+
+    // Simulates a documents.json entry persisted before openCaseExtensions was introduced —
+    // no such field, and the older derived fields absent too.
+    await fs.writeFile(
+      path.join(idxDir, 'documents.json'),
+      JSON.stringify([
+        {
+          storageKey,
+          sourcedId: storageKey,
+          title: 'A framework',
+          lastChangeDateTime: '2024-01-01T00:00:00Z',
+          currentFile: relativePath,
+        },
+      ]),
+      'utf8'
+    )
+
+    const store = new FileFrameworkStore({ baseDataDir })
+    await store.loadAll()
+
+    const meta = store.getDocumentMetadata(tenantId, version, storageKey)
+    expect(meta?.openCaseExtensions).toEqual(extOpencase)
+
+    // The backfill should persist, so a subsequent restart doesn't need to re-read the bundle.
+    const persisted = JSON.parse(await fs.readFile(path.join(idxDir, 'documents.json'), 'utf8'))
+    expect(persisted[0].openCaseExtensions).toEqual(extOpencase)
+
+    await fs.rm(baseDataDir, { recursive: true, force: true })
+  })
 })

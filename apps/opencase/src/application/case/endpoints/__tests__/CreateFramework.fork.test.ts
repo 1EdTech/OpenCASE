@@ -81,8 +81,10 @@ describe('CreateFramework — mirror fork behavior', () => {
       title: 'Source Framework',
       lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
       currentFile: 'frameworks/doc-123/doc-123_v0001.json',
-      sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
-      isModifiedFromSource: false
+      openCaseExtensions: {
+        sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
+        isModifiedFromSource: false
+      }
     }
     mockStore.resolveStorageKey.mockImplementation((_t, v) => (v === caseVersion ? docId : null))
     mockStore.getDocumentMetadata.mockReturnValue(existingMeta)
@@ -118,8 +120,10 @@ describe('CreateFramework — mirror fork behavior', () => {
       title: 'Source Framework',
       lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
       currentFile: 'frameworks/doc-123/doc-123_v0001.json',
-      sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
-      isModifiedFromSource: false
+      openCaseExtensions: {
+        sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
+        isModifiedFromSource: false
+      }
     }
     mockStore.resolveStorageKey.mockImplementation((_t, v) => (v === caseVersion ? docId : null))
     mockStore.getDocumentMetadata.mockReturnValue(existingMeta)
@@ -163,8 +167,10 @@ describe('CreateFramework — mirror fork behavior', () => {
       title: 'Source Framework',
       lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
       currentFile: 'frameworks/doc-123/doc-123_v0001.json',
-      sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
-      isModifiedFromSource: false
+      openCaseExtensions: {
+        sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
+        isModifiedFromSource: false
+      }
     }
     mockStore.resolveStorageKey.mockImplementation((_t, v) => (v === caseVersion ? docId : null))
     mockStore.getDocumentMetadata.mockReturnValue(existingMeta)
@@ -200,8 +206,10 @@ describe('CreateFramework — mirror fork behavior', () => {
       title: 'Source Framework',
       lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
       currentFile: 'frameworks/doc-123/doc-123_v0001.json',
-      sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
-      isModifiedFromSource: false
+      openCaseExtensions: {
+        sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
+        isModifiedFromSource: false
+      }
     }
     mockStore.resolveStorageKey.mockImplementation((_t, v) => (v === caseVersion ? docId : null))
     mockStore.getDocumentMetadata.mockReturnValue(existingMeta)
@@ -237,8 +245,10 @@ describe('CreateFramework — mirror fork behavior', () => {
       title: 'Source Framework',
       lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
       currentFile: 'frameworks/doc-123/doc-123_v0002.json',
-      sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
-      isModifiedFromSource: true
+      openCaseExtensions: {
+        sourcePackageURI: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123',
+        isModifiedFromSource: true
+      }
     }
     mockStore.resolveStorageKey.mockImplementation((_t, v) => (v === caseVersion ? docId : null))
     mockStore.getDocumentMetadata.mockReturnValue(existingMeta)
