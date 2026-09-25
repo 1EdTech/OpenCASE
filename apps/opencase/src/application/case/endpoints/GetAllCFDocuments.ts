@@ -131,18 +131,12 @@ export class GetAllCFDocuments {
         doc.caseVersion = caseVersion
         if (docMeta.frameworkType) doc.frameworkType = docMeta.frameworkType
 
-        // sourcePackageURI/isModifiedFromSource are derived from the ext:opencase extension —
-        // keep them nested under `extensions` (not flattened to top-level fields) so they flow
-        // through the same X-CASE-EDITOR gating (stripExtensions) as every other extension.
-        const extOpencase: Record<string, unknown> = {}
-        if (docMeta.sourcePackageURI) extOpencase.sourcePackageURI = docMeta.sourcePackageURI
-        // isModifiedFromSource is set (true or false) on any mirrored/forked framework,
-        // even one imported without a known sourcePackageURI (e.g. pasted JSON) — so it
-        // must be surfaced even when false, since the frontend uses its presence to
-        // decide whether to show the Mirrored/Forked badge at all.
-        if (docMeta.isModifiedFromSource !== undefined) extOpencase.isModifiedFromSource = docMeta.isModifiedFromSource
-        if (Object.keys(extOpencase).length > 0) {
-          doc.extensions = { 'ext:opencase': extOpencase }
+        // Serve the complete, untransformed ext:opencase object verbatim (not a hand-picked
+        // subset) so callers that request extensions (X-CASE-EDITOR) see everything stored on
+        // the document — nested under `extensions` so it flows through the same X-CASE-EDITOR
+        // gating (stripExtensions) as every other extension.
+        if (docMeta.openCaseExtensions) {
+          doc.extensions = { 'ext:opencase': docMeta.openCaseExtensions }
         }
       }
 

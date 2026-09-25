@@ -212,7 +212,8 @@ describe('ListFrameworks', () => {
           title: 'Alignment Framework',
           lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
           currentFile: 'frameworks/doc-1/doc-1_v0001.json',
-          alignmentParticipants: [{ identifier: 'participant-1', uri: '/ims/case/v1p1/CFDocuments/participant-1' }]
+          alignmentParticipants: [{ identifier: 'participant-1', uri: '/ims/case/v1p1/CFDocuments/participant-1' }],
+          openCaseExtensions: { alignmentParticipants: [{ identifier: 'participant-1', uri: '/ims/case/v1p1/CFDocuments/participant-1' }] }
         }
       ]
 
@@ -225,15 +226,21 @@ describe('ListFrameworks', () => {
       expect(result.frameworks[0]).not.toHaveProperty('alignmentParticipants')
     })
 
-    it('should nest alignmentParticipants under extensions.ext:opencase when present', async () => {
-      const participants = [{ identifier: 'participant-1', uri: '/ims/case/v1p1/CFDocuments/participant-1' }]
+    it('should nest the complete, untransformed ext:opencase object under extensions when present', async () => {
+      // Includes a field (notes) that is NOT modeled as its own DocumentMetadata property —
+      // it must still be served verbatim, unmodified.
+      const openCaseExtensions = {
+        alignmentParticipants: [{ identifier: 'participant-1', uri: '/ims/case/v1p1/CFDocuments/participant-1' }],
+        notes: 'some frontend-only annotation'
+      }
       const docs: DocumentMetadata[] = [
         {
           sourcedId: 'doc-1',
           title: 'Alignment Framework',
           lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
           currentFile: 'frameworks/doc-1/doc-1_v0001.json',
-          alignmentParticipants: participants
+          alignmentParticipants: openCaseExtensions.alignmentParticipants,
+          openCaseExtensions
         }
       ]
 
@@ -243,12 +250,10 @@ describe('ListFrameworks', () => {
 
       const result = await listFrameworks.execute({ tenantId })
 
-      expect(result.frameworks[0].extensions).toEqual({
-        'ext:opencase': { alignmentParticipants: participants }
-      })
+      expect(result.frameworks[0].extensions).toEqual({ 'ext:opencase': openCaseExtensions })
     })
 
-    it('should omit extensions entirely when there are no alignmentParticipants', async () => {
+    it('should omit extensions entirely when there is no ext:opencase data', async () => {
       const docs: DocumentMetadata[] = [
         {
           sourcedId: 'doc-1',

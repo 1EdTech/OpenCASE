@@ -69,4 +69,41 @@ describe('FileFrameworkStore — index survives a server restart', () => {
 
     await fs.rm(baseDataDir, { recursive: true, force: true })
   })
+
+  it('preserves the full ext:opencase extension object verbatim across a restart, including unmodeled keys', async () => {
+    const baseDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'case-store-restart-ext-'))
+    const storageKey = 'doc-1'
+
+    const store1 = new FileFrameworkStore({ baseDataDir })
+
+    const extOpencase = {
+      sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
+      isModifiedFromSource: true,
+      importedAt: '2026-09-17T14:55:51.931Z',
+      layout: { x: -200, y: -80, w: 400, h: 160 },
+      edgeType: 'default'
+    }
+    const bundle = {
+      document: {
+        sourcedId: 'doc-1',
+        title: 'A framework',
+        lastChangeDateTime: '2024-01-01T00:00:00Z',
+        extensions: { 'ext:opencase': extOpencase }
+      },
+      items: [],
+      associations: [],
+      rubrics: [],
+    }
+    const { relativePath } = await store1.writeBundleFile(tenantId, version, storageKey, bundle)
+    await store1.updateIndexesForBundle(tenantId, version, storageKey, bundle, relativePath)
+
+    expect(store1.getDocumentMetadata(tenantId, version, storageKey)?.openCaseExtensions).toEqual(extOpencase)
+
+    const store2 = new FileFrameworkStore({ baseDataDir })
+    await store2.loadAll()
+
+    expect(store2.getDocumentMetadata(tenantId, version, storageKey)?.openCaseExtensions).toEqual(extOpencase)
+
+    await fs.rm(baseDataDir, { recursive: true, force: true })
+  })
 })
