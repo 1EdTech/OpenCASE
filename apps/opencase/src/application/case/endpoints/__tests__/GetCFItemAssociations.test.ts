@@ -195,10 +195,12 @@ describe('GetCFItemAssociations', () => {
           currentFile: 'frameworks/align-doc-1/align-doc-1_v0001.json',
           frameworkType: 'Alignment',
           archived: false,
-          alignmentParticipants: [
-            { identifier: docId, uri: `/ims/case/v1p1/CFDocuments/${docId}` },
-            { identifier: targetDocId, uri: `/ims/case/v1p1/CFDocuments/${targetDocId}` }
-          ]
+          openCaseExtensions: {
+            alignmentParticipants: [
+              { identifier: docId, uri: `/ims/case/v1p1/CFDocuments/${docId}` },
+              { identifier: targetDocId, uri: `/ims/case/v1p1/CFDocuments/${targetDocId}` }
+            ]
+          }
         }
       ])
       mockStore.resolveStorageKey.mockReturnValue(alignDocId)
@@ -250,7 +252,9 @@ describe('GetCFItemAssociations', () => {
           currentFile: 'frameworks/align-doc-archived/align-doc-archived_v0001.json',
           frameworkType: 'Alignment',
           archived: true,
-          alignmentParticipants: [{ identifier: docId, uri: `/ims/case/v1p1/CFDocuments/${docId}` }]
+          openCaseExtensions: {
+            alignmentParticipants: [{ identifier: docId, uri: `/ims/case/v1p1/CFDocuments/${docId}` }]
+          }
         }
       ])
       mockRepository.load.mockResolvedValue(pkg)

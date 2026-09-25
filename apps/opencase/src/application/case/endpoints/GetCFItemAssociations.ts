@@ -1,7 +1,7 @@
 import { type CFPackageRepository } from '../ports/CFPackageRepository'
 import { type CaseVersion, type SourcedId, type TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { logger } from '../../../infrastructure/logging/Logger'
-import { type FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
+import { type FileFrameworkStore, getOpenCaseAlignmentParticipants } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export interface GetCFItemAssociationsQuery {
   tenantId: TenantId
@@ -50,7 +50,7 @@ export class GetCFItemAssociations {
       meta =>
         meta.frameworkType === 'Alignment' &&
         !meta.archived &&
-        meta.alignmentParticipants?.some(p => p.identifier === pkg.document.sourcedId)
+        getOpenCaseAlignmentParticipants(meta)?.some(p => p.identifier === pkg.document.sourcedId)
     )
 
     const crossAssociations = (
