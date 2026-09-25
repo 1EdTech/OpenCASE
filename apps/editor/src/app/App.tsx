@@ -618,7 +618,7 @@ function AppInner() {
       try {
         const alignmentDocs = await api.listAlignmentFrameworks({ tenantId, participantId: sourceId })
         return alignmentDocs.flatMap((doc) => {
-          const participants = doc.alignmentParticipants ?? []
+          const participants = doc.extensions?.['ext:opencase']?.alignmentParticipants ?? []
           const other = participants.find((p) => p.identifier !== sourceId)
           // No distinct "other" participant means this is a self (intra-framework) alignment doc.
           const targetIdentifier = other?.identifier ?? (participants.some((p) => p.identifier === sourceId) ? sourceId : undefined)
@@ -646,7 +646,7 @@ function AppInner() {
         // for a self-alignment (targetId === activeFrameworkId) matching "any participant === targetId"
         // would match the first cross-framework doc too — instead require ALL participants to be self.
         const matchingDoc = alignmentDocs.find((doc) => {
-          const participants = doc.alignmentParticipants ?? []
+          const participants = doc.extensions?.['ext:opencase']?.alignmentParticipants ?? []
           if (targetId === activeFrameworkId) {
             return participants.length > 0 && participants.every((p) => p.identifier === activeFrameworkId)
           }

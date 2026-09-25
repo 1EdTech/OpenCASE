@@ -792,8 +792,8 @@ export default function HomeScreen({
                           frameworkType: doc.frameworkType,
                           adoptionStatus: doc.adoptionStatus,
                         }}
-                        sourcePackageURI={doc.sourcePackageURI}
-                        isModifiedFromSource={doc.isModifiedFromSource}
+                        sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
+                        isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         rightHint={isArchiving ? 'Archiving' : hint}
                         lastChanged={doc.lastChangeDateTime}
                         onClick={() => openRemote(doc.identifier)}
@@ -843,8 +843,8 @@ export default function HomeScreen({
                           frameworkType: doc.frameworkType,
                           adoptionStatus: doc.adoptionStatus,
                         }}
-                        sourcePackageURI={doc.sourcePackageURI}
-                        isModifiedFromSource={doc.isModifiedFromSource}
+                        sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
+                        isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         rightHint={isDeleting ? 'Deleting' : (isRestoring ? 'Restoring' : undefined)}
                         lastChanged={doc.lastChangeDateTime}
                         onDelete={tenantId ? () => handleHardDeleteRequest(doc.identifier, title) : undefined}
