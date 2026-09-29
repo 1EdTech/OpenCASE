@@ -66,8 +66,6 @@ type Props = {
   onClick?: () => void
   className?: string
   children?: ReactNode
-  /** Show an "Unsaved" indicator for locally-created frameworks */
-  isUnsaved?: boolean
   /** ISO date string for the last change — shown in the card footer */
   lastChanged?: string
   /** URL the framework was imported from, if known — shown in the Mirrored/Forked badge tooltip */
@@ -93,7 +91,6 @@ export function FrameworkCard({
   onClick,
   className,
   children,
-  isUnsaved,
   lastChanged,
   sourcePackageURI,
   isModifiedFromSource,
@@ -214,11 +211,6 @@ export function FrameworkCard({
               <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
                 <span className="inline-block h-2 w-2 rounded-full bg-gray-400" />
                 {adoptionStatus}
-              </span>
-            ) : null}
-            {isUnsaved ? (
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800">
-                Unsaved
               </span>
             ) : null}
             {readOnly ? (

@@ -1,6 +1,6 @@
 import type { ImportFramework } from '../../case/endpoints/ImportFramework'
 import type { CgeApiClient } from '../../../infrastructure/cge/CgeApiClient'
-import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
+import { type FileFrameworkStore, getOpenCaseSourcePackageURI } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 import type { CaseVersion, TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { normalizeCfPackageData } from '../../case/cfPackageShape'
 import { resolveCoalitionFrameworkTitle } from '../../../infrastructure/cge/cgeCoalitionHelpers'
@@ -66,7 +66,7 @@ export class ImportCgeCachedFramework {
         version: 1,
         cgeFrameworkId: frameworkId,
         title: existing.title,
-        sourceUri: existing.sourcePackageURI ?? '',
+        sourceUri: getOpenCaseSourcePackageURI(existing) ?? '',
         itemCount,
         cachedAt: existing.cgeCachedAt?.toISOString() ?? existing.lastChangeDateTime.toISOString(),
         fromCache: true

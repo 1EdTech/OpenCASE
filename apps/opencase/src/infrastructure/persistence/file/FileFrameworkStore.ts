@@ -22,10 +22,6 @@ export interface DocumentMetadata {
   currentFile: string // relative to tenant/version root
   adoptionStatus?: string // CASE domain field — NOT used for server-level archive filtering
   licenseIdentifier?: string // UUID of the assigned CFLicense (for public-access checks)
-  /** URL this framework was imported from (set during import). */
-  sourcePackageURI?: string
-  /** True when an imported framework has been locally modified after import. */
-  isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
   /** When true, framework is a cached remote reference and cannot be mutated. */
@@ -36,8 +32,31 @@ export interface DocumentMetadata {
   linkedFromDocId?: string
   /** When a read-only CGE cache was last fetched. */
   cgeCachedAt?: Date
-  /** Participant frameworks in an alignment document (extracted from ext:opencase.alignmentParticipants) */
-  alignmentParticipants?: Array<{ identifier?: string; uri: string }>
+  /**
+   * The complete, untransformed `extensions['ext:opencase']` object as stored on the document,
+   * verbatim. This is the single source of truth for anything derived from that extension —
+   * use the getOpenCase*() accessors below rather than re-deriving/duplicating individual fields
+   * onto DocumentMetadata itself, so there's exactly one place each fact lives.
+   */
+  openCaseExtensions?: Record<string, unknown>
+}
+
+/** True when an imported framework has been locally modified after import (undefined if never imported/mirrored). */
+export function getOpenCaseIsModifiedFromSource (meta: DocumentMetadata | undefined | null): boolean | undefined {
+  const v = meta?.openCaseExtensions?.isModifiedFromSource
+  return typeof v === 'boolean' ? v : undefined
+}
+
+/** Participant frameworks in an alignment document, if any. */
+export function getOpenCaseAlignmentParticipants (meta: DocumentMetadata | undefined | null): Array<{ identifier?: string; uri: string }> | undefined {
+  const v = meta?.openCaseExtensions?.alignmentParticipants
+  return Array.isArray(v) ? v as Array<{ identifier?: string; uri: string }> : undefined
+}
+
+/** URL the framework was imported/mirrored from, if known. */
+export function getOpenCaseSourcePackageURI (meta: DocumentMetadata | undefined | null): string | undefined {
+  const v = meta?.openCaseExtensions?.sourcePackageURI
+  return typeof v === 'string' ? v : undefined
 }
 
 export interface DocumentVersionInfo {
@@ -140,6 +159,42 @@ export class FileFrameworkStore {
     this.setTenantVersionMap(this.assocIndex, tenantId, version, assocMap)
     this.setTenantVersionMap(this.rubricsIndex, tenantId, version, rubricsMap)
     this.setTenantVersionMap(this.definitionsIndex, tenantId, version, defsMap)
+
+    await this.backfillMissingOpenCaseExtensions(tenantId, version, versionDir, idxDir, docsMap)
+  }
+
+  /**
+   * `openCaseExtensions` is only computed when a document is written (see
+   * updateInMemoryDocumentIndex) — a `documents.json` entry for a document that hasn't been saved
+   * since that field was introduced will never have it, even though the document's own bundle
+   * file on disk still has the full ext:opencase object. Self-heal once per stale entry by reading
+   * it straight off the bundle file, then persist so this never needs to run again for that
+   * document.
+   */
+  private async backfillMissingOpenCaseExtensions (
+    tenantId: TenantId,
+    version: CaseVersion,
+    rootDir: string,
+    idxDir: string,
+    docsMap: Map<string, DocumentMetadata>
+  ): Promise<void> {
+    let changed = false
+    for (const meta of docsMap.values()) {
+      if (meta.openCaseExtensions !== undefined) continue
+      try {
+        const bundle = JSON.parse(await fs.readFile(path.join(rootDir, meta.currentFile), 'utf8'))
+        const extOpencase = bundle?.document?.extensions?.['ext:opencase']
+        if (!extOpencase || typeof extOpencase !== 'object') continue
+
+        meta.openCaseExtensions = extOpencase as Record<string, unknown>
+        changed = true
+      } catch {
+        // Bundle file missing/unreadable — leave metadata as-is, nothing to backfill.
+      }
+    }
+    if (changed) {
+      await this.writeDocumentsIndex(idxDir, tenantId, version)
+    }
   }
 
   private setTenantVersionMap<T>(
@@ -182,14 +237,12 @@ export class FileFrameworkStore {
           currentFile: d.currentFile,
           adoptionStatus: d.adoptionStatus,
           licenseIdentifier: d.licenseIdentifier,
-          sourcePackageURI: d.sourcePackageURI,
-          isModifiedFromSource: d.isModifiedFromSource,
           archived: d.archived,
           readOnly: d.readOnly === true,
           cgeFrameworkId: typeof d.cgeFrameworkId === 'string' ? d.cgeFrameworkId : undefined,
           linkedFromDocId: typeof d.linkedFromDocId === 'string' ? d.linkedFromDocId : undefined,
           cgeCachedAt: d.cgeCachedAt ? new Date(d.cgeCachedAt as string | number | Date) : undefined,
-          alignmentParticipants: d.alignmentParticipants,
+          openCaseExtensions: d.openCaseExtensions,
         })
       }
     } catch {
@@ -441,21 +494,12 @@ export class FileFrameworkStore {
       licenseIdentifier = lic.identifier
     }
 
-    // Extract sourcePackageURI and isModifiedFromSource from ext:opencase extension
-    let sourcePackageURI: string | undefined
-    let isModifiedFromSource: boolean | undefined
     let readOnly: boolean | undefined
     let cgeFrameworkId: string | undefined
     let linkedFromDocId: string | undefined
     let cgeCachedAt: Date | undefined
     const extOpencase = doc.extensions?.['ext:opencase']
     if (extOpencase && typeof extOpencase === 'object') {
-      if (typeof (extOpencase as any).sourcePackageURI === 'string') {
-        sourcePackageURI = (extOpencase as any).sourcePackageURI
-      }
-      if (typeof (extOpencase as any).isModifiedFromSource === 'boolean') {
-        isModifiedFromSource = (extOpencase as any).isModifiedFromSource
-      }
       if ((extOpencase as any).readOnly === true) {
         readOnly = true
       }
@@ -468,11 +512,6 @@ export class FileFrameworkStore {
       if (typeof (extOpencase as any).cgeCachedAt === 'string') {
         cgeCachedAt = new Date((extOpencase as any).cgeCachedAt)
       }
-    }
-
-    let alignmentParticipants: Array<{ identifier?: string; uri: string }> | undefined
-    if (extOpencase && typeof extOpencase === 'object' && Array.isArray((extOpencase as any).alignmentParticipants)) {
-      alignmentParticipants = (extOpencase as any).alignmentParticipants
     }
 
     // Preserve index-only flags when a new bundle omits ext:opencase fields (e.g. partial update).
@@ -495,13 +534,11 @@ export class FileFrameworkStore {
       currentFile: relativePath,
       adoptionStatus: doc.adoptionStatus as string | undefined,
       licenseIdentifier,
-      sourcePackageURI,
-      isModifiedFromSource,
       readOnly,
       cgeFrameworkId,
       linkedFromDocId,
       cgeCachedAt,
-      alignmentParticipants,
+      openCaseExtensions: extOpencase && typeof extOpencase === 'object' ? extOpencase as Record<string, unknown> : undefined,
     })
   }
 
@@ -703,14 +740,12 @@ export class FileFrameworkStore {
       currentFile: meta.currentFile,
       adoptionStatus: meta.adoptionStatus,
       licenseIdentifier: meta.licenseIdentifier,
-      sourcePackageURI: meta.sourcePackageURI,
-      isModifiedFromSource: meta.isModifiedFromSource,
       archived: meta.archived,
       readOnly: meta.readOnly,
       cgeFrameworkId: meta.cgeFrameworkId,
       linkedFromDocId: meta.linkedFromDocId,
       cgeCachedAt: meta.cgeCachedAt?.toISOString(),
-      alignmentParticipants: meta.alignmentParticipants,
+      openCaseExtensions: meta.openCaseExtensions,
     }))
 
     await fs.writeFile(

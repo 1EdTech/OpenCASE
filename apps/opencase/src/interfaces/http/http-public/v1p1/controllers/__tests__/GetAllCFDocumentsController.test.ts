@@ -65,8 +65,7 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
         orderBy: undefined,
         filter: undefined,
         fields: undefined,
-        includeArchived: false,
-        includeOpenCaseExtensions: false
+        includeArchived: false
       })
       expect(responseStatus).toHaveBeenCalledWith(200)
       expect(responseJson).toHaveBeenCalledWith(absolutizeCaseUris(result as any, 'http://localhost'))
@@ -103,14 +102,47 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
         orderBy: 'asc',
         filter: 'test',
         fields: ['title', 'identifier'],
-        includeArchived: false,
-        includeOpenCaseExtensions: false
+        includeArchived: false
       })
       expect(responseStatus).toHaveBeenCalledWith(200)
     })
 
-    it('should pass includeOpenCaseExtensions=true when X-CASE-EDITOR header is present', async () => {
-      const result = { CFDocuments: [] }
+    it('should strip extensions from the response when X-CASE-EDITOR header is absent', async () => {
+      const result = {
+        CFDocuments: [
+          {
+            identifier: 'doc-123',
+            uri: '/ims/case/v1p1/CFDocuments/doc-123',
+            title: 'Mirrored Document',
+            lastChangeDateTime: '2024-01-01T00:00:00.000Z',
+            extensions: { 'ext:opencase': { sourcePackageURI: 'https://example.org/ims/case/v1p1/CFPackages/abc' } }
+          }
+        ]
+      }
+
+      mockGetAllCFDocuments.execute.mockResolvedValue(result)
+      ;(mockRequest as any).tenantId = 'test-tenant'
+      ;(mockRequest as any).isAuthenticated = true
+
+      await controller.getAll(mockRequest as Request, mockResponse as Response)
+
+      const body = responseJson.mock.calls[0][0]
+      expect(body.CFDocuments[0]).not.toHaveProperty('extensions')
+    })
+
+    it('should keep extensions in the response when X-CASE-EDITOR header is present', async () => {
+      const result = {
+        CFDocuments: [
+          {
+            identifier: 'doc-123',
+            uri: '/ims/case/v1p1/CFDocuments/doc-123',
+            title: 'Mirrored Document',
+            lastChangeDateTime: '2024-01-01T00:00:00.000Z',
+            extensions: { 'ext:opencase': { sourcePackageURI: 'https://example.org/ims/case/v1p1/CFPackages/abc' } }
+          }
+        ]
+      }
+
       mockGetAllCFDocuments.execute.mockResolvedValue(result)
       ;(mockRequest as any).tenantId = 'test-tenant'
       ;(mockRequest as any).isAuthenticated = true
@@ -120,9 +152,10 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
 
       await controller.getAll(mockRequest as Request, mockResponse as Response)
 
-      expect(mockGetAllCFDocuments.execute).toHaveBeenCalledWith(
-        expect.objectContaining({ includeOpenCaseExtensions: true })
-      )
+      const body = responseJson.mock.calls[0][0]
+      expect(body.CFDocuments[0].extensions).toEqual({
+        'ext:opencase': { sourcePackageURI: 'https://example.org/ims/case/v1p1/CFPackages/abc' }
+      })
     })
 
     it('should return 400 for invalid limit', async () => {
