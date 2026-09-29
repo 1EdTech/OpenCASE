@@ -12,7 +12,7 @@ import { Input } from '@/ui/shared/components/ui/input'
 import { Label } from '@/ui/shared/components/ui/label'
 import { ComboboxInput } from '@/ui/shared/components/ui/combobox-input'
 import { ADOPTION_STATUS_OPTIONS } from '@/domain/framework/model/adoptionStatus'
-import { ExclamationTriangleIcon, ArrowUpTrayIcon, DocumentArrowDownIcon } from '@heroicons/react/24/solid'
+import { ExclamationTriangleIcon, ArrowUpTrayIcon, DocumentArrowDownIcon, ArrowPathIcon } from '@heroicons/react/24/solid'
 import { parseSpreadsheetFile, type ParseResult } from '@/application/framework/services/SpreadsheetParser'
 import { spreadsheetToFramework } from '@/application/framework/services/SpreadsheetToFramework'
 import { downloadTemplate } from '@/ui/home/spreadsheetTemplate'
@@ -25,7 +25,7 @@ export default function UploadFrameworkDialog({
 }: Readonly<{
   open: boolean
   onCancel: () => void
-  onUpload: (_framework: Framework) => void
+  onUpload: (_framework: Framework) => Promise<void>
 }>) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -39,12 +39,16 @@ export default function UploadFrameworkDialog({
   const [frameworkType, setFrameworkType] = useState('K-12')
   const [adoptionStatus, setAdoptionStatus] = useState('Draft')
 
+  // Upload (save-to-server) state
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
   const hasErrors = (parseResult?.errors.length ?? 0) > 0
   const rowCount = parseResult?.rows.length ?? 0
 
   const canUpload = useMemo(
-    () => title.trim().length > 0 && rowCount > 0 && !hasErrors && !parsing,
-    [title, rowCount, hasErrors, parsing],
+    () => title.trim().length > 0 && rowCount > 0 && !hasErrors && !parsing && !uploading,
+    [title, rowCount, hasErrors, parsing, uploading],
   )
 
   // Compute hierarchy depth for preview
@@ -89,10 +93,12 @@ export default function UploadFrameworkDialog({
     setTitle('')
     setFrameworkType('K-12')
     setAdoptionStatus('Draft')
+    setUploading(false)
+    setUploadError(null)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }, [])
 
-  const handleUpload = useCallback(() => {
+  const handleUpload = useCallback(async () => {
     if (!canUpload || !parseResult) return
 
     const framework = spreadsheetToFramework(parseResult.rows, {
@@ -101,8 +107,16 @@ export default function UploadFrameworkDialog({
       adoptionStatus: adoptionStatus.trim() || undefined,
     })
 
-    onUpload(framework)
-    resetForm()
+    setUploading(true)
+    setUploadError(null)
+    try {
+      await onUpload(framework)
+      // Reset form state on success (dialog will be closed by parent).
+      resetForm()
+    } catch (e: unknown) {
+      setUploadError(e instanceof Error ? e.message : String(e))
+      setUploading(false)
+    }
   }, [canUpload, parseResult, title, frameworkType, adoptionStatus, onUpload, resetForm])
 
   const handleCancel = useCallback(() => {
@@ -125,7 +139,7 @@ export default function UploadFrameworkDialog({
     <Dialog
       open={open}
       onOpenChange={(v) => {
-        if (!v) handleCancel()
+        if (!v && !uploading) handleCancel()
       }}
     >
       <DialogContent className="p-5 sm:p-8 sm:max-w-xl">
@@ -177,6 +191,7 @@ export default function UploadFrameworkDialog({
             </p>
             <button
               type="button"
+              disabled={uploading}
               className={[
                 'group relative w-full cursor-pointer rounded-lg border-2 border-dashed px-4 py-5 text-center transition-colors sm:px-5 sm:py-7',
                 file
@@ -192,6 +207,7 @@ export default function UploadFrameworkDialog({
                 type="file"
                 accept=".csv,.xlsx,.xls"
                 className="hidden"
+                disabled={uploading}
                 onChange={(e) => {
                   const f = e.target.files?.[0] ?? null
                   void handleFileChange(f)
@@ -280,6 +296,7 @@ export default function UploadFrameworkDialog({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g. Grade 3–5 Mathematics"
+                  disabled={uploading}
                 />
               </div>
 
@@ -291,6 +308,7 @@ export default function UploadFrameworkDialog({
                   value={frameworkType}
                   onChange={(e) => setFrameworkType(e.target.value)}
                   placeholder="e.g. K-12"
+                  disabled={uploading}
                 />
               </div>
 
@@ -306,14 +324,35 @@ export default function UploadFrameworkDialog({
               </div>
             </div>
           </div>
+
+          {uploadError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm leading-relaxed text-red-800 sm:px-5 sm:py-3.5 sm:text-base">
+              <div className="flex items-start gap-2.5 sm:gap-3">
+                <ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-500 sm:h-6 sm:w-6" />
+                <div>
+                  <div className="font-semibold">Couldn&rsquo;t create framework</div>
+                  <div className="mt-1">{uploadError}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <DialogFooter>
-          <Button variant="secondary" onClick={handleCancel}>
+          <Button variant="secondary" onClick={handleCancel} disabled={uploading}>
             Cancel
           </Button>
-          <Button disabled={!canUpload} onClick={handleUpload}>
-            {parsing ? 'Reading file...' : 'Create framework'}
+          <Button disabled={!canUpload} onClick={() => void handleUpload()}>
+            {parsing ? (
+              'Reading file...'
+            ) : uploading ? (
+              <>
+                <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                Creating&hellip;
+              </>
+            ) : (
+              'Create framework'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
