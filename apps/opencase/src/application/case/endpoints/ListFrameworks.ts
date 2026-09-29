@@ -23,11 +23,14 @@ export class ListFrameworks {
       sourcedId: string
       title: string
       caseVersion: CaseVersion
+      description?: string
+      creator?: string
       language?: string
       frameworkType?: string
       subject?: string
       version?: string
       lastChangeDateTime: string
+      adoptionStatus?: string
       readOnly?: boolean
       cgeFrameworkId?: string
       extensions?: { 'ext:opencase': Record<string, unknown> }
@@ -47,11 +50,14 @@ export class ListFrameworks {
           sourcedId: doc.sourcedId,
           title: doc.title,
           caseVersion: version,
+          description: doc.description,
+          creator: doc.creator,
           language: doc.language,
           frameworkType: doc.frameworkType,
           subject: doc.subject,
           version: doc.version,
           lastChangeDateTime: doc.lastChangeDateTime.toISOString(),
+          adoptionStatus: doc.adoptionStatus,
           readOnly: doc.readOnly === true,
           cgeFrameworkId: doc.cgeFrameworkId,
           // Serve the complete, untransformed ext:opencase object verbatim (not a hand-picked

@@ -108,14 +108,18 @@ export class CaseApiClient {
         identifier: String(f.sourcedId ?? f.identifier ?? ''),
         title: typeof f.title === 'string' ? f.title : undefined,
         creator: typeof f.creator === 'string' ? f.creator : undefined,
+        description: typeof f.description === 'string' ? f.description : undefined,
         frameworkType: typeof f.frameworkType === 'string' ? f.frameworkType : undefined,
+        adoptionStatus: typeof f.adoptionStatus === 'string' ? f.adoptionStatus : undefined,
         subject: typeof f.subject === 'string' ? f.subject : undefined,
         version: typeof f.version === 'string' ? f.version : undefined,
         lastChangeDateTime: typeof f.lastChangeDateTime === 'string' ? f.lastChangeDateTime : undefined,
         caseVersion: typeof f.caseVersion === 'string' ? f.caseVersion : undefined,
-        sourcePackageURI: typeof f.sourcePackageURI === 'string' ? f.sourcePackageURI : undefined,
         readOnly: f.readOnly === true,
         cgeFrameworkId: typeof f.cgeFrameworkId === 'string' ? f.cgeFrameworkId : undefined,
+        extensions: (f.extensions && typeof f.extensions === 'object')
+          ? f.extensions as { 'ext:opencase'?: OpenCaseListExtensions }
+          : undefined,
       }))
     }
 

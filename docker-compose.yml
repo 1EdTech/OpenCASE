@@ -37,7 +37,7 @@ services:
       # Hostname configuration - full public URL (scheme + host + optional port)
       # Required so login form actions match the browser URL when TLS is terminated
       # upstream of Traefik (e.g. ngrok https → local http :3000).
-      - KC_HOSTNAME=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-}
+      - KC_HOSTNAME=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-:3000}
       - KC_HOSTNAME_STRICT=false
       # Proxy settings for running behind Traefik
       - KC_PROXY_HEADERS=xforwarded
