@@ -1,5 +1,6 @@
 import type { Request, Response, RequestHandler } from 'express'
 import type { KeycloakAdminClient } from '../../../../../infrastructure/keycloak/KeycloakAdminClient'
+import { OidcJwtVerifier } from '../../../../../infrastructure/auth/OidcJwtVerifier'
 import { logger } from '../../../../../infrastructure/logging/Logger'
 
 export class TenantLookupController {
@@ -11,9 +12,25 @@ export class TenantLookupController {
   ) {}
 
   lookup: RequestHandler = async (req: Request, res: Response) => {
-    // Anti-enumeration: always 202, regardless of whether the email exists.
+    // Anti-enumeration: always 202, regardless of whether the email/org exists.
     res.status(202)
     res.setHeader('Cache-Control', 'no-store')
+
+    const rawOrgId = (req.query as any)?.orgId as string | string[] | undefined
+    const orgId = (Array.isArray(rawOrgId) ? rawOrgId[0] : rawOrgId)?.trim()
+    if (orgId) {
+      try {
+        const clientId = OidcJwtVerifier.computeTenantClientId(this.cfg.clientIdPrefix, orgId)
+        const client = await this.keycloakAdmin.findClientByClientIdPublic(clientId)
+        if (client) {
+          return res.json({ status: 'accepted', tenantId: orgId })
+        }
+        return res.json({ status: 'accepted' })
+      } catch (error: any) {
+        logger.warn({ error: error?.message, orgId }, 'Tenant lookup by orgId failed')
+        return res.json({ status: 'accepted' })
+      }
+    }
 
     const rawEmail = (req.query as any)?.email as string | string[] | undefined
     const email = (Array.isArray(rawEmail) ? rawEmail[0] : rawEmail)?.trim()
@@ -63,4 +80,3 @@ export class TenantLookupController {
     return null
   }
 }
-

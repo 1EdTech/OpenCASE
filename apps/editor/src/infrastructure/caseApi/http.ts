@@ -2,6 +2,7 @@ export type HttpClient = {
   get: (_url: string) => Promise<unknown>
   post: (_url: string, _body: unknown) => Promise<unknown>
   put: (_url: string, _body: unknown) => Promise<unknown>
+  patch: (_url: string, _body: unknown) => Promise<unknown>
   delete: (_url: string) => Promise<unknown>
 }
 
@@ -23,6 +24,19 @@ export class HttpError extends Error {
     super(message)
     this.name = 'HttpError'
   }
+}
+
+/** Extract a user-facing message from OpenCASE management API error bodies. */
+export function formatApiErrorMessage (error: unknown, fallback: string): string {
+  if (error instanceof HttpError && error.body && typeof error.body === 'object') {
+    const body = error.body as Record<string, unknown>
+    if (typeof body.message === 'string' && body.message.trim()) return body.message
+    if (typeof body.error === 'string' && body.error.trim() && body.error !== 'cge_import_failed') {
+      return body.error
+    }
+  }
+  if (error instanceof Error && error.message) return error.message
+  return fallback
 }
 
 function joinUrl(baseUrl: string, url: string) {
@@ -70,6 +84,7 @@ export function createFetchHttpClient(baseUrl: string, options: FetchHttpClientO
     get: (url) => doRequest('GET', url),
     post: (url, body) => doRequest('POST', url, body),
     put: (url, body) => doRequest('PUT', url, body),
+    patch: (url, body) => doRequest('PATCH', url, body),
     delete: (url) => doRequest('DELETE', url),
   }
 }

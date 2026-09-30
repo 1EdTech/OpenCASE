@@ -17,7 +17,8 @@ describe('UpdateCFAssociation', () => {
     } as any
 
     mockStore = {
-      getStorageKeyForAssociation: jest.fn()
+      getStorageKeyForAssociation: jest.fn(),
+      getDocumentMetadata: jest.fn().mockReturnValue(null)
     } as any
 
     updateCFAssociation = new UpdateCFAssociation(mockRepository, mockStore)

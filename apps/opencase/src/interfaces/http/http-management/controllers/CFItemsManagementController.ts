@@ -36,6 +36,9 @@ export class CFItemsManagementController {
       if (error.message?.includes('not found')) {
         return res.status(404).json({ error: error.message })
       }
+      if (error.name === 'ReadOnlyDocumentError' || error.message?.includes('read-only')) {
+        return res.status(403).json({ error: error.message })
+      }
       if (error.message?.includes('Schema validation failed')) {
         return res.status(400).json({
           error: 'validation_failed',
@@ -69,6 +72,9 @@ export class CFItemsManagementController {
     } catch (error: any) {
       if (error.message?.includes('not found')) {
         return res.status(404).json({ error: error.message })
+      }
+      if (error.name === 'ReadOnlyDocumentError' || error.message?.includes('read-only')) {
+        return res.status(403).json({ error: error.message })
       }
       return res.status(400).json({ error: error.message || 'Delete failed' })
     }

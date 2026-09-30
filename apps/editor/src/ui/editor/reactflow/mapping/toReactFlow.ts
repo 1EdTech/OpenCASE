@@ -6,6 +6,10 @@ import type { CaseEditorEdge, CaseEditorNodeType, CaseFrameworkNodeType, CaseIte
 import { FRAMEWORK_ROOT_ASSOCIATION_TYPE } from '@/ui/editor/reactflow/types'
 import type { CFAssociation, CFDocument, CFItem } from '@/domain/case/types'
 import type { LayoutState } from './types'
+import type { ExternalFrameworkNodeType } from '@/ui/editor/reactflow/types'
+import type { RemoteEditorData } from './fromEditorGraph'
+import { normalizeLinkedFrameworkColors } from './extractRemoteFrameworkFromCfPackage'
+import { nextRemoteFrameworkColor } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
 
 const DEFAULT_NODE_WIDTH = 280
 const DEFAULT_NODE_HEIGHT = 140
@@ -207,8 +211,8 @@ function getLayout(layout: LayoutState | undefined, nodeId: string, fallback: { 
  * The returned nodes use the existing CASE-shaped `cfDocument` / `cfItem` payloads
  * so we can migrate incrementally without rewriting all node/panel UI at once.
  */
-export function toReactFlowGraph(params: { framework: Framework; layout?: LayoutState }): EditorGraph {
-  const { framework, layout } = params
+export function toReactFlowGraph(params: { framework: Framework; layout?: LayoutState; remoteEditorData?: RemoteEditorData }): EditorGraph {
+  const { framework, layout, remoteEditorData } = params
   const fwId = framework.id as unknown as string
 
   const cfDocument = mapDomainFrameworkToCfDocument(framework)
@@ -405,6 +409,41 @@ export function toReactFlowGraph(params: { framework: Framework; layout?: Layout
   const nodeIdSet = new Set(nodes.map((n) => n.id))
   const safeEdges = edges.filter((e) => nodeIdSet.has(e.source) && nodeIdSet.has(e.target))
 
-  return { nodes: nodes as CaseEditorNodeType[], edges: safeEdges }
+  const linked = normalizeLinkedFrameworkColors(remoteEditorData?.linkedFrameworks ?? [])
+  let extIndex = 0
+  for (const lf of linked) {
+    const nodeId = `ext_${lf.id}`
+    const pos = lf.nodePosition ?? { x: 520 + extIndex * 40, y: HEADER_SAFE_Y + extIndex * 30 }
+    const extNode: ExternalFrameworkNodeType = {
+      id: nodeId,
+      type: 'externalFrameworkNode',
+      position: pos,
+      style: { width: 280, height: 120 },
+      data: {
+        refId: lf.id,
+        title: lf.title,
+        cgeFrameworkId: lf.cgeFrameworkId,
+        cacheDocId: lf.cacheDocId,
+        color: lf.color || nextRemoteFrameworkColor(extIndex),
+        sourceUri: lf.sourceUri,
+        uri: lf.sourceUri,
+        itemCount: lf.itemCount,
+        cachedAt: lf.cachedAt,
+        skipPublisherAuth: lf.skipPublisherAuth,
+        cacheError: lf.cacheError ?? null,
+      },
+      className: wrapperNodeClassName,
+    }
+    nodes.push(extNode)
+    extIndex += 1
+  }
+
+  const remoteLinks = (remoteEditorData?.remoteItemLinks ?? []).map((link) => ({
+    ...link,
+    remoteFrameworkColor: linked.find((l) => l.id === link.remoteFrameworkRefId)?.color,
+    remoteFrameworkTitle: linked.find((l) => l.id === link.remoteFrameworkRefId)?.title,
+  }))
+
+  return { nodes: nodes as CaseEditorNodeType[], edges: safeEdges, remoteLinks }
 }
 

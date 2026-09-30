@@ -9,6 +9,7 @@ import type {
   CaseEditorNodeType,
   CaseFrameworkNodeType,
   CaseItemNodeType,
+  ExternalFrameworkNodeType,
 } from '@/ui/editor/reactflow/types'
 
 // ── Layout constants ───────────────────────────────────────────────────
@@ -43,6 +44,9 @@ export const isFrameworkNode = (n: CaseEditorNodeType): n is CaseFrameworkNodeTy
 
 export const isItemNode = (n: CaseEditorNodeType): n is CaseItemNodeType =>
   n.type === 'caseItemNode'
+
+export const isExternalFrameworkNode = (n: CaseEditorNodeType): n is ExternalFrameworkNodeType =>
+  n.type === 'externalFrameworkNode'
 
 // ── Node size ──────────────────────────────────────────────────────────
 

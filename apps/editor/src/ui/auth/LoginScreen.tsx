@@ -11,6 +11,8 @@ export default function LoginScreen() {
   const publicApi = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl)), [cfg.opencaseBaseUrl])
 
   const [email, setEmail] = useState('')
+  const [orgId, setOrgId] = useState('')
+  const [mode, setMode] = useState<'email' | 'org'>('org')
   const [uiState, setUiState] = useState<'idle' | 'loading'>('idle')
   const [hint, setHint] = useState<string | null>(null)
 
@@ -49,6 +51,27 @@ export default function LoginScreen() {
     }
   }, [email, publicApi, setTenantId, signIn])
 
+  const continueWithOrgId = useCallback(async () => {
+    const trimmed = orgId.trim()
+    if (!trimmed) return
+    setUiState('loading')
+    setHint(null)
+    try {
+      const res = await publicApi.lookupTenantByOrgId({ orgId: trimmed })
+      const resolvedTenantId = res?.tenantId
+      if (resolvedTenantId) {
+        setTenantId(resolvedTenantId)
+        await signIn(resolvedTenantId)
+        return
+      }
+      setHint("If your organization is recognized, you'll be redirected to sign in.")
+    } catch {
+      setHint("If your organization is recognized, you'll be redirected to sign in.")
+    } finally {
+      setUiState('idle')
+    }
+  }, [orgId, publicApi, setTenantId, signIn])
+
   // Single-tenant mode: show a direct sign-in button (no email/tenant lookup)
   if (cfg.defaultTenantId) {
     return (
@@ -75,45 +98,74 @@ export default function LoginScreen() {
       <div className="mx-auto flex w-full max-w-md flex-col px-5 py-14">
         <div className="rounded-3xl border border-black/10 bg-white p-6 shadow-sm">
           <div className="text-lg font-semibold text-slate-900">Sign in</div>
-          <div className="mt-1 text-sm text-slate-600">Enter your email to continue to your organization’s sign-in.</div>
-
-          <div className="mt-5">
-            <label className="text-xs font-semibold text-slate-700">Email</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-2 focus:outline-violet-700/30"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.org"
-              autoComplete="email"
-              inputMode="email"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void continueWithEmail()
-              }}
-            />
+          <div className="mt-1 text-sm text-slate-600">
+            {mode === 'org'
+              ? 'Enter your organization ID to continue to your organization’s sign-in.'
+              : 'Enter your email to continue to your organization’s sign-in.'}
           </div>
+
+          <div className="mt-4 flex gap-2 text-xs">
+            <button
+              type="button"
+              className={`rounded-lg px-2 py-1 ${mode === 'org' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+              onClick={() => { setMode('org'); setHint(null) }}
+            >
+              Organization ID
+            </button>
+            <button
+              type="button"
+              className={`rounded-lg px-2 py-1 ${mode === 'email' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700'}`}
+              onClick={() => { setMode('email'); setHint(null) }}
+            >
+              Email
+            </button>
+          </div>
+
+          {mode === 'org' ? (
+            <div className="mt-5">
+              <label className="text-xs font-semibold text-slate-700">Organization ID</label>
+              <input
+                className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-2 focus:outline-violet-700/30"
+                value={orgId}
+                onChange={(e) => setOrgId(e.target.value)}
+                placeholder="your-org-id"
+                autoComplete="organization"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void continueWithOrgId()
+                }}
+              />
+            </div>
+          ) : (
+            <div className="mt-5">
+              <label className="text-xs font-semibold text-slate-700">Email</label>
+              <input
+                className="mt-1 w-full rounded-xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-2 focus:outline-violet-700/30"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.org"
+                autoComplete="email"
+                inputMode="email"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') void continueWithEmail()
+                }}
+              />
+            </div>
+          )}
 
           {hint ? <div className="mt-3 text-sm text-slate-600">{hint}</div> : null}
           {status === 'error' && error ? <div className="mt-3 text-sm text-red-700">{error}</div> : null}
 
           <div className="mt-5">
-            <Button className="w-full" onClick={() => void continueWithEmail()} disabled={uiState === 'loading'}>
+            <Button
+              className="w-full"
+              onClick={() => void (mode === 'org' ? continueWithOrgId() : continueWithEmail())}
+              disabled={uiState === 'loading'}
+            >
               {uiState === 'loading' ? 'Continuing…' : 'Continue'}
             </Button>
           </div>
-
-          <div className="mt-4 text-center">
-            <a
-              href={`${cfg.oidcAuthority}/login-actions/reset-credentials`}
-              className="text-sm text-violet-700 hover:underline"
-            >
-              Forgot password?
-            </a>
-          </div>
-
-          <div className="mt-4 text-xs text-slate-500">API: {cfg.opencaseBaseUrl}</div>
         </div>
       </div>
     </div>
   )
 }
-

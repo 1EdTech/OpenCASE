@@ -7,6 +7,8 @@ import { FileFrameworkStore } from '../infrastructure/persistence/file/FileFrame
 import { FileCFPackageRepository } from '../infrastructure/persistence/file/FileCFPackageRepository'
 import { CreateFramework } from '../application/case/endpoints/CreateFramework'
 import { ImportFramework } from '../application/case/endpoints/ImportFramework'
+import { ImportCgeCachedFramework } from '../application/cge/endpoints/ImportCgeCachedFramework'
+import { SearchCachedFrameworkItems } from '../application/cge/endpoints/SearchCachedFrameworkItems'
 import { GetCFPackage } from '../application/case/endpoints/GetCFPackage'
 import { GetCFDocument } from '../application/case/endpoints/GetCFDocument'
 import { GetAllCFDocuments } from '../application/case/endpoints/GetAllCFDocuments'
@@ -58,6 +60,8 @@ import { CFAssociationsManagementController } from '../interfaces/http/http-mana
 import { CFPackagesManagementController } from '../interfaces/http/http-management/controllers/CFPackagesManagementController'
 import { TenantsManagementController } from '../interfaces/http/http-management/controllers/TenantsManagementController'
 import { ApiKeysManagementController } from '../interfaces/http/http-management/controllers/ApiKeysManagementController'
+import { MembersManagementController } from '../interfaces/http/http-management/controllers/MembersManagementController'
+import { CgeManagementController } from '../interfaces/http/http-management/controllers/CgeManagementController'
 import { ListFrameworks } from '../application/case/endpoints/ListFrameworks'
 import { ListTenants } from '../application/case/endpoints/ListTenants'
 import { CreateTenant } from '../application/case/endpoints/CreateTenant'
@@ -66,6 +70,9 @@ import { JsonSchemaValidator } from '../infrastructure/validation/JsonSchemaVali
 import { KeycloakAdminClient } from '../infrastructure/keycloak/KeycloakAdminClient'
 import { KeycloakTenantProvisioner } from '../infrastructure/keycloak/KeycloakTenantProvisioner'
 import { TenantLookupController } from '../interfaces/http/http-public/public/controllers/TenantLookupController'
+import { FileCgeCredentialsStore } from '../infrastructure/cge/FileCgeCredentialsStore'
+import { CgeAuthClient } from '../infrastructure/cge/CgeAuthClient'
+import { CgeApiClient } from '../infrastructure/cge/CgeApiClient'
 
 export interface Container {
   config: AppConfig
@@ -111,6 +118,8 @@ export interface Container {
       cfPackages: CFPackagesManagementController
       tenants: TenantsManagementController
       apiKeys: ApiKeysManagementController
+      members: MembersManagementController
+      cge: CgeManagementController
     }
     public: {
       tenantLookup: TenantLookupController
@@ -385,6 +394,30 @@ export async function buildContainer(): Promise<Container> {
     clientIdPrefix: config.oidcClientIdPrefix
   })
 
+  const membersManagementController = new MembersManagementController(keycloakAdmin, {
+    clientIdPrefix: config.oidcClientIdPrefix,
+    ssoOrgClaim: config.ssoOrgClaim
+  })
+
+  const cgeCredentialsStore = new FileCgeCredentialsStore(
+    config.caseDataDir,
+    config.cgeCredentialsEncryptionKey
+  )
+  const cgeAuthClient = new CgeAuthClient()
+  const cgeApiClient = new CgeApiClient(cgeAuthClient, cgeCredentialsStore, {
+    apiBaseUrl: config.cgeApiBaseUrl,
+    tokenUrl: config.cgeTokenUrl
+  })
+  const importCgeCachedFramework = new ImportCgeCachedFramework(cgeApiClient, importFramework, store)
+  const searchCachedFrameworkItems = new SearchCachedFrameworkItems(store)
+  const cgeManagementController = new CgeManagementController(
+    cgeCredentialsStore,
+    cgeApiClient,
+    importFramework,
+    importCgeCachedFramework,
+    searchCachedFrameworkItems
+  )
+
   const tenantLookupController = new TenantLookupController(keycloakAdmin, {
     clientIdPrefix: config.oidcClientIdPrefix
   })
@@ -432,7 +465,9 @@ export async function buildContainer(): Promise<Container> {
         cfAssociations: cfAssociationsManagementController,
         cfPackages: cfPackagesManagementController,
         tenants: tenantsManagementController,
-        apiKeys: apiKeysManagementController
+        apiKeys: apiKeysManagementController,
+        members: membersManagementController,
+        cge: cgeManagementController
       },
       public: {
         tenantLookup: tenantLookupController

@@ -20,7 +20,8 @@ describe('UpdateCFDocument', () => {
 
     // Identifier === storage key for these tests (no mirror/fork scenario).
     mockStore = {
-      resolveStorageKey: jest.fn((_t, _v, identifier) => identifier)
+      resolveStorageKey: jest.fn((_t, _v, identifier) => identifier),
+      getDocumentMetadata: jest.fn().mockReturnValue(null)
     } as any
 
     updateCFDocument = new UpdateCFDocument(mockRepository, mockStore)

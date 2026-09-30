@@ -24,6 +24,14 @@ export interface DocumentMetadata {
   licenseIdentifier?: string // UUID of the assigned CFLicense (for public-access checks)
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
+  /** When true, framework is a cached remote reference and cannot be mutated. */
+  readOnly?: boolean
+  /** CASE Global coalition registry ID (read-only caches). */
+  cgeFrameworkId?: string
+  /** Local framework that triggered a CGE cache import. */
+  linkedFromDocId?: string
+  /** When a read-only CGE cache was last fetched. */
+  cgeCachedAt?: Date
   /**
    * The complete, untransformed `extensions['ext:opencase']` object as stored on the document,
    * verbatim. This is the single source of truth for anything derived from that extension —
@@ -43,6 +51,12 @@ export function getOpenCaseIsModifiedFromSource (meta: DocumentMetadata | undefi
 export function getOpenCaseAlignmentParticipants (meta: DocumentMetadata | undefined | null): Array<{ identifier?: string; uri: string }> | undefined {
   const v = meta?.openCaseExtensions?.alignmentParticipants
   return Array.isArray(v) ? v as Array<{ identifier?: string; uri: string }> : undefined
+}
+
+/** URL the framework was imported/mirrored from, if known. */
+export function getOpenCaseSourcePackageURI (meta: DocumentMetadata | undefined | null): string | undefined {
+  const v = meta?.openCaseExtensions?.sourcePackageURI
+  return typeof v === 'string' ? v : undefined
 }
 
 export interface DocumentVersionInfo {
@@ -224,6 +238,10 @@ export class FileFrameworkStore {
           adoptionStatus: d.adoptionStatus,
           licenseIdentifier: d.licenseIdentifier,
           archived: d.archived,
+          readOnly: d.readOnly === true,
+          cgeFrameworkId: typeof d.cgeFrameworkId === 'string' ? d.cgeFrameworkId : undefined,
+          linkedFromDocId: typeof d.linkedFromDocId === 'string' ? d.linkedFromDocId : undefined,
+          cgeCachedAt: d.cgeCachedAt ? new Date(d.cgeCachedAt as string | number | Date) : undefined,
           openCaseExtensions: d.openCaseExtensions,
         })
       }
@@ -476,7 +494,32 @@ export class FileFrameworkStore {
       licenseIdentifier = lic.identifier
     }
 
+    let readOnly: boolean | undefined
+    let cgeFrameworkId: string | undefined
+    let linkedFromDocId: string | undefined
+    let cgeCachedAt: Date | undefined
     const extOpencase = doc.extensions?.['ext:opencase']
+    if (extOpencase && typeof extOpencase === 'object') {
+      if ((extOpencase as any).readOnly === true) {
+        readOnly = true
+      }
+      if (typeof (extOpencase as any).cgeFrameworkId === 'string') {
+        cgeFrameworkId = (extOpencase as any).cgeFrameworkId
+      }
+      if (typeof (extOpencase as any).linkedFromDocId === 'string') {
+        linkedFromDocId = (extOpencase as any).linkedFromDocId
+      }
+      if (typeof (extOpencase as any).cgeCachedAt === 'string') {
+        cgeCachedAt = new Date((extOpencase as any).cgeCachedAt)
+      }
+    }
+
+    // Preserve index-only flags when a new bundle omits ext:opencase fields (e.g. partial update).
+    // `previous` is the metadata already recorded under this storage key (resolved above).
+    if (readOnly !== true && previous?.readOnly === true) readOnly = true
+    if (!cgeFrameworkId && previous?.cgeFrameworkId) cgeFrameworkId = previous.cgeFrameworkId
+    if (!linkedFromDocId && previous?.linkedFromDocId) linkedFromDocId = previous.linkedFromDocId
+    if (!cgeCachedAt && previous?.cgeCachedAt) cgeCachedAt = previous.cgeCachedAt
 
     versionMap.set(storageKey, {
       sourcedId: currentIdentifier,
@@ -491,6 +534,10 @@ export class FileFrameworkStore {
       currentFile: relativePath,
       adoptionStatus: doc.adoptionStatus as string | undefined,
       licenseIdentifier,
+      readOnly,
+      cgeFrameworkId,
+      linkedFromDocId,
+      cgeCachedAt,
       openCaseExtensions: extOpencase && typeof extOpencase === 'object' ? extOpencase as Record<string, unknown> : undefined,
     })
   }
@@ -694,6 +741,10 @@ export class FileFrameworkStore {
       adoptionStatus: meta.adoptionStatus,
       licenseIdentifier: meta.licenseIdentifier,
       archived: meta.archived,
+      readOnly: meta.readOnly,
+      cgeFrameworkId: meta.cgeFrameworkId,
+      linkedFromDocId: meta.linkedFromDocId,
+      cgeCachedAt: meta.cgeCachedAt?.toISOString(),
       openCaseExtensions: meta.openCaseExtensions,
     }))
 
@@ -874,6 +925,58 @@ export class FileFrameworkStore {
     const versionMap = this.documents.get(tenantId)?.get(version)
     if (!versionMap) return []
     return Array.from(versionMap.values())
+  }
+
+  findDocumentByCgeFrameworkId (
+    tenantId: TenantId,
+    version: CaseVersion,
+    cgeFrameworkId: string
+  ): DocumentMetadata | null {
+    const docs = this.getAllDocuments(tenantId, version)
+    return docs.find(d => d.cgeFrameworkId === cgeFrameworkId && d.readOnly === true) ?? null
+  }
+
+  async searchItemsInDocument (
+    tenantId: TenantId,
+    version: CaseVersion,
+    docId: string,
+    query: string,
+    limit: number
+  ): Promise<Array<{
+    identifier: string
+    uri?: string
+    fullStatement?: string
+    abbreviatedStatement?: string
+    humanCodingScheme?: string
+    CFItemType?: string
+  }>> {
+    const bundle = await this.loadDocumentBundle(tenantId, version, docId)
+    if (!bundle?.items || !Array.isArray(bundle.items)) return []
+
+    const q = query.trim().toLowerCase()
+    const matches = (item: any): boolean => {
+      if (!q) return true
+      const parts = [
+        item.fullStatement,
+        item.abbreviatedStatement,
+        item.humanCodingScheme,
+        item.identifier,
+        item.CFItemType
+      ]
+      return parts.some(p => typeof p === 'string' && p.toLowerCase().includes(q))
+    }
+
+    return bundle.items
+      .filter(matches)
+      .slice(0, limit)
+      .map((item: any) => ({
+        identifier: item.identifier ?? item.sourcedId,
+        uri: item.uri,
+        fullStatement: item.fullStatement,
+        abbreviatedStatement: item.abbreviatedStatement,
+        humanCodingScheme: item.humanCodingScheme,
+        CFItemType: item.CFItemType
+      }))
   }
 
   // ──────────────────────────────────────────────────────────────────────────

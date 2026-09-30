@@ -72,6 +72,8 @@ type Props = {
   sourcePackageURI?: string
   /** Set (true or false) once a framework has been imported/mirrored; true once it's been locally modified (forked) */
   isModifiedFromSource?: boolean
+  /** Read-only cached remote framework (CGE cache) */
+  readOnly?: boolean
 }
 
 export function FrameworkCard({
@@ -92,6 +94,7 @@ export function FrameworkCard({
   lastChanged,
   sourcePackageURI,
   isModifiedFromSource,
+  readOnly,
 }: Readonly<Props>) {
   const title = cfDocument.title ?? 'Untitled framework'
   const frameworkType = (cfDocument as { frameworkType?: string }).frameworkType
@@ -208,6 +211,11 @@ export function FrameworkCard({
               <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
                 <span className="inline-block h-2 w-2 rounded-full bg-gray-400" />
                 {adoptionStatus}
+              </span>
+            ) : null}
+            {readOnly ? (
+              <span className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                Read-only
               </span>
             ) : null}
             {isModifiedFromSource !== undefined ? (

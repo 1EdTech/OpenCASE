@@ -20,7 +20,8 @@ describe('DeleteCFItem', () => {
     mockStore = {
       getStorageKeyForItem: jest.fn(),
       removeItemFromIndex: jest.fn(),
-      removeAssociationFromIndex: jest.fn()
+      removeAssociationFromIndex: jest.fn(),
+      getDocumentMetadata: jest.fn().mockReturnValue(null),
     } as any
 
     deleteCFItem = new DeleteCFItem(mockRepository, mockStore)
