@@ -36,6 +36,8 @@ export type CaseDocumentSnapshot = {
   lastChangeDateTime?: string
   /** Link to the CFLicense governing this framework */
   licenseURI?: { title?: string; identifier?: string; uri: string }
+  /** OpenCASE: unauthenticated CASE API reads. Absent means sign-in is required. */
+  publicAccess?: boolean
 }
 
 /**

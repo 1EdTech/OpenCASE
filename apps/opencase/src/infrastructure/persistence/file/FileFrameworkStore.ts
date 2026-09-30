@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { type CaseVersion, type TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { logger } from '../../logging/Logger'
-import { DEFAULT_LICENSES, isPublicLicense } from '../../../domain/case/seed/defaultLicenses'
+import { DEFAULT_LICENSES } from '../../../domain/case/seed/defaultLicenses'
 import { DEFAULT_CONCEPTS, DEFAULT_SUBJECTS, DEFAULT_ITEM_TYPES, DEFAULT_ASSOCIATION_GROUPINGS } from '../../../domain/case/seed/defaultDefinitions'
 
 export interface FileFrameworkStoreConfig {
@@ -21,7 +21,7 @@ export interface DocumentMetadata {
   lastChangeDateTime: Date
   currentFile: string // relative to tenant/version root
   adoptionStatus?: string // CASE domain field — NOT used for server-level archive filtering
-  licenseIdentifier?: string // UUID of the assigned CFLicense (for public-access checks)
+  licenseIdentifier?: string // UUID of the assigned CFLicense
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
   /** When true, framework is a cached remote reference and cannot be mutated. */
@@ -57,6 +57,14 @@ export function getOpenCaseAlignmentParticipants (meta: DocumentMetadata | undef
 export function getOpenCaseSourcePackageURI (meta: DocumentMetadata | undefined | null): string | undefined {
   const v = meta?.openCaseExtensions?.sourcePackageURI
   return typeof v === 'string' ? v : undefined
+}
+
+/**
+ * True when the CASE Provider API should serve this framework without authentication.
+ * Absent or false means sign-in is required. Independent of the framework's license.
+ */
+export function getOpenCasePublicAccess (meta: DocumentMetadata | undefined | null): boolean {
+  return meta?.openCaseExtensions?.publicAccess === true
 }
 
 export interface DocumentVersionInfo {
@@ -889,13 +897,13 @@ export class FileFrameworkStore {
   }
 
   /**
-   * Returns true if the framework has a license that allows unauthenticated access.
-   * Frameworks with no license or a private license return false.
+   * Returns true when the framework is explicitly marked public.
+   * Sign-in is required unless `publicAccess` is true — license does not affect this.
    */
   isDocumentPublic (tenantId: TenantId, version: CaseVersion, storageKey: string): boolean {
     const meta = this.getDocumentMetadata(tenantId, version, storageKey)
     if (!meta) return false
-    return isPublicLicense(meta.licenseIdentifier)
+    return getOpenCasePublicAccess(meta)
   }
 
   itemExists (tenantId: TenantId, version: CaseVersion, itemId: string): boolean {
@@ -1070,12 +1078,12 @@ export class FileFrameworkStore {
   }
 
   /**
-   * Check whether a globally-unique document ID has a public license, searching all tenants.
+   * Check whether a globally-unique document ID is marked public, searching all tenants.
    */
   isDocumentPublicGlobal (docId: string): boolean {
     const resolved = this.resolveDocumentGlobal(docId)
     if (!resolved) return false
-    return isPublicLicense(resolved.metadata.licenseIdentifier)
+    return getOpenCasePublicAccess(resolved.metadata)
   }
 
   // Public methods for index management (used by management endpoints)

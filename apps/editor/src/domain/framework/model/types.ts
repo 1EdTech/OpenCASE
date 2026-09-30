@@ -40,6 +40,11 @@ export type FrameworkMetadata = {
   lastChangeDateTime?: string
   /** CASE licenseURI — link to the CFLicense governing this framework */
   licenseURI?: { title?: string; identifier?: string; uri: string }
+  /**
+   * When true, the CASE API serves this framework without authentication.
+   * Persisted as `ext:opencase.publicAccess`. Absent means sign-in is required.
+   */
+  publicAccess?: boolean
 }
 
 export type ItemMetadata = Record<string, unknown>

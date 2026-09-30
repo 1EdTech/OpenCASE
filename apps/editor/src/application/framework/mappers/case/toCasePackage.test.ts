@@ -31,3 +31,32 @@ describe('frameworkToCfPackage — version', () => {
     expect(second.CFDocument.version).toBe('2.0')
   })
 })
+
+describe('frameworkToCfPackage — public access', () => {
+  it('writes public access into ext:opencase only when enabled', () => {
+    const pub = frameworkToCfPackage({
+      framework: { ...makeFramework(), metadata: { title: 'Test Framework', publicAccess: true } },
+      caseVersion: '1.1',
+    })
+    const pubExt = pub.CFDocument.extensions?.['ext:opencase'] as { publicAccess?: boolean } | undefined
+    expect(pubExt?.publicAccess).toBe(true)
+    expect(pub.CFDocument.publicAccess).toBeUndefined()
+
+    const priv = frameworkToCfPackage({
+      framework: {
+        ...makeFramework(),
+        metadata: {
+          title: 'Test Framework',
+          licenseURI: {
+            identifier: 'c0c0c0c0-0000-4000-a000-000000000001',
+            uri: '/ims/case/v1p1/CFLicenses/c0c0c0c0-0000-4000-a000-000000000001',
+            title: 'Public Domain (CC0 1.0)',
+          },
+        },
+      },
+      caseVersion: '1.1',
+    })
+    const privExt = priv.CFDocument.extensions?.['ext:opencase'] as { publicAccess?: boolean } | undefined
+    expect(privExt?.publicAccess).toBeUndefined()
+  })
+})

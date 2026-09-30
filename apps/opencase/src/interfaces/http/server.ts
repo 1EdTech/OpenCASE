@@ -37,7 +37,7 @@ export function createServer (container: Container): express.Express {
     tenantLookupController: container.controllers.public.tenantLookup
   })
 
-  // CASE Provider API — optional auth (public-licensed frameworks accessible without auth)
+  // CASE Provider API — optional auth (frameworks marked public are readable without auth)
   // IDs are globally unique so no tenantId is needed for read endpoints.
   const optionalAuthMiddleware = makeOptionalAuthMiddleware(container.jwtVerifier)
   app.use('/ims/case', optionalAuthMiddleware)

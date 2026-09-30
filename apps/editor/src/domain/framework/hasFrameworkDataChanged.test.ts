@@ -48,6 +48,13 @@ describe('hasFrameworkDataChanged', () => {
     expect(hasFrameworkDataChanged(a, b)).toBe(false)
   })
 
+  it('ignores toggling public read access', () => {
+    const a = baseFramework()
+    const b = clone(a)
+    b.metadata = { ...b.metadata, publicAccess: true }
+    expect(hasFrameworkDataChanged(a, b)).toBe(false)
+  })
+
   it('ignores canvas-only changes nested under metadata["ext:opencase"]', () => {
     const a = baseFramework()
     const b = clone(a)

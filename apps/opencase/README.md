@@ -47,4 +47,4 @@ Framework data is stored as versioned files rather than in a traditional databas
 | [API Endpoint Reference](FRAMEWORK_MANAGEMENT_GUIDE.md) | Complete endpoint reference for building integrations |
 | [Data Model](docs/DataModel.md) | Official CASE v1.1 data model specification |
 | [REST Bindings](docs/RESTBindings.md) | Official CASE v1.1 REST binding specification |
-| [Licensing](docs/Licensing.md) | Framework-level licensing and public access controls |
+| [Licensing](docs/Licensing.md) | Framework licenses, and a separate public-read switch |

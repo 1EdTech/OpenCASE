@@ -68,6 +68,12 @@ export interface CFDocument {
   /** licensing */
   licenseURI?: LinkURI
 
+  /**
+   * Editor-only: when true, the CASE API serves this framework without authentication.
+   * Persisted in `ext:opencase.publicAccess`. Absent means sign-in is required.
+   */
+  publicAccess?: boolean
+
   lastChangeDateTime: string
 
   /** Link back to containing package */

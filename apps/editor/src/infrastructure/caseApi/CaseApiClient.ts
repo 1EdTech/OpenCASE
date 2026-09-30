@@ -16,6 +16,8 @@ export type OpenCaseListExtensions = {
   sourcePackageURI?: string
   isModifiedFromSource?: boolean
   alignmentParticipants?: Array<{ identifier?: string; uri: string }>
+  /** When true, the CASE API serves this framework without authentication. */
+  publicAccess?: boolean
 }
 
 export type AlignmentFrameworkSummary = {

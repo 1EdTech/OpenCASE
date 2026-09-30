@@ -838,6 +838,7 @@ export default function HomeScreen({
                         sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
                         isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         readOnly={doc.readOnly === true}
+                        publicAccess={doc.extensions?.['ext:opencase']?.publicAccess === true}
                         rightHint={isArchiving ? 'Archiving' : hint}
                         lastChanged={doc.lastChangeDateTime}
                         onClick={() => openRemote(doc.identifier)}
@@ -904,6 +905,7 @@ export default function HomeScreen({
                         sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
                         isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         readOnly
+                        publicAccess={doc.extensions?.['ext:opencase']?.publicAccess === true}
                         rightHint={isArchiving ? 'Archiving' : hint}
                         lastChanged={doc.lastChangeDateTime}
                         onClick={() => openRemote(doc.identifier)}
@@ -956,6 +958,7 @@ export default function HomeScreen({
                         sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
                         isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         readOnly={doc.readOnly === true}
+                        publicAccess={doc.extensions?.['ext:opencase']?.publicAccess === true}
                         rightHint={isDeleting ? 'Deleting' : (isRestoring ? 'Restoring' : undefined)}
                         lastChanged={doc.lastChangeDateTime}
                         onDelete={tenantId ? () => handleHardDeleteRequest(doc.identifier, title) : undefined}
