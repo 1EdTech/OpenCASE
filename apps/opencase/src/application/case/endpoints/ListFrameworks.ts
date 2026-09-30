@@ -1,5 +1,5 @@
 import { type CaseVersion, type TenantId } from '../../../domain/case/value-objects/Identifiers'
-import { type FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
+import { type FileFrameworkStore, getOpenCaseAlignmentParticipants } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 import { logger } from '../../../infrastructure/logging/Logger'
 
 export interface ListFrameworksQuery {
@@ -10,8 +10,6 @@ export interface ListFrameworksQuery {
   frameworkType?: string
   /** When set, only alignment frameworks listing this docId as a participant are returned */
   participantId?: string
-  /** When true, include OpenCASE-proprietary fields derived from ext:opencase (e.g. alignmentParticipants). Set when the request carries the X-CASE-EDITOR header. */
-  includeOpenCaseExtensions?: boolean
 }
 
 export class ListFrameworks {
@@ -25,16 +23,17 @@ export class ListFrameworks {
       sourcedId: string
       title: string
       caseVersion: CaseVersion
+      description?: string
+      creator?: string
       language?: string
       frameworkType?: string
       subject?: string
       version?: string
       lastChangeDateTime: string
+      adoptionStatus?: string
       readOnly?: boolean
       cgeFrameworkId?: string
-      sourcePackageURI?: string
-      alignmentParticipants?: Array<{ identifier?: string; uri: string }>
-      publicAccess?: boolean
+      extensions?: { 'ext:opencase': Record<string, unknown> }
     }> = []
 
     for (const version of versions) {
@@ -43,7 +42,7 @@ export class ListFrameworks {
         if (!query.includeArchived && doc.archived === true) continue
         if (query.frameworkType && doc.frameworkType !== query.frameworkType) continue
         if (query.participantId) {
-          const participates = doc.alignmentParticipants?.some(p => p.identifier === query.participantId)
+          const participates = getOpenCaseAlignmentParticipants(doc)?.some(p => p.identifier === query.participantId)
           if (!participates) continue
         }
 
@@ -51,19 +50,20 @@ export class ListFrameworks {
           sourcedId: doc.sourcedId,
           title: doc.title,
           caseVersion: version,
+          description: doc.description,
+          creator: doc.creator,
           language: doc.language,
           frameworkType: doc.frameworkType,
           subject: doc.subject,
           version: doc.version,
           lastChangeDateTime: doc.lastChangeDateTime.toISOString(),
+          adoptionStatus: doc.adoptionStatus,
           readOnly: doc.readOnly === true,
           cgeFrameworkId: doc.cgeFrameworkId,
-          sourcePackageURI: doc.sourcePackageURI,
-          // alignmentParticipants and publicAccess are derived from the ext:opencase
-          // extension and are OpenCASE-proprietary — only surface them to callers
-          // that requested extensions.
-          ...(query.includeOpenCaseExtensions && doc.alignmentParticipants ? { alignmentParticipants: doc.alignmentParticipants } : {}),
-          ...(query.includeOpenCaseExtensions && doc.publicAccess === true ? { publicAccess: true } : {})
+          // Serve the complete, untransformed ext:opencase object verbatim (not a hand-picked
+          // subset), nested under `extensions` so the caller (management controller) can strip
+          // it the same way the public API strips `extensions` when X-CASE-EDITOR is absent.
+          ...(doc.openCaseExtensions ? { extensions: { 'ext:opencase': doc.openCaseExtensions } } : {})
         })
       }
     }

@@ -7,7 +7,7 @@ import { CFAssociation } from '../../../domain/case/entities/CFAssociation'
 import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { JsonSchemaValidator } from '../../../infrastructure/validation/JsonSchemaValidator'
-import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
+import { type FileFrameworkStore, getOpenCaseIsModifiedFromSource } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 import { mintForkedIdentifiers, stripNonDataFields, type RawComparableBundle } from '../services/mirrorFork'
 
 export interface CreateFrameworkCommand {
@@ -199,8 +199,8 @@ export class CreateFramework {
       const existingMeta = this.store.getDocumentMetadata(tenantId, caseVersion, resolvedStorageKey)
       const existingPkg = existingMeta ? await this.pkgRepo.load(tenantId, caseVersion, resolvedStorageKey) : null
 
-      if (existingMeta?.isModifiedFromSource !== undefined && existingPkg) {
-        preserveUris = { preserveUris: existingMeta.isModifiedFromSource === false }
+      if (getOpenCaseIsModifiedFromSource(existingMeta) !== undefined && existingPkg) {
+        preserveUris = { preserveUris: getOpenCaseIsModifiedFromSource(existingMeta) === false }
         const candidate = buildEntities(cfDocPayload, cfItemsPayload, cfAssociationsPayload, cfRubricsPayload, preserveUris)
 
         const existingComparable: RawComparableBundle = {
@@ -222,9 +222,9 @@ export class CreateFramework {
         const priorOpencase = (existingComparable.CFDocument as any)?.extensions?.['ext:opencase']
         const priorOpencaseObj = (priorOpencase && typeof priorOpencase === 'object') ? priorOpencase : {}
 
-        let newIsModifiedFromSource = existingMeta.isModifiedFromSource
+        let newIsModifiedFromSource = getOpenCaseIsModifiedFromSource(existingMeta)
 
-        if (dataChanged && existingMeta.isModifiedFromSource === false) {
+        if (dataChanged && getOpenCaseIsModifiedFromSource(existingMeta) === false) {
           // Fork event: mint fresh local identifiers for the document,
           // items, associations, and rubrics. The document's storage
           // location doesn't change — it keeps living under its pre-fork

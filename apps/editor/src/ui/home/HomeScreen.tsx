@@ -3,7 +3,6 @@ import { CodeBracketSquareIcon } from '@heroicons/react/24/outline'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/ui/shared/components/ui/button'
 import { FrameworkCard } from '@/ui/shared/components/FrameworkCard'
-import type { HomeFramework } from '@/ui/home/frameworkStore'
 import CreateFrameworkDialog, { type CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 import ImportFrameworkDialog from '@/ui/home/ImportFrameworkDialog'
 import UploadFrameworkDialog from '@/ui/home/UploadFrameworkDialog'
@@ -153,25 +152,18 @@ function UserAvatarMenu({
 }
 
 export default function HomeScreen({
-  unsavedDrafts,
-  onOpenFramework,
   onOpenRemoteFramework,
-  onDeleteDraft,
   onRemoveFromStorage,
   remoteOpenLoading,
   onCreateNew,
   onUploadFramework,
 }: Readonly<{
-  /** Locally-created frameworks that have not yet been saved to the server */
-  unsavedDrafts: HomeFramework[]
-  onOpenFramework: (_id: string) => void
   onOpenRemoteFramework?: (_docId: string) => Promise<void>
-  onDeleteDraft?: (_id: string) => void
   /** Remove a framework from localStorage after archive or hard delete */
   onRemoveFromStorage?: (_docId: string) => void
   remoteOpenLoading?: boolean
-  onCreateNew: (_draft: CreateFrameworkDraft) => void
-  onUploadFramework?: (_framework: Framework) => void
+  onCreateNew: (_draft: CreateFrameworkDraft) => Promise<void>
+  onUploadFramework?: (_framework: Framework) => Promise<void>
 }>) {
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -222,9 +214,6 @@ export default function HomeScreen({
   const [hardDeleteConfirm, setHardDeleteConfirm] = useState<{ docId: string; title: string } | null>(null)
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null)
 
-  // Delete confirmation state (for unsaved drafts)
-  const [draftDeleteConfirm, setDraftDeleteConfirm] = useState<{ id: string; title: string } | null>(null)
-
   // Search & filter state
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -239,11 +228,12 @@ export default function HomeScreen({
         ? await api.listManagementCfPackages({ tenantId, caseVersion: '1.1' })
         : await api.listCfDocuments({ caseVersion: 'v1p1' })
       setServerFrameworks(docs)
-      setHasLoadedOnce(true)
     } catch (e: unknown) {
       setServerFrameworks([])
       setError(e instanceof Error ? e.message : String(e))
     } finally {
+      // Mark attempted even on failure so the auto-load effect doesn't retry forever
+      setHasLoadedOnce(true)
       setLoading(false)
     }
   }, [api, tenantId])
@@ -365,13 +355,6 @@ export default function HomeScreen({
     }
   }, [api, tenantId, loadFrameworks])
 
-  // Handle unsaved draft delete
-  const handleDraftDeleteConfirm = useCallback(() => {
-    if (!draftDeleteConfirm || !onDeleteDraft) return
-    onDeleteDraft(draftDeleteConfirm.id)
-    setDraftDeleteConfirm(null)
-  }, [draftDeleteConfirm, onDeleteDraft])
-
   // Handle import from external CASE endpoint
   const handleImport = useCallback(async (endpointUrl: string, accessToken?: string) => {
     if (!tenantId) throw new Error('Not authenticated')
@@ -409,15 +392,6 @@ export default function HomeScreen({
 
   const isAuthenticated = status === 'authenticated'
 
-  // IDs of server frameworks, used to exclude drafts that have since been saved
-  const serverIds = useMemo(() => new Set(serverFrameworks.map((f) => f.identifier)), [serverFrameworks])
-
-  // Unsaved drafts that haven't been saved to the server yet
-  const visibleDrafts = useMemo(
-    () => unsavedDrafts.filter((d) => !serverIds.has(d.id)),
-    [unsavedDrafts, serverIds],
-  )
-
   // ── Search & filter helpers ────────────────────────────────────────
 
   function matchesSearch(title?: string, creator?: string, description?: string): boolean {
@@ -435,17 +409,6 @@ export default function HomeScreen({
     if (typeFilter && frameworkType !== typeFilter) return false
     return true
   }
-
-  // Filtered unsaved drafts
-  const filteredDrafts = useMemo(
-    () =>
-      visibleDrafts.filter((d) => {
-        const doc = d.cfDocument
-        return matchesSearch(doc.title, doc.creator, doc.description) && matchesFilters(doc.adoptionStatus, doc.frameworkType)
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [visibleDrafts, searchQuery, statusFilter, typeFilter],
-  )
 
   // Editable vs read-only remote cache frameworks
   const editableServerFrameworks = useMemo(
@@ -481,14 +444,13 @@ export default function HomeScreen({
   // Collect unique framework types for the type filter dropdown
   const allFrameworkTypes = useMemo(() => {
     const types = new Set<string>()
-    visibleDrafts.forEach((d) => { if (d.cfDocument.frameworkType) types.add(d.cfDocument.frameworkType) })
     editableServerFrameworks.forEach((d) => { if (d.frameworkType && d.frameworkType !== 'Alignment') types.add(d.frameworkType) })
     remoteServerFrameworks.forEach((d) => { if (d.frameworkType && d.frameworkType !== 'Alignment') types.add(d.frameworkType) })
     return Array.from(types).sort((a, b) => a.localeCompare(b))
-  }, [visibleDrafts, editableServerFrameworks, remoteServerFrameworks])
+  }, [editableServerFrameworks, remoteServerFrameworks])
 
   const hasActiveFilters = Boolean(searchQuery || statusFilter || typeFilter)
-  const totalActiveResults = filteredDrafts.length + filteredServerFrameworks.length
+  const totalActiveResults = filteredServerFrameworks.length
   const totalRemoteResults = filteredRemoteFrameworks.length
 
   const clearFilters = useCallback(() => {
@@ -809,40 +771,6 @@ export default function HomeScreen({
           </div>
         )}
 
-        {/* ── Unsaved Drafts (only shown on Active tab) ──────────────── */}
-        {viewMode === 'active' && filteredDrafts.length > 0 && (
-          <div className="mt-6">
-            <div className="flex items-center gap-3">
-              <h3 className="font-heading text-lg font-medium tracking-[0.02em] text-[#2E2F2F]">Unsaved Drafts</h3>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
-                {filteredDrafts.length}
-              </span>
-            </div>
-            <p className="mt-1 text-sm text-gray-400">
-              New frameworks not yet saved to the server. Open to edit, then save to publish.
-            </p>
-
-            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredDrafts.map((fw) => (
-                <FrameworkCard
-                  key={fw.id}
-                  cfDocument={fw.cfDocument}
-                  rightHint="Open to edit"
-                  isUnsaved
-                  lastChanged={fw.cfDocument.lastChangeDateTime}
-                  onClick={() => onOpenFramework(fw.id)}
-                  onDelete={
-                    onDeleteDraft
-                      ? () => setDraftDeleteConfirm({ id: fw.id, title: fw.cfDocument.title ?? 'Untitled' })
-                      : undefined
-                  }
-                  actionStyle="delete"
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* ── Server Frameworks ──────────────────────────────────────── */}
         <div className="mt-6">
 
@@ -907,10 +835,10 @@ export default function HomeScreen({
                           frameworkType: doc.frameworkType,
                           adoptionStatus: doc.adoptionStatus,
                         }}
-                        sourcePackageURI={doc.sourcePackageURI}
-                        isModifiedFromSource={doc.isModifiedFromSource}
+                        sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
+                        isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         readOnly={doc.readOnly === true}
-                        publicAccess={doc.publicAccess === true}
+                        publicAccess={doc.extensions?.['ext:opencase']?.publicAccess === true}
                         rightHint={isArchiving ? 'Archiving' : hint}
                         lastChanged={doc.lastChangeDateTime}
                         onClick={() => openRemote(doc.identifier)}
@@ -974,10 +902,10 @@ export default function HomeScreen({
                           frameworkType: doc.frameworkType,
                           adoptionStatus: doc.adoptionStatus,
                         }}
-                        sourcePackageURI={doc.sourcePackageURI}
-                        isModifiedFromSource={doc.isModifiedFromSource}
+                        sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
+                        isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         readOnly
-                        publicAccess={doc.publicAccess === true}
+                        publicAccess={doc.extensions?.['ext:opencase']?.publicAccess === true}
                         rightHint={isArchiving ? 'Archiving' : hint}
                         lastChanged={doc.lastChangeDateTime}
                         onClick={() => openRemote(doc.identifier)}
@@ -1027,10 +955,10 @@ export default function HomeScreen({
                           frameworkType: doc.frameworkType,
                           adoptionStatus: doc.adoptionStatus,
                         }}
-                        sourcePackageURI={doc.sourcePackageURI}
-                        isModifiedFromSource={doc.isModifiedFromSource}
+                        sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
+                        isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         readOnly={doc.readOnly === true}
-                        publicAccess={doc.publicAccess === true}
+                        publicAccess={doc.extensions?.['ext:opencase']?.publicAccess === true}
                         rightHint={isDeleting ? 'Deleting' : (isRestoring ? 'Restoring' : undefined)}
                         lastChanged={doc.lastChangeDateTime}
                         onDelete={tenantId ? () => handleHardDeleteRequest(doc.identifier, title) : undefined}
@@ -1088,9 +1016,9 @@ export default function HomeScreen({
       <CreateFrameworkDialog
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
-        onCreate={(draft) => {
+        onCreate={async (draft) => {
+          await onCreateNew(draft)
           setCreateOpen(false)
-          onCreateNew(draft)
         }}
       />
 
@@ -1104,9 +1032,9 @@ export default function HomeScreen({
       <UploadFrameworkDialog
         open={uploadOpen}
         onCancel={() => setUploadOpen(false)}
-        onUpload={(framework) => {
+        onUpload={async (framework) => {
+          await onUploadFramework?.(framework)
           setUploadOpen(false)
-          onUploadFramework?.(framework)
         }}
       />
 
@@ -1176,27 +1104,6 @@ export default function HomeScreen({
             </Button>
             <Button variant="destructive" onClick={() => void handleHardDeleteConfirm()}>
               Delete permanently
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog (unsaved drafts) */}
-      <Dialog open={Boolean(draftDeleteConfirm)} onOpenChange={(open) => !open && setDraftDeleteConfirm(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Draft</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete &ldquo;{draftDeleteConfirm?.title}&rdquo;?
-              This draft has not been saved to the server and will be permanently removed.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setDraftDeleteConfirm(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleDraftDeleteConfirm}>
-              Delete
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -62,24 +62,41 @@ describe('CFPackagesManagementController', () => {
     expect(mockListFrameworks.execute).toHaveBeenCalledWith({
       tenantId: 'test-tenant',
       caseVersion: '1.0',
-      includeArchived: false,
-      includeOpenCaseExtensions: false
+      includeArchived: false
     })
     expect(responseStatus).toHaveBeenCalledWith(200)
   })
 
-  it('requests OpenCASE extensions when X-CASE-EDITOR header is present', async () => {
+  it('strips extensions from frameworks when X-CASE-EDITOR header is absent', async () => {
+    ;(mockRequest as any).tenantId = 'test-tenant'
+    mockListFrameworks.execute.mockResolvedValueOnce({
+      frameworks: [{ sourcedId: 'doc-1', extensions: { 'ext:opencase': { alignmentParticipants: [] } } }],
+      total: 1,
+      tenantId: 'test-tenant'
+    } as any)
+
+    await (controller.list as any)(mockRequest as Request, mockResponse as Response, next)
+
+    const body = responseJson.mock.calls[0][0]
+    expect(body.frameworks[0]).not.toHaveProperty('extensions')
+  })
+
+  it('keeps extensions on frameworks when X-CASE-EDITOR header is present', async () => {
     ;(mockRequest as any).tenantId = 'test-tenant'
     ;(mockRequest.header as jest.Mock).mockImplementation((name: string) =>
       name === 'X-CASE-EDITOR' ? 'true' : undefined
     )
-    mockListFrameworks.execute.mockResolvedValueOnce({ frameworks: [], total: 0, tenantId: 'test-tenant' } as any)
+    const extensions = { 'ext:opencase': { alignmentParticipants: [] } }
+    mockListFrameworks.execute.mockResolvedValueOnce({
+      frameworks: [{ sourcedId: 'doc-1', extensions }],
+      total: 1,
+      tenantId: 'test-tenant'
+    } as any)
 
     await (controller.list as any)(mockRequest as Request, mockResponse as Response, next)
 
-    expect(mockListFrameworks.execute).toHaveBeenCalledWith(
-      expect.objectContaining({ includeOpenCaseExtensions: true })
-    )
+    const body = responseJson.mock.calls[0][0]
+    expect(body.frameworks[0].extensions).toEqual(extensions)
   })
 
   it('archives a CFPackage by id (soft delete by default)', async () => {

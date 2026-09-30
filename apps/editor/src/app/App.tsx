@@ -11,6 +11,7 @@ import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
 import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage, extractRemoteFrameworkDataFromCfPackage, normalizeLinkedFrameworkColors } from '@/ui/editor/reactflow/mapping'
+import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
 import type { LayoutState } from '@/ui/editor/reactflow/mapping'
 import type { CaseVersion } from '@/application/framework/mappers/case/CasePackageSnapshot'
 import type { CFAssociationGrouping, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
@@ -79,10 +80,6 @@ function AppInner() {
   const [tenantCfConcepts, setTenantCfConcepts] = useState<CFConcept[]>([])
   const [tenantCfLicenses, setTenantCfLicenses] = useState<CFLicense[]>([])
   const [tenantCfAssociationGroupings, setTenantCfAssociationGroupings] = useState<CFAssociationGrouping[]>([])
-
-  // Track which framework IDs have been published to OpenCASE
-  // (either loaded from the server or successfully saved)
-  const [publishedFrameworkIds, setPublishedFrameworkIds] = useState<Set<string>>(new Set())
 
   // Server-side framework list — populated from GET /ims/case/v1p1/CFDocuments on auth
   const [serverCfDocuments, setServerCfDocuments] = useState<CfDocumentSummary[]>([])
@@ -270,12 +267,6 @@ function AppInner() {
     return frameworks.find((f) => f.id === activeFrameworkId) ?? null
   }, [frameworks, activeFrameworkId])
 
-  // Unsaved drafts: frameworks in the local cache that haven't been published to the server
-  const unsavedDrafts = useMemo(
-    () => frameworks.filter((f) => !publishedFrameworkIds.has(f.id)),
-    [frameworks, publishedFrameworkIds],
-  )
-
   // Summaries of server frameworks passed to the crosswalk target selector (excludes alignment frameworks)
   const serverFrameworkSummaries = useMemo(
     () => serverCfDocuments
@@ -311,18 +302,6 @@ function AppInner() {
     navigateToFramework(id)
   }, [navigateToFramework])
 
-  const deleteDraft = useCallback((id: string) => {
-    setFrameworks((prev) => {
-      const next = prev.filter((f) => f.id !== id)
-      saveFrameworks(next)
-      return next
-    })
-    // If we're deleting the active framework, go back to home
-    if (activeFrameworkId === id) {
-      navigateHome({ replace: true })
-    }
-  }, [activeFrameworkId, navigateHome])
-
   /** Remove a framework from localStorage (used after archive or hard delete) */
   const removeFrameworkFromStorage = useCallback((docId: string) => {
     setFrameworks((prev) => {
@@ -330,36 +309,47 @@ function AppInner() {
       saveFrameworks(next)
       return next
     })
-    setPublishedFrameworkIds((prev) => {
-      const next = new Set(prev)
-      next.delete(docId)
-      return next
-    })
     if (activeFrameworkId === docId) {
       navigateHome({ replace: true })
     }
   }, [activeFrameworkId, navigateHome])
 
-  const createNew = useCallback((draft: CreateFrameworkDraft) => {
+  // Persist a brand-new (never-yet-saved) framework to the server as its base
+  // version. Shared by the "create new" and "upload spreadsheet" flows below,
+  // both of which build a HomeFramework locally first but must confirm it
+  // exists on the server before treating it like any other framework in the
+  // list — leaving without an explicit save should only ever lose in-progress
+  // edits, never the framework's existence.
+  const saveNewFrameworkToServer = useCallback(async (fw: HomeFramework, tid: string) => {
+    const cfPackage = frameworkToCfPackage({ framework: fw.framework, caseVersion: '1.1' })
+    const openCasePackage = toOpenCaseFormat(cfPackage)
+    await api.saveCfPackage({ tenantId: tid, cfPackage: openCasePackage, caseVersion: 'v1p1' })
+  }, [api])
+
+  const createNew = useCallback(async (draft: CreateFrameworkDraft) => {
     const fw = createNewFrameworkDraft(draft)
+    if (tenantId) await saveNewFrameworkToServer(fw, tenantId)
+
     setFrameworks((prev) => {
       const next = [fw, ...prev]
       saveFrameworks(next)
       return next
     })
     navigateToFramework(fw.id)
-  }, [navigateToFramework])
+  }, [navigateToFramework, tenantId, saveNewFrameworkToServer])
 
   /** Create a HomeFramework from a pre-populated domain Framework (e.g. from spreadsheet upload). */
-  const createFromFramework = useCallback((framework: Framework) => {
+  const createFromFramework = useCallback(async (framework: Framework) => {
     const fw = createHomeFrameworkFromDomain(framework)
+    if (tenantId) await saveNewFrameworkToServer(fw, tenantId)
+
     setFrameworks((prev) => {
       const next = [fw, ...prev]
       saveFrameworks(next)
       return next
     })
     navigateToFramework(fw.id)
-  }, [navigateToFramework])
+  }, [navigateToFramework, tenantId, saveNewFrameworkToServer])
 
   const openRemoteFramework = useCallback(
     async (docId: string, opts?: { replace?: boolean }) => {
@@ -424,9 +414,6 @@ function AppInner() {
           return next
         })
 
-        // Mark as published since it was loaded from OpenCASE
-        setPublishedFrameworkIds((prev) => new Set(prev).add(fw.id))
-
         navigateToFramework(fw.id, opts)
       } finally {
         setRemoteOpenState('idle')
@@ -470,7 +457,6 @@ function AppInner() {
         saveFrameworks(next)
         return next
       })
-      setPublishedFrameworkIds((prev) => new Set(prev).add(fw.id))
     },
     [api, mergeCfDefinitions],
   )
@@ -556,11 +542,6 @@ function AppInner() {
         caseVersion: caseApiVersion,
       })
 
-      // Mark this framework as published to OpenCASE
-      if (activeFrameworkId) {
-        setPublishedFrameworkIds((prev) => new Set(prev).add(activeFrameworkId))
-      }
-
       // A fork mints new identifiers server-side for the document AND every
       // item/association in it — not just the document. Patching the local
       // session by hand would mean re-deriving that whole remap ourselves and
@@ -575,11 +556,6 @@ function AppInner() {
         setFrameworks((prev) => {
           const next = prev.filter((f) => f.id !== oldId)
           saveFrameworks(next)
-          return next
-        })
-        setPublishedFrameworkIds((prev) => {
-          const next = new Set(prev)
-          next.delete(oldId)
           return next
         })
         setFrameworkLayouts((prev) => {
@@ -640,7 +616,7 @@ function AppInner() {
       try {
         const alignmentDocs = await api.listAlignmentFrameworks({ tenantId, participantId: sourceId })
         return alignmentDocs.flatMap((doc) => {
-          const participants = doc.alignmentParticipants ?? []
+          const participants = doc.extensions?.['ext:opencase']?.alignmentParticipants ?? []
           const other = participants.find((p) => p.identifier !== sourceId)
           // No distinct "other" participant means this is a self (intra-framework) alignment doc.
           const targetIdentifier = other?.identifier ?? (participants.some((p) => p.identifier === sourceId) ? sourceId : undefined)
@@ -668,7 +644,7 @@ function AppInner() {
         // for a self-alignment (targetId === activeFrameworkId) matching "any participant === targetId"
         // would match the first cross-framework doc too — instead require ALL participants to be self.
         const matchingDoc = alignmentDocs.find((doc) => {
-          const participants = doc.alignmentParticipants ?? []
+          const participants = doc.extensions?.['ext:opencase']?.alignmentParticipants ?? []
           if (targetId === activeFrameworkId) {
             return participants.length > 0 && participants.every((p) => p.identifier === activeFrameworkId)
           }
@@ -731,10 +707,8 @@ function AppInner() {
 
   const homeScreen = (
     <HomeScreen
-      unsavedDrafts={unsavedDrafts}
       onOpenFramework={openFramework}
       onOpenRemoteFramework={openRemoteFramework}
-      onDeleteDraft={deleteDraft}
       onRemoveFromStorage={removeFrameworkFromStorage}
       remoteOpenLoading={remoteOpenState === 'loading'}
       onCreateNew={createNew}
@@ -766,7 +740,11 @@ function AppInner() {
       <EditorCanvas
         onBack={() => navigateHome()}
         onSaveToServer={tenantId ? handleSaveToServer : undefined}
-        isPublishedToOpenCase={activeFrameworkId ? publishedFrameworkIds.has(activeFrameworkId) : false}
+        // Every framework that reaches `frameworks` was either loaded from the server
+        // or saved to it before being added locally (see saveNewFrameworkToServer,
+        // openRemoteFramework, handleLoadTargetFramework, handleSaveToServer) — so if
+        // there's an active framework at all, it's known-published.
+        isPublishedToOpenCase={Boolean(activeFrameworkId)}
         onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
         onFetchCfPackage={activeFrameworkId ? handleFetchCfPackage : undefined}
         availableFrameworks={frameworks}

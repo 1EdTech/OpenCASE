@@ -6,13 +6,27 @@ export { normalizeCgeFrameworkList, normalizeCgeSubscriptionList } from './cgeTy
 
 export type OpenCaseCfPackageResponse = { CFPackage: CFPackage }
 
+/**
+ * Shape of the `extensions['ext:opencase']` object as served by the CFDocuments list endpoint
+ * and the management "list frameworks" endpoint (only present when the request sends
+ * X-CASE-EDITOR). Server-side, this object is passed through verbatim — it may contain other
+ * frontend-only keys too (e.g. layout), but these are the ones the editor currently reads here.
+ */
+export type OpenCaseListExtensions = {
+  sourcePackageURI?: string
+  isModifiedFromSource?: boolean
+  alignmentParticipants?: Array<{ identifier?: string; uri: string }>
+  /** When true, the CASE API serves this framework without authentication. */
+  publicAccess?: boolean
+}
+
 export type AlignmentFrameworkSummary = {
   sourcedId: string
   title: string
   caseVersion: string
   frameworkType?: string
-  alignmentParticipants?: Array<{ identifier?: string; uri: string }>
   lastChangeDateTime?: string
+  extensions?: { 'ext:opencase'?: OpenCaseListExtensions }
 }
 
 export type OpenCaseManagementCfPackageSummary = {
@@ -40,16 +54,12 @@ export type CfDocumentSummary = {
   adoptionStatus?: string
   lastChangeDateTime?: string
   caseVersion?: string
-  /** URL the framework was imported from, if known (set during import via backend). */
-  sourcePackageURI?: string
-  /** Set (true or false) once a framework has been imported/mirrored; true once it's been locally modified (forked). */
-  isModifiedFromSource?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus */
   archived?: boolean
-  /** When true, the CASE API serves this framework without authentication. */
-  publicAccess?: boolean
   readOnly?: boolean
   cgeFrameworkId?: string
+  /** OpenCASE-proprietary data (e.g. sourcePackageURI/isModifiedFromSource for the mirror/fork badge) — only present when the request sends X-CASE-EDITOR. */
+  extensions?: { 'ext:opencase'?: OpenCaseListExtensions }
 }
 
 export class CaseApiClient {
@@ -100,15 +110,18 @@ export class CaseApiClient {
         identifier: String(f.sourcedId ?? f.identifier ?? ''),
         title: typeof f.title === 'string' ? f.title : undefined,
         creator: typeof f.creator === 'string' ? f.creator : undefined,
+        description: typeof f.description === 'string' ? f.description : undefined,
         frameworkType: typeof f.frameworkType === 'string' ? f.frameworkType : undefined,
+        adoptionStatus: typeof f.adoptionStatus === 'string' ? f.adoptionStatus : undefined,
         subject: typeof f.subject === 'string' ? f.subject : undefined,
         version: typeof f.version === 'string' ? f.version : undefined,
         lastChangeDateTime: typeof f.lastChangeDateTime === 'string' ? f.lastChangeDateTime : undefined,
         caseVersion: typeof f.caseVersion === 'string' ? f.caseVersion : undefined,
-        sourcePackageURI: typeof f.sourcePackageURI === 'string' ? f.sourcePackageURI : undefined,
-        publicAccess: f.publicAccess === true,
         readOnly: f.readOnly === true,
         cgeFrameworkId: typeof f.cgeFrameworkId === 'string' ? f.cgeFrameworkId : undefined,
+        extensions: (f.extensions && typeof f.extensions === 'object')
+          ? f.extensions as { 'ext:opencase'?: OpenCaseListExtensions }
+          : undefined,
       }))
     }
 

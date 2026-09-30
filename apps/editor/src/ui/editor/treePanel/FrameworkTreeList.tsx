@@ -19,6 +19,8 @@ type Props = {
   noHeader?: boolean
   /** Optional extra content rendered inside the header (e.g. a framework selector dropdown) */
   headerSlot?: React.ReactNode
+  /** Optional content rendered below the header, above the scrollable tree (e.g. an "Add item" action) */
+  belowHeaderSlot?: React.ReactNode
   onSelect?: (_id: string) => void
   onAddChild?: (_parentId: string) => void
   onAddRoot?: () => void
@@ -50,6 +52,7 @@ export default function FrameworkTreeList({
   onToggleExpand,
   noHeader,
   headerSlot,
+  belowHeaderSlot,
   onSelect,
   onAddChild,
   onAddRoot,
@@ -69,6 +72,7 @@ export default function FrameworkTreeList({
     <div className="flex h-full flex-col overflow-hidden">
       {!noHeader && <button
         type="button"
+        data-tree-panel-header
         onClick={() => frameworkNodeId && onSelect?.(frameworkNodeId)}
         className={[
           'flex shrink-0 w-full items-start justify-between gap-2 border-b px-4 py-3 text-left transition-colors',
@@ -99,6 +103,12 @@ export default function FrameworkTreeList({
           ) : null}
         </div>
       </button>}
+
+      {belowHeaderSlot ? (
+        <div className="shrink-0 border-b border-black/10 p-3">
+          {belowHeaderSlot}
+        </div>
+      ) : null}
 
       <div className="flex-1 overflow-y-auto p-3" data-scroll-container role="tree" aria-label="Framework items">
         {roots.length === 0 ? (

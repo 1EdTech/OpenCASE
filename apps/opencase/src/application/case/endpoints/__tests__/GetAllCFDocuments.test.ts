@@ -268,15 +268,23 @@ describe('GetAllCFDocuments', () => {
       expect(result.CFDocuments).toHaveLength(2)
     })
 
-    it('should omit sourcePackageURI and isModifiedFromSource when includeOpenCaseExtensions is not set', async () => {
+    it('should nest the complete, untransformed ext:opencase object under extensions for CASE 1.1', async () => {
+      // Includes fields (importedAt, layout, edgeType) that are NOT modeled as their own
+      // DocumentMetadata properties — they must still be served verbatim, unmodified.
+      const openCaseExtensions = {
+        sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
+        isModifiedFromSource: true,
+        importedAt: '2026-09-17T14:55:51.931Z',
+        layout: { x: -200, y: -80, w: 400, h: 160 },
+        edgeType: 'default'
+      }
       const documents = [
         {
           sourcedId: 'doc-1',
           title: 'Mirrored Document',
           lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
           currentFile: 'file1.json',
-          sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
-          isModifiedFromSource: true
+          openCaseExtensions
         }
       ]
 
@@ -284,28 +292,25 @@ describe('GetAllCFDocuments', () => {
 
       const result = await getAllCFDocuments.execute({ tenantId, caseVersion })
 
-      expect(result.CFDocuments[0]).not.toHaveProperty('sourcePackageURI')
-      expect(result.CFDocuments[0]).not.toHaveProperty('isModifiedFromSource')
+      expect(result.CFDocuments[0].extensions).toEqual({ 'ext:opencase': openCaseExtensions })
     })
 
-    it('should include sourcePackageURI and isModifiedFromSource when includeOpenCaseExtensions is true', async () => {
+    it('should omit the extensions block entirely for CASE 1.0', async () => {
       const documents = [
         {
           sourcedId: 'doc-1',
           title: 'Mirrored Document',
           lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
           currentFile: 'file1.json',
-          sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc',
-          isModifiedFromSource: false
+          openCaseExtensions: { sourcePackageURI: 'https://standards.example.org/ims/case/v1p1/CFPackages/abc' }
         }
       ]
 
       mockStore.getAllDocuments.mockImplementation((_: any, v: any) => (v === '1.0' ? documents as any : []))
 
-      const result = await getAllCFDocuments.execute({ tenantId, caseVersion, includeOpenCaseExtensions: true })
+      const result = await getAllCFDocuments.execute({ tenantId, caseVersion: '1.0' })
 
-      expect(result.CFDocuments[0].sourcePackageURI).toBe('https://standards.example.org/ims/case/v1p1/CFPackages/abc')
-      expect(result.CFDocuments[0].isModifiedFromSource).toBe(false)
+      expect(result.CFDocuments[0]).not.toHaveProperty('extensions')
     })
   })
 })

@@ -32,8 +32,7 @@ export class GetAllCFDocumentsControllerV1p0 {
         orderBy,
         filter,
         fields,
-        includeArchived,
-        includeOpenCaseExtensions: wantsOpenCaseExtensions(req)
+        includeArchived
       })
 
       // Access control: unauthenticated requests only see public frameworks

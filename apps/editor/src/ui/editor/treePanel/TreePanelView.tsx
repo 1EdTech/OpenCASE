@@ -237,6 +237,11 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
   const leftPanelRef = useRef<HTMLDivElement>(null)
   const rightPanelRef = useRef<HTMLDivElement>(null)
 
+  // Right panel's static header has no variable content, so it's kept in sync with the
+  // left panel's header height (which varies with title/description/publisher) instead
+  // of hard-coding a height — that way the "Add" buttons below each header stay aligned.
+  const [leftHeaderHeight, setLeftHeaderHeight] = useState<number | undefined>(undefined)
+
   // Stable refs for values used inside recalculateLines (avoids stale closures)
   const pendingRef = useRef(pendingAssociations)
   pendingRef.current = pendingAssociations
@@ -443,6 +448,19 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
       obs.disconnect()
     }
   }, [recalculateLines, expandedTargetId])
+
+  // Track the left panel's header height so the right panel's header can match it
+  useEffect(() => {
+    const header = leftPanelRef.current?.querySelector('[data-tree-panel-header]')
+    if (!header) return
+
+    const sync = () => setLeftHeaderHeight(header.getBoundingClientRect().height)
+    sync()
+
+    const obs = new ResizeObserver(sync)
+    obs.observe(header)
+    return () => obs.disconnect()
+  }, [frameworkInfo.title, cfDocument?.description, cfDocument?.publisher])
 
   // Close popover on outside click
   useEffect(() => {
@@ -876,6 +894,16 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                 onDragStart={NOOP_DRAG_START}
                 associationCounts={leftAssociationCounts}
                 onBadgeClick={handleLeftBadgeClick}
+                belowHeaderSlot={(
+                  <button
+                    type="button"
+                    onClick={() => { if (frameworkNodeId) addChild(frameworkNodeId) }}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 transition-colors hover:border-teal-400 hover:text-teal-600 focus:outline-none"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add framework item
+                  </button>
+                )}
               />
             </div>
             {/* Gate callout — shown only when a target is expanded but source hasn't been saved */}
@@ -887,24 +915,28 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                 </p>
               </div>
             )}
-            <div className="shrink-0 border-t border-black/10 p-3">
-              <button
-                type="button"
-                onClick={() => { if (frameworkNodeId) addChild(frameworkNodeId) }}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 transition-colors hover:border-teal-400 hover:text-teal-600 focus:outline-none"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add framework item
-              </button>
-            </div>
           </div>
         </div>
 
         {/* Right panel — accordion list of target frameworks */}
         <div ref={rightPanelRef} className={panelClass}>
           <div className="flex h-full flex-col overflow-hidden">
-            <div className="shrink-0 border-b border-black/10 bg-blue-50 px-4 py-3">
+            <div
+              className="shrink-0 border-b border-black/10 bg-blue-50 px-4 py-3"
+              style={leftHeaderHeight ? { height: leftHeaderHeight } : undefined}
+            >
               <p className="text-sm font-semibold text-slate-800">Associated Frameworks</p>
+            </div>
+
+            <div className="shrink-0 border-b border-black/10 p-3">
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(true)}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 transition-colors hover:border-teal-400 hover:text-teal-600 focus:outline-none"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add associated framework
+              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto">
@@ -1002,17 +1034,6 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                   )
                 })
               )}
-            </div>
-
-            <div className="shrink-0 border-t border-black/10 p-3">
-              <button
-                type="button"
-                onClick={() => setIsAddModalOpen(true)}
-                className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500 transition-colors hover:border-teal-400 hover:text-teal-600 focus:outline-none"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add associated framework
-              </button>
             </div>
           </div>
         </div>
