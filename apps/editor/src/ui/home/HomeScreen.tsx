@@ -228,11 +228,12 @@ export default function HomeScreen({
         ? await api.listManagementCfPackages({ tenantId, caseVersion: '1.1' })
         : await api.listCfDocuments({ caseVersion: 'v1p1' })
       setServerFrameworks(docs)
-      setHasLoadedOnce(true)
     } catch (e: unknown) {
       setServerFrameworks([])
       setError(e instanceof Error ? e.message : String(e))
     } finally {
+      // Mark attempted even on failure so the auto-load effect doesn't retry forever
+      setHasLoadedOnce(true)
       setLoading(false)
     }
   }, [api, tenantId])
