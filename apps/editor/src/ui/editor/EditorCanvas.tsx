@@ -35,7 +35,7 @@ import type { CFDocument, CFItem, CFPackage } from '@/domain/case/types'
 import type { HomeFramework } from '@/ui/home/frameworkStore'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
-import { absolutizeCaseUris, frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
+import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
 import type { Framework } from '@/domain/framework/model/types'
 import { hasFrameworkDataChanged } from '@/domain/framework/hasFrameworkDataChanged'
 
@@ -190,8 +190,8 @@ type MirrorStatus = { isModifiedFromSource?: boolean; sourcePackageURI?: string 
 type EditorCanvasProps = {
   onBack?: () => void
   onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework) => Promise<void>
-  /** Whether the current framework has been published to OpenCASE (loaded from or saved to server) */
-  isPublishedToOpenCase?: boolean
+  /** Whether the current framework has been saved to the OpenCASE server (has a server-side document) */
+  isSavedToServer?: boolean
   /** Archive the current framework on the server and navigate home */
   onArchiveFramework?: () => Promise<void>
   /** Fetch the published CFPackage from the server (returns CASE JSON with absolute URIs) */
@@ -244,7 +244,7 @@ function RemoteLinkInternalsSync({
   return null
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpenCase, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, isSavedToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -398,34 +398,19 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
   const saveCtxRef = useRef({ caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings })
   saveCtxRef.current = { caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings }
 
-  // Open the CFPackage viewer. Fetches from the server when published (absolute URIs);
-  // falls back to local generation for unsaved/draft frameworks.
+  // Open the CFPackage viewer. Every framework open in the editor has been saved to the
+  // server, so the server copy (absolute URIs, no OpenCASE extensions) is the export.
   const handleViewCFPackage = useCallback(async () => {
-    if (isPublishedToOpenCase && onFetchCfPackage) {
-      setCfPackageDialogOpen(true)
-      setViewCaseLoading(true)
-      try {
-        const pkg = await onFetchCfPackage()
-        setGeneratedCfPackage(pkg)
-      } finally {
-        setViewCaseLoading(false)
-      }
-    } else {
-      const { nodes: n, edges: e, remoteLinks: rl } = graphRef.current
-      const ctx = saveCtxRef.current
-      const { framework, layout, remoteEditorData } = fromEditorGraph({ graph: { nodes: n, edges: e, remoteLinks: rl } })
-      const cfPackage = frameworkToCfPackage({
-        framework, layout,
-        caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
-        cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
-        cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
-        remoteEditorData,
-      })
-      const caseJson = toOpenCaseFormat(cfPackage)
-      setGeneratedCfPackage(absolutizeCaseUris(caseJson, window.location.origin))
-      setCfPackageDialogOpen(true)
+    if (!onFetchCfPackage) return
+    setCfPackageDialogOpen(true)
+    setViewCaseLoading(true)
+    try {
+      const pkg = await onFetchCfPackage()
+      setGeneratedCfPackage(pkg)
+    } finally {
+      setViewCaseLoading(false)
     }
-  }, [isPublishedToOpenCase, onFetchCfPackage])
+  }, [onFetchCfPackage])
 
   // Actually perform the save (network call). Split out from `handleSave` so
   // the fork-warning dialog can defer this until the user confirms.
@@ -1780,7 +1765,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
             availableFrameworks={availableFrameworks}
             serverFrameworks={serverFrameworks}
             onLoadTargetFramework={onLoadTargetFramework}
-            isSourcePublished={isPublishedToOpenCase}
+            isSourceSavedToServer={isSavedToServer}
             onSaveAlignments={onSaveAlignments}
             onLoadAlignmentsForTarget={onLoadAlignmentsForTarget}
             onDiscoverAlignedTargets={onDiscoverAlignedTargets}
@@ -1822,7 +1807,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, isPublishedToOpen
         onChangeNode={updateNodeData}
         hideColorBand={activeView === 'tree'}
         onViewCFPackage={handleViewCFPackage}
-        isPublishedToOpenCase={isPublishedToOpenCase}
+        isSavedToServer={isSavedToServer}
         availableLicenses={availableLicenses}
         cfItemTypes={cfItemTypes}
         ensureCfItemType={ensureCfItemType}

@@ -1,5 +1,13 @@
+export type RequestOptions = {
+  /**
+   * Send X-CASE-EDITOR so OpenCASE includes its proprietary `extensions` (ext:opencase) data.
+   * Defaults to true; pass false for spec-clean CASE JSON (e.g. user-facing export).
+   */
+  includeExtensions?: boolean
+}
+
 export type HttpClient = {
-  get: (_url: string) => Promise<unknown>
+  get: (_url: string, _options?: RequestOptions) => Promise<unknown>
   post: (_url: string, _body: unknown) => Promise<unknown>
   put: (_url: string, _body: unknown) => Promise<unknown>
   patch: (_url: string, _body: unknown) => Promise<unknown>
@@ -54,14 +62,13 @@ async function readBody(res: Response): Promise<unknown> {
 }
 
 export function createFetchHttpClient(baseUrl: string, options: FetchHttpClientOptions = {}): HttpClient {
-  const doRequest = async (method: string, url: string, body?: unknown): Promise<unknown> => {
+  const doRequest = async (method: string, url: string, body?: unknown, requestOptions: RequestOptions = {}): Promise<unknown> => {
     const fullUrl = joinUrl(baseUrl, url)
     const token = options.getAccessToken ? await options.getAccessToken() : null
 
-    const headers: Record<string, string> = {
-      // Required by OpenCASE to return OpenCASE extensions in responses
-      'X-CASE-EDITOR': 'true',
-    }
+    const headers: Record<string, string> = {}
+    // Required by OpenCASE to return OpenCASE extensions in responses
+    if (requestOptions.includeExtensions !== false) headers['X-CASE-EDITOR'] = 'true'
     if (token) headers.Authorization = `Bearer ${token}`
     if (body !== undefined) headers['Content-Type'] = 'application/json'
 
@@ -81,7 +88,7 @@ export function createFetchHttpClient(baseUrl: string, options: FetchHttpClientO
   }
 
   return {
-    get: (url) => doRequest('GET', url),
+    get: (url, requestOptions) => doRequest('GET', url, undefined, requestOptions),
     post: (url, body) => doRequest('POST', url, body),
     put: (url, body) => doRequest('PUT', url, body),
     patch: (url, body) => doRequest('PATCH', url, body),

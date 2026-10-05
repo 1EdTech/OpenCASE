@@ -520,10 +520,11 @@ function AppInner() {
     removeFrameworkFromStorage(activeFrameworkId)
   }, [api, tenantId, activeFrameworkId, caseApiVersion, removeFrameworkFromStorage])
 
-  // Handler to fetch the published CFPackage from the server (returns CASE JSON with absolute URIs)
+  // Handler to fetch the published CFPackage from the server (returns CASE JSON with absolute URIs).
+  // This is the user-facing view/export, so omit OpenCASE extensions (ext:opencase).
   const handleFetchCfPackage = useCallback(async () => {
     if (!activeFrameworkId) throw new Error('No active framework')
-    return api.getCfPackage({ docId: activeFrameworkId, caseVersion: caseApiVersion })
+    return api.getCfPackage({ docId: activeFrameworkId, caseVersion: caseApiVersion, includeExtensions: false })
   }, [api, activeFrameworkId, caseApiVersion])
 
   // Handler to save the CFPackage to the server
@@ -744,7 +745,7 @@ function AppInner() {
         // or saved to it before being added locally (see saveNewFrameworkToServer,
         // openRemoteFramework, handleLoadTargetFramework, handleSaveToServer) — so if
         // there's an active framework at all, it's known-published.
-        isPublishedToOpenCase={Boolean(activeFrameworkId)}
+        isSavedToServer={Boolean(activeFrameworkId)}
         onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
         onFetchCfPackage={activeFrameworkId ? handleFetchCfPackage : undefined}
         availableFrameworks={frameworks}
