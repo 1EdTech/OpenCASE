@@ -19,6 +19,7 @@ import RemoteFrameworkItemsPanel from '@/ui/editor/components/RemoteFrameworkIte
 import AssociationTypePickerDialog from '@/ui/editor/components/AssociationTypePickerDialog'
 import ViewCFPackageDialog from '@/ui/editor/components/ViewCFPackageDialog'
 import TreePanelView from '@/ui/editor/treePanel/TreePanelView'
+import { CANVAS_VIEW_ENABLED } from '@/ui/editor/featureFlags'
 import { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient, formatApiErrorMessage } from '@/infrastructure/caseApi/http'
 import { getAppConfig } from '@/app/config'
@@ -31,7 +32,7 @@ import {
 import { useEditor } from '@/ui/editor/state/EditorContext'
 import { isFrameworkNode, getNodeSize } from '@/ui/editor/state/helpers/nodeGeometry'
 import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/types'
-import type { CFDocument, CFItem, CFPackage } from '@/domain/case/types'
+import type { CFAssociationGrouping, CFDocument, CFItem, CFPackage } from '@/domain/case/types'
 import type { HomeFramework } from '@/ui/home/frameworkStore'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
@@ -56,6 +57,8 @@ const REACT_FLOW_DEFAULT_EDGE_OPTIONS = {
 const REACT_FLOW_PRO_OPTIONS = { hideAttribution: true }
 const REACT_FLOW_BACKGROUND_STYLE = { backgroundColor: '#f0f0f2' }
 const minimapNodeColor = (node: CaseEditorNodeType) => (node.selected ? '#8b5cf6' : '#e2e8f0') // violet-500 if selected, slate-200 otherwise
+const NO_EDGES: CaseEditorEdge[] = []
+const NO_GROUPINGS: CFAssociationGrouping[] = []
 const minimapNodeStrokeColor = (node: CaseEditorNodeType) => (node.selected ? '#7c3aed' : '#cbd5e1') // violet-600 if selected, slate-300 otherwise
 
 type ReactFlowGraphProps = {
@@ -325,17 +328,20 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
   const [saveError, setSaveError] = useState<string | null>(null)
   const [selectedRemoteEdgeIds, setSelectedRemoteEdgeIds] = useState<string[]>([])
 
+  const [activeView, setActiveView] = useState<'canvas' | 'tree'>('tree')
+
+  // The edge derivations below exist only to feed <ReactFlow>. Skip them
+  // entirely while the canvas view is disabled (see featureFlags.ts) so they
+  // don't add per-keystroke cost to Tree View on large frameworks.
   const remoteLinkEdges = useMemo(
-    () => buildRemoteLinkEdges(nodesWithCallbacks, remoteLinks, selectedRemoteEdgeIds),
+    () => (CANVAS_VIEW_ENABLED ? buildRemoteLinkEdges(nodesWithCallbacks, remoteLinks, selectedRemoteEdgeIds) : NO_EDGES),
     [nodesWithCallbacks, remoteLinks, selectedRemoteEdgeIds],
   )
 
   const allEditorEdges = useMemo(
-    () => [...editorEdges, ...remoteLinkEdges],
+    () => (CANVAS_VIEW_ENABLED ? [...editorEdges, ...remoteLinkEdges] : NO_EDGES),
     [editorEdges, remoteLinkEdges],
   )
-
-  const [activeView, setActiveView] = useState<'canvas' | 'tree'>('tree')
   const [forkWarningOpen, setForkWarningOpen] = useState(false)
 
   // Baseline Framework snapshot for fork-detection — captured once when this
@@ -467,8 +473,11 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
     await doSave(openCasePackage, framework)
   }, [mirrorStatus, doSave])
 
-  // Compute in-use groupings from actual edges (for filter dropdown)
+  // Compute in-use groupings from actual edges (for filter dropdown).
+  // Pathway highlighting only affects canvas edges, so with the canvas view
+  // disabled the dropdown is hidden by reporting no groupings in use.
   const inUseGroupings = useMemo(() => {
+    if (!CANVAS_VIEW_ENABLED) return NO_GROUPINGS
     const seenIds = new Set<string>()
     for (const e of editorEdges) {
       const gId = e.data?.cfAssociation?.CFAssociationGroupingURI?.identifier
@@ -496,6 +505,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
   const edgesCacheRef = useRef(new Map<string, { input: CaseEditorEdge; edgeType: string; filter: string | null; parallelIndex: number; parallelCount: number; output: CaseEditorEdge }>())
 
   const edgesWithType = useMemo<CaseEditorEdge[]>(() => {
+    if (!CANVAS_VIEW_ENABLED) return NO_EDGES
     const prev = edgesCacheRef.current
     const next = new Map<string, { input: CaseEditorEdge; edgeType: string; filter: string | null; parallelIndex: number; parallelCount: number; output: CaseEditorEdge }>()
     const globalEdgeType = settings.edgeType
@@ -1748,9 +1758,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
             : undefined
         }
         onOpenSettings={() => setSettingsOpen(true)}
-        onResetHierarchy={() => { setActiveView('canvas'); applyHierarchyLayout() }}
-        onResetStar={() => { setActiveView('canvas'); applyStarLayout() }}
-        onSwitchTreeView={() => setActiveView(activeView === 'tree' ? 'canvas' : 'tree')}
+        onResetHierarchy={CANVAS_VIEW_ENABLED ? () => { setActiveView('canvas'); applyHierarchyLayout() } : undefined}
+        onResetStar={CANVAS_VIEW_ENABLED ? () => { setActiveView('canvas'); applyStarLayout() } : undefined}
+        onSwitchTreeView={CANVAS_VIEW_ENABLED ? () => setActiveView(activeView === 'tree' ? 'canvas' : 'tree') : undefined}
         activeView={activeView}
         cfAssociationGroupings={inUseGroupings}
         activeGroupingFilter={activeGroupingFilter}
@@ -1770,7 +1780,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
         </div>
       ) : null}
 
-      <ReactFlowGraph
+      {/* Not mounted at all while the canvas view is disabled — avoids React
+          Flow's store setup across every node/edge on framework open. */}
+      {CANVAS_VIEW_ENABLED ? <ReactFlowGraph
         wrapRef={reactFlowWrapRef}
         visible={activeView !== 'tree'}
         nodes={canvasNodes}
@@ -1796,7 +1808,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
         onPointerDownCapture={onCanvasPointerDownCapture}
         onDragOver={onPaneDragOver}
         onDrop={onPaneDrop}
-      />
+      /> : null}
 
       <NodePropertiesPanel
         node={showPropertiesPanel ? selectedNode : null}
