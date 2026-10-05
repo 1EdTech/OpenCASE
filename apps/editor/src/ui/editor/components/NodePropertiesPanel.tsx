@@ -36,7 +36,6 @@ type Props = {
   onClose?: () => void
   onChangeNode?: (_nodeId: string, _patch: CaseEditorNodeDataPatch) => void
   onViewCFPackage?: () => void
-  isPublishedToOpenCase?: boolean
   availableLicenses?: CFLicense[]
   cfItemTypes?: CFItemType[]
   ensureCfItemType?: (_title: string) => CFItemType | null
@@ -55,7 +54,7 @@ type Props = {
 }
 
 export default memo(function NodePropertiesPanel({
-  node, onClose, onChangeNode, onViewCFPackage, isPublishedToOpenCase, availableLicenses,
+  node, onClose, onChangeNode, onViewCFPackage, availableLicenses,
   cfItemTypes = [], ensureCfItemType, cfSubjects = [], ensureCfSubject, cfConcepts = [], ensureCfConcept,
   remoteLinks = [], onRemoveRemoteLink, onUpdateRemoteLinkType,
   onRemoveRemoteFramework, onBrowseRemoteItems, onRefreshRemoteFramework, remoteFrameworkRefreshing,
@@ -723,7 +722,7 @@ export default memo(function NodePropertiesPanel({
             ) : null}
 
             {/* ── OpenCASE URL (framework only) ── */}
-            {isFramework && isPublishedToOpenCase && opencaseUrl ? (
+            {isFramework && opencaseUrl ? (
               <SidebarSection title="OpenCASE URL" subtitle="The CASE API endpoint for this framework." accentColor={accentColor} defaultOpen={false}>
                 <div className="flex items-stretch gap-2">
                   <a

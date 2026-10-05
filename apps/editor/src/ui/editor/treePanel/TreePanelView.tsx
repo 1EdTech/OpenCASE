@@ -74,8 +74,6 @@ type Props = {
   serverFrameworks?: Array<{ id: string; title: string }>
   /** Load a framework from the server into the local session (called when a server-only target is selected) */
   onLoadTargetFramework?: (id: string) => Promise<void>
-  /** Whether the source (left-panel) framework has been saved to the server. Alignment authoring requires stable server-assigned URIs. */
-  isSourcePublished?: boolean
   /** Called with a serialized alignment CFPackage when the user saves pending associations. */
   onSaveAlignments?: (cfPackage: unknown) => Promise<void>
   /** Called when the user expands a target framework — returns any previously-saved alignment doc ID and associations for that pairing. */
@@ -174,7 +172,7 @@ function findNearestVisible(
 
 // ── Component ─────────────────────────────────────────────────────────────
 
-export default function TreePanelView({ availableFrameworks = [], serverFrameworks = [], onLoadTargetFramework, isSourcePublished = false, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets }: Props) {
+export default function TreePanelView({ availableFrameworks = [], serverFrameworks = [], onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets }: Props) {
   const {
     nodes,
     cfItems,
@@ -890,7 +888,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                 onToggleExpand={handleLeftToggleExpand}
                 onSelect={handleSelect}
                 onAddChild={handleAddChild}
-                isDraggable={Boolean(expandedTargetFramework) && isSourcePublished}
+                isDraggable={Boolean(expandedTargetFramework)}
                 onDragStart={NOOP_DRAG_START}
                 associationCounts={leftAssociationCounts}
                 onBadgeClick={handleLeftBadgeClick}
@@ -906,15 +904,6 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                 )}
               />
             </div>
-            {/* Gate callout — shown only when a target is expanded but source hasn't been saved */}
-            {expandedTargetFramework && !isSourcePublished && (
-              <div className="shrink-0 border-t border-amber-200 bg-amber-50 px-4 py-2.5">
-                <p className="text-xs text-amber-700">
-                  <span className="font-semibold">Save this framework first</span> to enable alignment authoring.
-                  Items need stable server-assigned URIs before associations can be created.
-                </p>
-              </div>
-            )}
           </div>
         </div>
 
@@ -1004,7 +993,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                               onBadgeClick={handleRightBadgeClick}
                             />
                           </div>
-                          {isSourcePublished && onSaveAlignments && target.hasUnsavedChanges && (
+                          {onSaveAlignments && target.hasUnsavedChanges && (
                             <div className="flex shrink-0 items-center justify-between gap-3 border-t border-black/10 bg-slate-50 px-4 py-2.5">
                               <span className="text-xs text-slate-600">
                                 {targetAssocCount > 0

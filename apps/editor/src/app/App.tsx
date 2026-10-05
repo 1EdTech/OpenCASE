@@ -126,6 +126,13 @@ function AppInner() {
 
   const [authCallbackState, setAuthCallbackState] = useState<'idle' | 'processing' | 'error'>('idle')
   const [remoteOpenState, setRemoteOpenState] = useState<'idle' | 'loading'>('idle')
+  // Framework ids confirmed against the server this session (fetched from it or just saved to it).
+  // The localStorage cache can hold entries the server no longer has — or never had, e.g. drafts
+  // from before save-on-create — so the editor only opens a framework once it's in this set.
+  const [serverVerifiedIds, setServerVerifiedIds] = useState<ReadonlySet<string>>(() => new Set())
+  const markServerVerified = useCallback((id: string) => {
+    setServerVerifiedIds((prev) => (prev.has(id) ? prev : new Set(prev).add(id)))
+  }, [])
   const authStatusRef = useRef(authStatus)
   authStatusRef.current = authStatus
 
@@ -298,10 +305,6 @@ function AppInner() {
     setScreen('home')
   }, [])
 
-  const openFramework = useCallback((id: string) => {
-    navigateToFramework(id)
-  }, [navigateToFramework])
-
   /** Remove a framework from localStorage (used after archive or hard delete) */
   const removeFrameworkFromStorage = useCallback((docId: string) => {
     setFrameworks((prev) => {
@@ -329,6 +332,7 @@ function AppInner() {
   const createNew = useCallback(async (draft: CreateFrameworkDraft) => {
     const fw = createNewFrameworkDraft(draft)
     if (tenantId) await saveNewFrameworkToServer(fw, tenantId)
+    markServerVerified(fw.id)
 
     setFrameworks((prev) => {
       const next = [fw, ...prev]
@@ -336,12 +340,13 @@ function AppInner() {
       return next
     })
     navigateToFramework(fw.id)
-  }, [navigateToFramework, tenantId, saveNewFrameworkToServer])
+  }, [navigateToFramework, tenantId, saveNewFrameworkToServer, markServerVerified])
 
   /** Create a HomeFramework from a pre-populated domain Framework (e.g. from spreadsheet upload). */
   const createFromFramework = useCallback(async (framework: Framework) => {
     const fw = createHomeFrameworkFromDomain(framework)
     if (tenantId) await saveNewFrameworkToServer(fw, tenantId)
+    markServerVerified(fw.id)
 
     setFrameworks((prev) => {
       const next = [fw, ...prev]
@@ -349,7 +354,7 @@ function AppInner() {
       return next
     })
     navigateToFramework(fw.id)
-  }, [navigateToFramework, tenantId, saveNewFrameworkToServer])
+  }, [navigateToFramework, tenantId, saveNewFrameworkToServer, markServerVerified])
 
   const openRemoteFramework = useCallback(
     async (docId: string, opts?: { replace?: boolean }) => {
@@ -384,6 +389,7 @@ function AppInner() {
 
         // Create a HomeFramework entry from the domain Framework
         const fw = createHomeFrameworkFromDomain(framework, mirrorStatus)
+        markServerVerified(fw.id)
         if (pkg.CFDocument?.extensions) {
           fw.cfDocument = { ...fw.cfDocument, extensions: pkg.CFDocument.extensions }
         }
@@ -419,16 +425,17 @@ function AppInner() {
         setRemoteOpenState('idle')
       }
     },
-    [api, mergeCfDefinitions, navigateToFramework],
+    [api, mergeCfDefinitions, navigateToFramework, markServerVerified],
   )
 
-  // If the URL points at a framework that isn't in the local cache yet (e.g. a hard refresh,
-  // or a deep link to a framework never opened on this device), fetch it from the server.
+  // If the URL points at a framework not yet confirmed against the server this session (e.g. a
+  // hard refresh or deep link), fetch it from the server — even when it's in the local cache,
+  // since the cached copy may be stale or may never have been saved at all.
   // Falls back to home if it can't be loaded (deleted, no access, etc.).
   useEffect(() => {
     if (!activeFrameworkId) return
     if (authStatus !== 'authenticated') return
-    if (frameworks.some((f) => f.id === activeFrameworkId)) return
+    if (serverVerifiedIds.has(activeFrameworkId)) return
     let cancelled = false
     openRemoteFramework(activeFrameworkId, { replace: true }).catch((err: unknown) => {
       if (cancelled) return
@@ -436,7 +443,7 @@ function AppInner() {
       navigateHome({ replace: true })
     })
     return () => { cancelled = true }
-  }, [activeFrameworkId, authStatus, frameworks, openRemoteFramework, navigateHome])
+  }, [activeFrameworkId, authStatus, serverVerifiedIds, openRemoteFramework, navigateHome])
 
   // Load a framework from the server into the local session without navigating to it.
   // Used by TreePanelView when the user selects a crosswalk target that isn't loaded locally yet.
@@ -520,10 +527,11 @@ function AppInner() {
     removeFrameworkFromStorage(activeFrameworkId)
   }, [api, tenantId, activeFrameworkId, caseApiVersion, removeFrameworkFromStorage])
 
-  // Handler to fetch the published CFPackage from the server (returns CASE JSON with absolute URIs)
+  // Handler to fetch the published CFPackage from the server (returns CASE JSON with absolute URIs).
+  // This is the user-facing view/export, so omit OpenCASE extensions (ext:opencase).
   const handleFetchCfPackage = useCallback(async () => {
     if (!activeFrameworkId) throw new Error('No active framework')
-    return api.getCfPackage({ docId: activeFrameworkId, caseVersion: caseApiVersion })
+    return api.getCfPackage({ docId: activeFrameworkId, caseVersion: caseApiVersion, includeExtensions: false })
   }, [api, activeFrameworkId, caseApiVersion])
 
   // Handler to save the CFPackage to the server
@@ -707,7 +715,6 @@ function AppInner() {
 
   const homeScreen = (
     <HomeScreen
-      onOpenFramework={openFramework}
       onOpenRemoteFramework={openRemoteFramework}
       onRemoveFromStorage={removeFrameworkFromStorage}
       remoteOpenLoading={remoteOpenState === 'loading'}
@@ -720,7 +727,7 @@ function AppInner() {
     return homeScreen
   }
 
-  if (!activeFramework || !activeGraph) {
+  if (!activeFramework || !activeGraph || !serverVerifiedIds.has(activeFramework.id)) {
     return homeScreen
   }
 
@@ -740,11 +747,6 @@ function AppInner() {
       <EditorCanvas
         onBack={() => navigateHome()}
         onSaveToServer={tenantId ? handleSaveToServer : undefined}
-        // Every framework that reaches `frameworks` was either loaded from the server
-        // or saved to it before being added locally (see saveNewFrameworkToServer,
-        // openRemoteFramework, handleLoadTargetFramework, handleSaveToServer) — so if
-        // there's an active framework at all, it's known-published.
-        isPublishedToOpenCase={Boolean(activeFrameworkId)}
         onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
         onFetchCfPackage={activeFrameworkId ? handleFetchCfPackage : undefined}
         availableFrameworks={frameworks}

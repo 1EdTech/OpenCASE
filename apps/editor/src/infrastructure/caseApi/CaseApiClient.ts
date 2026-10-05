@@ -134,9 +134,12 @@ export class CaseApiClient {
     return []
   }
 
-  async getCfPackage(params: { docId: string; caseVersion?: 'v1p0' | 'v1p1' }): Promise<CFPackage> {
+  async getCfPackage(params: { docId: string; caseVersion?: 'v1p0' | 'v1p1'; includeExtensions?: boolean }): Promise<CFPackage> {
     const v = params.caseVersion ?? 'v1p1'
-    const res = (await this._http.get(`/ims/case/${v}/CFPackages/${encodeURIComponent(params.docId)}`)) as unknown
+    const res = (await this._http.get(
+      `/ims/case/${v}/CFPackages/${encodeURIComponent(params.docId)}`,
+      { includeExtensions: params.includeExtensions },
+    )) as unknown
     if (!res || typeof res !== 'object') throw new Error('Unexpected CFPackage response shape')
 
     if ('CFDocument' in res) {
