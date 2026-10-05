@@ -3,6 +3,7 @@ import type { ComponentType } from 'react'
 import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon, ShareIcon, QueueListIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
 import type { CFAssociationGrouping } from '@/domain/case/types'
+import { CANVAS_VIEW_ENABLED } from '@/ui/editor/featureFlags'
 
 type MenuItem = {
   label: string
@@ -383,9 +384,12 @@ export default function CanvasHeader({
               icon={Cog6ToothIcon}
               items={[
                 { label: 'Settings', icon: Cog6ToothIcon, onClick: onOpenSettings },
-                ...(SHOW_HIERARCHY_LAYOUT_MENU_ITEM ? [{ label: 'Hierarchy layout', icon: Bars3BottomLeftIcon, onClick: onResetHierarchy, disabled: !onResetHierarchy }] : []),
-                { label: 'Canvas View', icon: SparklesIcon, onClick: onResetStar, disabled: !onResetStar },
-                { label: activeView === 'tree' ? '✓ Tree View' : 'Tree View', icon: QueueListIcon, onClick: onSwitchTreeView, disabled: !onSwitchTreeView },
+                // View switching is hidden while Tree View is the only view (see featureFlags.ts).
+                ...(CANVAS_VIEW_ENABLED ? [
+                  ...(SHOW_HIERARCHY_LAYOUT_MENU_ITEM ? [{ label: 'Hierarchy layout', icon: Bars3BottomLeftIcon, onClick: onResetHierarchy, disabled: !onResetHierarchy }] : []),
+                  { label: 'Canvas View', icon: SparklesIcon, onClick: onResetStar, disabled: !onResetStar },
+                  { label: activeView === 'tree' ? '✓ Tree View' : 'Tree View', icon: QueueListIcon, onClick: onSwitchTreeView, disabled: !onSwitchTreeView },
+                ] : []),
                 'divider',
                 { label: 'Help', icon: QuestionMarkCircleIcon, onClick: () => {} },
               ]}
