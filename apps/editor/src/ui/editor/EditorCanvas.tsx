@@ -190,8 +190,6 @@ type MirrorStatus = { isModifiedFromSource?: boolean; sourcePackageURI?: string 
 type EditorCanvasProps = {
   onBack?: () => void
   onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework) => Promise<void>
-  /** Whether the current framework has been saved to the OpenCASE server (has a server-side document) */
-  isSavedToServer?: boolean
   /** Archive the current framework on the server and navigate home */
   onArchiveFramework?: () => Promise<void>
   /** Fetch the published CFPackage from the server (returns CASE JSON with absolute URIs) */
@@ -244,7 +242,7 @@ function RemoteLinkInternalsSync({
   return null
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, isSavedToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -1765,7 +1763,6 @@ export default function EditorCanvas({ onBack, onSaveToServer, isSavedToServer, 
             availableFrameworks={availableFrameworks}
             serverFrameworks={serverFrameworks}
             onLoadTargetFramework={onLoadTargetFramework}
-            isSourceSavedToServer={isSavedToServer}
             onSaveAlignments={onSaveAlignments}
             onLoadAlignmentsForTarget={onLoadAlignmentsForTarget}
             onDiscoverAlignedTargets={onDiscoverAlignedTargets}
@@ -1807,7 +1804,6 @@ export default function EditorCanvas({ onBack, onSaveToServer, isSavedToServer, 
         onChangeNode={updateNodeData}
         hideColorBand={activeView === 'tree'}
         onViewCFPackage={handleViewCFPackage}
-        isSavedToServer={isSavedToServer}
         availableLicenses={availableLicenses}
         cfItemTypes={cfItemTypes}
         ensureCfItemType={ensureCfItemType}
