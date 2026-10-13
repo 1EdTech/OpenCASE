@@ -1736,7 +1736,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
         tenantId={tenantId ?? undefined}
         onChangePassword={authStatus === 'authenticated' && changePassword ? () => void changePassword() : undefined}
         reserveRightForPanel={sidePanelOpen}
-        showSettings
+        // Settings menu is canvas-only (edge style, view switching), so it's
+        // hidden while Tree View is the only view (see featureFlags.ts).
+        showSettings={CANVAS_VIEW_ENABLED}
         isDirty={isDirty}
         saveStatus={saveStatus}
         saveError={saveError}
@@ -1757,7 +1759,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
               }
             : undefined
         }
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={CANVAS_VIEW_ENABLED ? () => setSettingsOpen(true) : undefined}
         onResetHierarchy={CANVAS_VIEW_ENABLED ? () => { setActiveView('canvas'); applyHierarchyLayout() } : undefined}
         onResetStar={CANVAS_VIEW_ENABLED ? () => { setActiveView('canvas'); applyStarLayout() } : undefined}
         onSwitchTreeView={CANVAS_VIEW_ENABLED ? () => setActiveView(activeView === 'tree' ? 'canvas' : 'tree') : undefined}
@@ -1939,12 +1941,13 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
         }}
       />
 
-      <SettingsModal
+      {/* Edge style is the only setting, and it only affects the canvas. */}
+      {CANVAS_VIEW_ENABLED ? <SettingsModal
         open={settingsOpen}
         settings={settings}
         onClose={() => setSettingsOpen(false)}
         onSave={updateSettings}
-      />
+      /> : null}
 
       {showBrowsePanel ? (
         <div className="fixed right-0 top-0 z-20 h-screen w-[min(460px,92vw)] border-l border-black/10 bg-white shadow-xl">
