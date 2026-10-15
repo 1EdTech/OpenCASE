@@ -1,7 +1,7 @@
 import { type CaseVersion, type TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { logger } from '../../../infrastructure/logging/Logger'
 import { type FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
-import { type LinkData } from '../../../domain/case/value-objects/LinkData'
+import { buildCFPackageURI } from '../services/packageUri'
 
 export interface GetAllCFDocumentsQuery {
   tenantId?: TenantId  // Optional — when omitted, lists across ALL tenants (global catalog)
@@ -103,18 +103,12 @@ export class GetAllCFDocuments {
     const isV1p0 = query.caseVersion === '1.0'
 
     const cfDocuments = paginatedDocs.map(({ meta: docMeta, caseVersion }) => {
-      const packageURI: LinkData = {
-        title: 'CFPackage',
-        identifier: docMeta.sourcedId,
-        uri: `${requestedBasePath}/CFPackages/${docMeta.sourcedId}`
-      }
-
       const doc: any = {
         identifier: docMeta.sourcedId,
         uri: `${requestedBasePath}/CFDocuments/${docMeta.sourcedId}`,
         title: docMeta.title,
         lastChangeDateTime: docMeta.lastChangeDateTime.toISOString(),
-        CFPackageURI: packageURI
+        CFPackageURI: buildCFPackageURI(docMeta.sourcedId, query.caseVersion, docMeta.openCaseExtensions)
       }
 
       // Add optional fields if present

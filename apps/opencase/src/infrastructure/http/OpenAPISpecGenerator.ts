@@ -1626,12 +1626,12 @@ export class OpenAPISpecGenerator {
             required: ['CFDocument', 'CFItems', 'CFAssociations'],
             properties: {
               CFDocument: {
-                $ref: '#/components/schemas/CFDocumentDType'
+                $ref: '#/components/schemas/CFPckgDocumentDType'
               },
               CFItems: {
                 type: 'array',
                 items: {
-                  $ref: '#/components/schemas/CFItemDType'
+                  $ref: '#/components/schemas/CFPckgItemDType'
                 }
               },
               CFAssociations: {
@@ -2085,6 +2085,22 @@ export class OpenAPISpecGenerator {
 
     spec.paths['/management/tenants/{tenantId}/ims/case/v1p0/CFPackages/{id}'] = deleteByVersion('1.0')
     spec.paths['/management/tenants/{tenantId}/ims/case/v1p1/CFPackages/{id}'] = deleteByVersion('1.1')
+
+    // A CFPackage's CFDocument is a CFPckgDocument: the same as CFDocument but
+    // without CFPackageURI, which only appears in getCFDocument(s) responses.
+    const { CFPackageURI: _packageUri, ...pckgDocumentProperties } = spec.components.schemas.CFDocumentDType.properties
+    spec.components.schemas.CFPckgDocumentDType = {
+      ...spec.components.schemas.CFDocumentDType,
+      properties: pckgDocumentProperties
+    }
+
+    // Likewise a CFPackage's items are CFPckgItems, which have no CFDocumentURI.
+    const { CFDocumentURI: _documentUri, ...pckgItemProperties } = spec.components.schemas.CFItemDType.properties
+    spec.components.schemas.CFPckgItemDType = {
+      ...spec.components.schemas.CFItemDType,
+      required: spec.components.schemas.CFItemDType.required.filter((r: string) => r !== 'CFDocumentURI'),
+      properties: pckgItemProperties
+    }
 
     return spec
   }

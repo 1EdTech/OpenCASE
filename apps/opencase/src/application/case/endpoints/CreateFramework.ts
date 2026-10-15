@@ -160,7 +160,7 @@ export class CreateFramework {
     // compare like-for-like against the existing persisted entities' own
     // .toJSON() output — comparing the raw POST payload directly against a
     // .toJSON()'d bundle would false-positive on every save, since GET-only
-    // fields (CFDocumentURI, CFPackageURI) are legitimately absent from POST
+    // fields (CFDocumentURI) are legitimately absent from POST
     // payloads by CASE spec convention but always present after fromRaw/toJSON.
     const buildEntities = (docPayload: any, itemsPayload: any[], assocPayload: any[], rubricsPayload: any[], uriOptions?: { preserveUris: boolean }) => {
       const doc = CFDocument.fromRaw(tenantId, caseVersion, docPayload, uriOptions)
@@ -321,7 +321,7 @@ export class CreateFramework {
           CFItems: sortById(items.map(i => i.toJSON())),
           CFAssociations: sortById(associations.map(a => a.toJSON())),
           CFRubrics: sortById(rubrics.map(r => r.toJSON())),
-          CFDefinitions: definitions
+          CFDefinitions: pkg.definitions
         }
 
         if (stableStringify(existingBundle) === stableStringify(newBundle)) {

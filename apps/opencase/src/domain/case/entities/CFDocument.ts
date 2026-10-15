@@ -23,7 +23,6 @@ export interface CFDocumentProps {
   notes?: string;
   statusStartDate?: string;
   statusEndDate?: string;
-  CFPackageURI?: LinkData;
   extensions?: Record<string, unknown>;
 }
 
@@ -62,11 +61,13 @@ export class CFDocument {
     }
 
     // Rebase reference URIs onto the local host — these point at per-tenant
-    // definition entities (licenses, packages, subjects) that OpenCASE serves
+    // definition entities (licenses, subjects) that OpenCASE serves
     // itself, so they must resolve locally rather than to the source host.
     // Mirrored frameworks skip this and keep the source's reference URIs as-is.
     const licenseURI = options?.preserveUris ? raw.licenseURI : LinkDataHelper.rebaseLinkData(raw.licenseURI, caseVersion, 'CFLicenses')
-    const CFPackageURI = options?.preserveUris ? raw.CFPackageURI : LinkDataHelper.rebaseLinkData(raw.CFPackageURI, caseVersion, 'CFPackages')
+    // CFPackageURI is intentionally not read: it isn't part of a CFPackage's
+    // CFDocument (CFPckgDocument), so an incoming one is ignored rather than
+    // stored. getCFDocument(s) derive it at response time (see packageUri.ts).
     // subjectURI must use LinkURI format (UUID identifier required)
     const subjectURI = options?.preserveUris
       ? raw.subjectURI
@@ -102,7 +103,6 @@ export class CFDocument {
       notes: raw.notes,
       statusStartDate: raw.statusStartDate,
       statusEndDate: raw.statusEndDate,
-      CFPackageURI,
       extensions: raw.extensions
     });
   }
@@ -116,6 +116,7 @@ export class CFDocument {
   get tenantId(): TenantId { return this.props.tenantId; }
   get caseVersion(): CaseVersion { return this.props.caseVersion; }
   get sourcedId(): SourcedId { return this.props.sourcedId; }
+  get extensions(): Record<string, unknown> | undefined { return this.props.extensions; }
 
   toJSON(serializeAs?: CaseVersion) {
     const { tenantId, caseVersion, sourcedId, licenceUri, ...rest } = this.props;

@@ -109,7 +109,7 @@ describe('CFDocument', () => {
       expect(json.lastChangeDateTime).toBe('2024-01-01T12:30:45.000Z');
     });
 
-    it('should rewrite licenseURI/CFPackageURI/subjectURI to the local host on import (POR-730)', () => {
+    it('should rewrite licenseURI/subjectURI to the local host and drop CFPackageURI on import (POR-730, CGE-59)', () => {
       const raw = {
         sourcedId: 'doc-123',
         title: 'Test Document',
@@ -135,8 +135,28 @@ describe('CFDocument', () => {
       const json = doc.toJSON();
 
       expect(json.licenseURI.uri).toBe('/ims/case/v1p1/CFLicenses/c0c0c0c0-0000-4000-a000-000000000002');
-      expect(json.CFPackageURI.uri).toBe('/ims/case/v1p1/CFPackages/doc-123');
+      expect(json.CFPackageURI).toBeUndefined();
       expect(json.subjectURI[0].uri).toBe('/ims/case/v1p1/CFSubjects/c0c0c0c0-0000-4000-a000-000000000012');
+    });
+
+    it('should ignore an incoming CFPackageURI on a mirrored import (CGE-59)', () => {
+      const raw = {
+        identifier: 'doc-123',
+        uri: 'https://standards.example.org/doc-123',
+        title: 'Test Document',
+        creator: 'Source',
+        lastChangeDateTime: '2024-01-01T00:00:00Z',
+        CFPackageURI: {
+          title: 'Package',
+          identifier: 'doc-123',
+          uri: 'https://standards.example.org/ims/case/v1p1/CFPackages/doc-123'
+        }
+      };
+
+      const json = CFDocument.fromRaw(tenantId, caseVersion, raw, { preserveUris: true }).toJSON();
+
+      expect(json.CFPackageURI).toBeUndefined();
+      expect(json.uri).toBe('https://standards.example.org/doc-123');
     });
   });
 

@@ -29,5 +29,20 @@ describe('OpenAPISpecGenerator (discovery)', () => {
     expect(spec.paths['/management/tenants/{tenantId}/ims/case/v1p0/CFPackages/{id}']).toBeDefined()
     expect(spec.paths['/management/tenants/{tenantId}/ims/case/v1p1/CFPackages/{id}']).toBeDefined()
   })
-})
 
+  it('describes CFPackage contents as CFPckgDocument/CFPckgItem without CFPackageURI/CFDocumentURI (CGE-59)', () => {
+    const { schemas } = OpenAPISpecGenerator.generateV1p1({ baseUrl: 'https://example.com', version: '1.0.0' }).components
+
+    expect(schemas.CFPackageDType.properties.CFDocument.$ref).toBe('#/components/schemas/CFPckgDocumentDType')
+    expect(schemas.CFPckgDocumentDType.properties.CFPackageURI).toBeUndefined()
+    expect(schemas.CFPckgDocumentDType.properties.title).toBeDefined()
+    // getCFDocument(s) still carry it
+    expect(schemas.CFDocumentDType.properties.CFPackageURI).toBeDefined()
+
+    expect(schemas.CFPackageDType.properties.CFItems.items.$ref).toBe('#/components/schemas/CFPckgItemDType')
+    expect(schemas.CFPckgItemDType.properties.CFDocumentURI).toBeUndefined()
+    expect(schemas.CFPckgItemDType.required).not.toContain('CFDocumentURI')
+    // getCFItem still carries it
+    expect(schemas.CFItemDType.required).toContain('CFDocumentURI')
+  })
+})

@@ -128,10 +128,7 @@ describe('GetCFPackage', () => {
       expect(result).toEqual({
         CFDocument: expect.objectContaining({
           identifier: docId,
-          title: 'Test Document',
-          CFPackageURI: expect.objectContaining({
-            identifier: docId
-          })
+          title: 'Test Document'
         }),
         CFItems: expect.arrayContaining([
           expect.objectContaining({ identifier: 'item-1' }),
@@ -149,6 +146,11 @@ describe('GetCFPackage', () => {
           })
         ])
       });
+      // CFPckgDocument has no CFPackageURI; CFPckgItem has no CFDocumentURI (CGE-59)
+      expect(result!.CFDocument).not.toHaveProperty('CFPackageURI');
+      for (const item of result!.CFItems) {
+        expect(item).not.toHaveProperty('CFDocumentURI');
+      }
     });
 
     it('should handle empty items and associations', async () => {
@@ -176,14 +178,13 @@ describe('GetCFPackage', () => {
       expect(result).toEqual({
         CFDocument: expect.objectContaining({
           identifier: docId,
-          title: 'Test Document',
-          CFPackageURI: expect.objectContaining({
-            identifier: docId
-          })
+          title: 'Test Document'
         }),
         CFItems: [],
         CFAssociations: []
       });
+      // CFPckgDocument has no CFPackageURI (CGE-59)
+      expect(result!.CFDocument).not.toHaveProperty('CFPackageURI');
     });
 
     it('should return archived document when getting by ID (archived documents always returned)', async () => {

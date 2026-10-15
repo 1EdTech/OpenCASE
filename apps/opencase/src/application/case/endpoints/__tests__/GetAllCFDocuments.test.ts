@@ -295,6 +295,23 @@ describe('GetAllCFDocuments', () => {
       expect(result.CFDocuments[0].extensions).toEqual({ 'ext:opencase': openCaseExtensions })
     })
 
+    it('should derive CFPackageURI from mirror/fork state (CGE-59)', async () => {
+      const source = 'https://standards.example.org/ims/case/v1p1/CFPackages/mirror'
+      const documents = [
+        { sourcedId: 'mirror', title: 'Mirror', lastChangeDateTime: new Date('2024-01-01T00:00:00Z'), currentFile: 'a.json',
+          openCaseExtensions: { isModifiedFromSource: false, sourcePackageURI: source } },
+        { sourcedId: 'fork', title: 'Fork', lastChangeDateTime: new Date('2024-01-01T00:00:00Z'), currentFile: 'b.json',
+          openCaseExtensions: { isModifiedFromSource: true, sourcePackageURI: source } }
+      ]
+      mockStore.getAllDocuments.mockImplementation((_: any, v: any) => (v === '1.1' ? documents as any : []))
+
+      const result = await getAllCFDocuments.execute({ tenantId, caseVersion })
+      const byId = Object.fromEntries(result.CFDocuments.map((d: any) => [d.identifier, d]))
+
+      expect(byId.mirror.CFPackageURI.uri).toBe(source)
+      expect(byId.fork.CFPackageURI.uri).toBe('/ims/case/v1p1/CFPackages/fork')
+    })
+
     it('should omit the extensions block entirely for CASE 1.0', async () => {
       const documents = [
         {
