@@ -281,7 +281,8 @@ export class CaseApiClient {
     const queryParams = new URLSearchParams()
     if (params?.limit != null) queryParams.set('limit', String(params.limit))
     if (params?.offset != null) queryParams.set('offset', String(params.offset))
-    if (params?.includeArchived) queryParams.set('includeArchived', 'true')
+    // Server lists archived frameworks by default; only send the flag to opt out.
+    if (params?.includeArchived === false) queryParams.set('includeArchived', 'false')
 
     const query = queryParams.toString()
     const url = `/ims/case/${v}/CFDocuments${query ? `?${query}` : ''}`

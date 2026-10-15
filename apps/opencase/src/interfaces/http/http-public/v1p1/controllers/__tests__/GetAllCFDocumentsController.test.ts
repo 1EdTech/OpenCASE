@@ -16,8 +16,7 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
       execute: jest.fn()
     } as any
 
-    const mockStore = { isDocumentPublicGlobal: jest.fn() } as any
-    controller = new GetAllCFDocumentsControllerV1p1(mockGetAllCFDocuments, mockStore)
+    controller = new GetAllCFDocumentsControllerV1p1(mockGetAllCFDocuments)
 
     responseJson = jest.fn()
     mockResponse = {
@@ -65,7 +64,7 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
         orderBy: undefined,
         filter: undefined,
         fields: undefined,
-        includeArchived: false
+        includeArchived: true
       })
       expect(responseStatus).toHaveBeenCalledWith(200)
       expect(responseJson).toHaveBeenCalledWith(absolutizeCaseUris(result as any, 'http://localhost'))
@@ -102,9 +101,47 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
         orderBy: 'asc',
         filter: 'test',
         fields: ['title', 'identifier'],
-        includeArchived: false
+        includeArchived: true
       })
       expect(responseStatus).toHaveBeenCalledWith(200)
+    })
+
+    it('should exclude archived documents when includeArchived=false', async () => {
+      mockGetAllCFDocuments.execute.mockResolvedValue({ CFDocuments: [] })
+      ;(mockRequest as any).tenantId = 'test-tenant'
+      ;(mockRequest as any).isAuthenticated = true
+      mockRequest.query = { includeArchived: 'false' }
+
+      await controller.getAll(mockRequest as Request, mockResponse as Response)
+
+      expect(mockGetAllCFDocuments.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ includeArchived: false })
+      )
+    })
+
+    it('should return every document, total and all, to unauthenticated requests', async () => {
+      const result = {
+        CFDocuments: [
+          { identifier: 'doc-public', uri: '/ims/case/v1p1/CFDocuments/doc-public', title: 'Public', lastChangeDateTime: '2024-01-01T00:00:00.000Z' },
+          { identifier: 'doc-private', uri: '/ims/case/v1p1/CFDocuments/doc-private', title: 'Private', lastChangeDateTime: '2024-01-01T00:00:00.000Z' }
+        ],
+        total: 2,
+        limit: 10,
+        offset: 0
+      }
+      mockGetAllCFDocuments.execute.mockResolvedValue(result)
+      ;(mockRequest as any).isAuthenticated = false
+      mockRequest.query = { limit: '10' }
+
+      await controller.getAll(mockRequest as Request, mockResponse as Response)
+
+      expect(mockGetAllCFDocuments.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ tenantId: undefined, includeArchived: true })
+      )
+      expect(responseStatus).toHaveBeenCalledWith(200)
+      const body = responseJson.mock.calls[0][0]
+      expect(body.CFDocuments.map((d: any) => d.identifier)).toEqual(['doc-public', 'doc-private'])
+      expect(body.total).toBe(2)
     })
 
     it('should strip extensions from the response when X-CASE-EDITOR header is absent', async () => {

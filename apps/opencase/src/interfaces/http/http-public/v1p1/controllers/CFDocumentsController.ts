@@ -35,10 +35,8 @@ export class CFDocumentsControllerV1p1 {
         ))
       }
 
-      // Access control: unauthenticated requests only see public frameworks
-      if (!(req as any).isAuthenticated && !this.store.isDocumentPublic(resolved.tenantId, '1.1', resolved.storageKey)) {
-        return res.status(401).json(StatusInfoFormatter.unauthorized('Authentication required to access this framework.'))
-      }
+      // No access check: a CFDocument is always readable. publicAccess gates the framework's
+      // contents (CFPackages, CFItems, ...), not its document.
 
       const result = await this.getCFDocument.execute({
         tenantId: resolved.tenantId,

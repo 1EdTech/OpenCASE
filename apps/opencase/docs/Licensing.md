@@ -5,9 +5,9 @@
 A framework has two independent settings:
 
 1. **License** — the legal terms for how the framework may be used. Stored as `licenseURI` on the `CFDocument`.
-2. **Access** — whether the CASE Provider API requires a sign-in to read the framework. Stored as `extensions['ext:opencase'].publicAccess`.
+2. **Access** — whether the CASE Provider API requires a sign-in to read the framework's contents. Stored as `extensions['ext:opencase'].publicAccess`.
 
-Sign-in is required unless **Make public** is turned on. Choosing an open license does not make the framework readable without authentication.
+Sign-in is required unless **Make public** is turned on. Choosing an open license does not make the framework readable without authentication. Every framework's `CFDocument` is always readable without signing in, so the framework can be discovered whether or not it's public.
 
 ## Available Licenses
 
@@ -93,7 +93,9 @@ The CASE Provider API (`/ims/case/v1p0/*` and `/ims/case/v1p1/*`) uses **optiona
 - If a valid bearer token is present: sets `req.isAuthenticated = true` and extracts the `tenantId` from the JWT.
 - If no token (or invalid token): sets `req.isAuthenticated = false` and proceeds without a `tenantId`.
 
-Controllers then check the framework's access flag before returning data:
+The `CFDocuments` endpoints (`getAllCFDocuments` and `getCFDocument`) never check access. They return every framework, public or not, to every caller, and the `total` returned by `getAllCFDocuments` counts every framework.
+
+Every other entity endpoint checks the framework's access flag before returning data:
 
 ```
 Request arrives at GET /ims/case/v1p1/CFPackages/{id}
@@ -105,7 +107,7 @@ Request arrives at GET /ims/case/v1p1/CFPackages/{id}
   → If authenticated or public → return the CFPackage
 ```
 
-This check happens on every entity endpoint (CFPackages, CFDocuments, CFItems, CFAssociations, CFItemAssociations, CFRubrics).
+This check happens on every entity endpoint except CFDocuments (CFPackages, CFItems, CFAssociations, CFItemAssociations, CFRubrics).
 
 ### How Public/Private Is Determined
 
@@ -115,8 +117,8 @@ At request time, `isDocumentPublic()` is true only when that flag is `true`:
 
 ```
 Make public on   → readable without signing in
-Make public off  → sign-in required
-No flag set      → sign-in required
+Make public off  → sign-in required (CFDocument still readable)
+No flag set      → sign-in required (CFDocument still readable)
 Any license      → does not change the above
 ```
 
@@ -200,7 +202,7 @@ The `licenseText` field contains the human-readable license terms. For Creative 
 
 | Action | Result |
 |---|---|
-| Leave **Make public** off (default) | Framework requires authentication to read |
+| Leave **Make public** off (default) | Framework contents require authentication to read; its CFDocument is listed and readable by anyone |
 | Turn **Make public** on and save | Framework is readable without signing in |
 | Turn **Make public** off and save | Sign-in is required again |
 | Change the license | Legal terms change; who can read the framework stays the same |

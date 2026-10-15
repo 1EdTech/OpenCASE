@@ -2,26 +2,25 @@ import type { Request, Response } from 'express'
 import { GetAllCFDocuments } from '../../../../../application/case/endpoints/GetAllCFDocuments'
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
 import { absolutizeCaseUris, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified, stripExtensions, wantsOpenCaseExtensions } from '../utils/httpUtils'
-import type { FileFrameworkStore } from '../../../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export class GetAllCFDocumentsControllerV1p0 {
-  constructor (
-    private readonly getAllCFDocuments: GetAllCFDocuments,
-    private readonly store: FileFrameworkStore
-  ) {}
+  constructor (private readonly getAllCFDocuments: GetAllCFDocuments) {}
 
   getAll = async (req: Request, res: Response) => {
     try {
       // Authenticated: scope to the authenticated tenant's documents
-      // Unauthenticated: list across ALL tenants (global catalog), filtered to public only
+      // Unauthenticated: list across ALL tenants (global catalog)
+      // Every framework is listed either way — publicAccess only gates the framework's
+      // contents (CFPackages, CFItems, ...), never its CFDocument.
       const tenantId = (req as any).isAuthenticated ? ((req as any).tenantId ?? undefined) : undefined
 
       const parsed = parseCaseQueryParams(req)
       if (!parsed.ok) return res.status(parsed.status).json(parsed.body)
       const { limit, offset, sort, orderBy, filter, fields } = parsed.value
       
-      // Extract includeArchived query parameter (default: false)
-      const includeArchived = req.query.includeArchived === 'true'
+      // Archiving is an OpenCASE concept, not a CASE one, so archived frameworks are listed
+      // by default. Callers can opt out with includeArchived=false.
+      const includeArchived = req.query.includeArchived !== 'false'
 
       const result = await this.getAllCFDocuments.execute({
         tenantId,
@@ -34,13 +33,6 @@ export class GetAllCFDocumentsControllerV1p0 {
         fields,
         includeArchived
       })
-
-      // Access control: unauthenticated requests only see public frameworks
-      if (!(req as any).isAuthenticated && result.CFDocuments) {
-        result.CFDocuments = result.CFDocuments.filter(
-          (doc: any) => this.store.isDocumentPublicGlobal(doc.identifier)
-        )
-      }
 
       const baseUrl = getBaseUrl(req)
       let body = absolutizeCaseUris(result, baseUrl, '1.0')

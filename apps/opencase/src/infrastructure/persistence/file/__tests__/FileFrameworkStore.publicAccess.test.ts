@@ -34,8 +34,6 @@ describe('FileFrameworkStore — public access is independent of license', () =>
     expect(store.isDocumentPublic(tenantId, version, 'storage-licensed')).toBe(false)
     expect(store.isDocumentPublic(tenantId, version, 'storage-public')).toBe(true)
     expect(store.isDocumentPublic(tenantId, version, 'storage-private')).toBe(false)
-    expect(store.isDocumentPublicGlobal('doc-licensed')).toBe(false)
-    expect(store.isDocumentPublicGlobal('doc-public')).toBe(true)
   })
 
   it('clears public access when a later save omits the flag', () => {

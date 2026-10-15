@@ -1077,15 +1077,6 @@ export class FileFrameworkStore {
     return result
   }
 
-  /**
-   * Check whether a globally-unique document ID is marked public, searching all tenants.
-   */
-  isDocumentPublicGlobal (docId: string): boolean {
-    const resolved = this.resolveDocumentGlobal(docId)
-    if (!resolved) return false
-    return getOpenCasePublicAccess(resolved.metadata)
-  }
-
   // Public methods for index management (used by management endpoints)
   removeDocumentFromIndex (tenantId: TenantId, version: CaseVersion, storageKey: string): void {
     const versionMap = this.documents.get(tenantId)?.get(version)
