@@ -288,7 +288,7 @@ export async function buildContainer(): Promise<Container> {
 
   const cfPackagesControllerV1p0 = new CFPackagesControllerV1p0(getCFPackage, store)
   const cfDocumentsControllerV1p0 = new CFDocumentsControllerV1p0(getCFDocument, store)
-  const getAllCFDocumentsControllerV1p0 = new GetAllCFDocumentsControllerV1p0(getAllCFDocuments, store)
+  const getAllCFDocumentsControllerV1p0 = new GetAllCFDocumentsControllerV1p0(getAllCFDocuments)
   const cfItemsControllerV1p0 = new CFItemsControllerV1p0(getCFItem, store)
   const cfAssociationsControllerV1p0 = new CFAssociationsControllerV1p0(getCFAssociation, store)
   const cfItemAssociationsControllerV1p0 = new CFItemAssociationsControllerV1p0(getCFItemAssociations, store)
@@ -302,7 +302,7 @@ export async function buildContainer(): Promise<Container> {
 
   const cfPackagesControllerV1p1 = new CFPackagesControllerV1p1(getCFPackage, store)
   const cfDocumentsControllerV1p1 = new CFDocumentsControllerV1p1(getCFDocument, store)
-  const getAllCFDocumentsControllerV1p1 = new GetAllCFDocumentsControllerV1p1(getAllCFDocuments, store)
+  const getAllCFDocumentsControllerV1p1 = new GetAllCFDocumentsControllerV1p1(getAllCFDocuments)
   const cfItemsControllerV1p1 = new CFItemsControllerV1p1(getCFItem, store)
   const cfAssociationsControllerV1p1 = new CFAssociationsControllerV1p1(getCFAssociation, store)
   const cfItemAssociationsControllerV1p1 = new CFItemAssociationsControllerV1p1(getCFItemAssociations, store)

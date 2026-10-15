@@ -65,6 +65,23 @@ describe('CFDocumentsControllerV1p1', () => {
       expect(responseJson).toHaveBeenCalledWith(absolutizeCaseUris(result as any, 'http://localhost'))
     })
 
+    it('should return a non-public CFDocument to unauthenticated requests', async () => {
+      const result = {
+        identifier: '550e8400-e29b-41d4-a716-446655440000',
+        uri: '/ims/case/v1p1/CFDocuments/550e8400-e29b-41d4-a716-446655440000',
+        title: 'Private Framework',
+        lastChangeDateTime: '2024-01-01T00:00:00.000Z'
+      }
+      mockStore.isDocumentPublic.mockReturnValue(false)
+      mockGetCFDocument.execute.mockResolvedValue(result)
+      ;(mockRequest as any).isAuthenticated = false
+
+      await controller.getById(mockRequest as Request, mockResponse as Response)
+
+      expect(responseStatus).toHaveBeenCalledWith(200)
+      expect(responseJson).toHaveBeenCalledWith(absolutizeCaseUris(result as any, 'http://localhost'))
+    })
+
     it('should return 404 when document is not found', async () => {
       mockStore.resolveDocumentGlobal.mockReturnValue(null)
       ;(mockRequest as any).tenantId = 'test-tenant'

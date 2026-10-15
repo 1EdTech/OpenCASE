@@ -28,10 +28,8 @@ export class CFDocumentsControllerV1p0 {
         return res.status(404).json(StatusInfoFormatter.notFound('The requested CFDocument was not found.'))
       }
 
-      // Access control: unauthenticated requests only see public frameworks
-      if (!(req as any).isAuthenticated && !this.store.isDocumentPublic(resolved.tenantId, resolved.version, resolved.storageKey)) {
-        return res.status(401).json(StatusInfoFormatter.unauthorized('Authentication required to access this framework.'))
-      }
+      // No access check: a CFDocument is always readable. publicAccess gates the framework's
+      // contents (CFPackages, CFItems, ...), not its document.
 
       // On-the-fly downconversion: if stored as v1p1, load from there but serialize as v1p0
       const result = await this.getCFDocument.execute({

@@ -260,7 +260,7 @@ function AppInner() {
   useEffect(() => {
     if (authStatus !== 'authenticated') return
     let cancelled = false
-    api.listCfDocuments({ caseVersion: 'v1p1' }).then((docs) => {
+    api.listCfDocuments({ caseVersion: 'v1p1', includeArchived: false }).then((docs) => {
       if (cancelled) return
       setServerCfDocuments(docs)
     }).catch((err) => {

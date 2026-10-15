@@ -226,7 +226,7 @@ export default function HomeScreen({
     try {
       const docs = tenantId
         ? await api.listManagementCfPackages({ tenantId, caseVersion: '1.1' })
-        : await api.listCfDocuments({ caseVersion: 'v1p1' })
+        : await api.listCfDocuments({ caseVersion: 'v1p1', includeArchived: false })
       setServerFrameworks(docs)
     } catch (e: unknown) {
       setServerFrameworks([])
@@ -264,7 +264,7 @@ export default function HomeScreen({
     setArchivedLoading(true)
     setError(null)
     try {
-      const docs = await api.listCfDocuments({ caseVersion: 'v1p1', includeArchived: true })
+      const docs = await api.listCfDocuments({ caseVersion: 'v1p1' })
       // Filter to only server-level archived frameworks
       const archived = docs.filter((d) => d.archived === true)
       setArchivedFrameworks(archived)
