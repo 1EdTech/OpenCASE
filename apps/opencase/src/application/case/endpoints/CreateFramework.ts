@@ -195,9 +195,19 @@ export class CreateFramework {
       }
     }
 
+    const storedPkg = resolvedStorageKey ? await this.pkgRepo.load(tenantId, caseVersion, resolvedStorageKey) : null
+
+    // The editor can't author rubrics or CFPackage-level extensions and omits
+    // them on save. Omitted (undefined) means "keep what's stored"; an explicit
+    // value — including an empty CFRubrics array — replaces it.
+    if (payload.CFRubrics === undefined && storedPkg) {
+      cfRubricsPayload = storedPkg.rubrics.map(r => r.toJSON())
+    }
+    const packageExtensions = payload.extensions !== undefined ? payload.extensions : storedPkg?.extensions
+
     if (resolvedStorageKey) {
       const existingMeta = this.store.getDocumentMetadata(tenantId, caseVersion, resolvedStorageKey)
-      const existingPkg = existingMeta ? await this.pkgRepo.load(tenantId, caseVersion, resolvedStorageKey) : null
+      const existingPkg = existingMeta ? storedPkg : null
 
       if (getOpenCaseIsModifiedFromSource(existingMeta) !== undefined && existingPkg) {
         preserveUris = { preserveUris: getOpenCaseIsModifiedFromSource(existingMeta) === false }
@@ -287,7 +297,7 @@ export class CreateFramework {
     )
     const definitions = payload.CFDefinitions ?? null
 
-    const pkg = new CFPackage({ document, items, associations, rubrics, definitions })
+    const pkg = new CFPackage({ document, items, associations, rubrics, definitions, extensions: packageExtensions })
 
     if (forked) {
       // A fork always writes a new version — no idempotency short-circuit.
@@ -307,21 +317,23 @@ export class CreateFramework {
       // Idempotency: if this doc already exists and the resulting stored bundle would be identical,
       // don't create a new version.
       // Compare using CFPackage format (CFDocument, CFItems, etc.) to match validation format
-      const existing = await this.pkgRepo.load(tenantId, caseVersion, resolvedStorageKey)
+      const existing = storedPkg
       if (existing) {
         const existingBundle = {
           CFDocument: existing.document.toJSON(),
           CFItems: sortById(existing.items.map(i => i.toJSON())),
           CFAssociations: sortById(existing.associations.map(a => a.toJSON())),
           CFRubrics: sortById((existing.rubrics ?? []).map(r => r.toJSON())),
-          CFDefinitions: existing.definitions ?? null
+          CFDefinitions: existing.definitions ?? null,
+          extensions: existing.extensions ?? null
         }
         const newBundle = {
           CFDocument: docJSON,
           CFItems: sortById(items.map(i => i.toJSON())),
           CFAssociations: sortById(associations.map(a => a.toJSON())),
           CFRubrics: sortById(rubrics.map(r => r.toJSON())),
-          CFDefinitions: pkg.definitions
+          CFDefinitions: pkg.definitions,
+          extensions: pkg.extensions ?? null
         }
 
         if (stableStringify(existingBundle) === stableStringify(newBundle)) {

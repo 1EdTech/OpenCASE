@@ -4,6 +4,9 @@ import crypto from 'node:crypto'
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
 import { UrnCaseUriHelper } from '../../../../../domain/case/value-objects/LinkData'
 import { CaseVersion } from '../../../../../domain/case/value-objects/Identifiers'
+import { stripOpenCaseExtensions } from '../../../../../application/case/services/openCaseExtensions'
+
+export { stripOpenCaseExtensions }
 
 export type OrderBy = 'asc' | 'desc'
 
@@ -133,9 +136,9 @@ export function absolutizeCaseUris<T> (payload: T, baseUrl: string, caseVersion:
 }
 
 /**
- * Strip all `extensions` properties from a CFPackage response.
- * OpenCASE extensions are proprietary and should only be included
- * when the client explicitly requests them via the X-CASE-EDITOR header.
+ * Strip all `extensions` properties from a response. Used by the CASE v1.0
+ * endpoints, whose data model has no `extensions` field; v1.1 endpoints use
+ * {@link stripOpenCaseExtensions} instead.
  */
 export function stripExtensions<T> (payload: T): T {
   if (!payload || typeof payload !== 'object') return payload

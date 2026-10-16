@@ -73,6 +73,7 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     lastChangeDateTime: doc?.lastChangeDateTime,
     licenseURI: doc?.licenseURI,
     publicAccess: doc?.publicAccess === true ? true : undefined,
+    extensions: doc?.extensions,
   }
 
   const items: Framework['items'] = new Map()

@@ -334,5 +334,38 @@ describe('FileCFPackageRepository', () => {
       ).rejects.toThrow('File system error');
     });
   });
+  describe('CFPackage-level extensions', () => {
+    const tenantId = 'test-tenant';
+    const version = '1.1';
+    const document = CFDocument.fromRaw(tenantId, version, {
+      sourcedId: 'doc-123',
+      uri: '/ims/case/v1p1/CFDocuments/doc-123',
+      title: 'Test Document',
+      creator: 'Test Creator',
+      lastChangeDateTime: '2024-01-01T00:00:00Z'
+    });
+
+    it('writes package extensions into the bundle', async () => {
+      mockStore.writeBundleFile.mockResolvedValue({ relativePath: 'frameworks/doc-123/doc-123_v0001.json' });
+      const pkg = new CFPackage({ document, items: [], associations: [], extensions: { syncRunId: 'run-42' } });
+
+      await repository.saveNewVersion(tenantId, version, pkg, 'doc-123');
+
+      expect(mockStore.writeBundleFile.mock.calls[0][3]).toMatchObject({ extensions: { syncRunId: 'run-42' } });
+    });
+
+    it('reads package extensions back from the bundle', async () => {
+      mockStore.loadDocumentBundle.mockResolvedValue({
+        document: document.toJSON(),
+        items: [],
+        associations: [],
+        extensions: { syncRunId: 'run-42' }
+      });
+
+      const pkg = await repository.load(tenantId, version, 'doc-123');
+
+      expect(pkg?.extensions).toEqual({ syncRunId: 'run-42' });
+    });
+  });
 });
 

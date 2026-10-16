@@ -80,6 +80,9 @@ export default memo(function NodePropertiesPanel({
   const cfItem: CFItem | undefined = node && isItemNode(node) ? node.data.cfItem : undefined
   const cfDocument: CFDocument | undefined = node && isFrameworkNode(node) ? node.data.cfDocument : undefined
   const externalData: ExternalFrameworkNodeData | undefined = node && isExternalFrameworkNode(node) ? node.data : undefined
+  // Custom fields shown in the Extensions section; ext:opencase is editor-internal state.
+  const customExtensionEntries = Object.entries((isFramework ? cfDocument?.extensions : cfItem?.extensions) ?? {})
+    .filter(([k]) => k !== 'ext:opencase')
 
   useEffect(() => {
     setConceptInput(cfItem?.conceptKeywordsURI?.title ?? '')
@@ -692,9 +695,9 @@ export default memo(function NodePropertiesPanel({
 
             {/* ── Extensions ── */}
             <SidebarSection title="Extensions" subtitle="Custom fields" accentColor={accentColor} defaultOpen={false}>
-              {Object.entries(isFramework ? cfDocument?.extensions ?? {} : cfItem?.extensions ?? {}).length ? (
+              {customExtensionEntries.length ? (
                 <div className="space-y-2">
-                  {Object.entries(isFramework ? cfDocument?.extensions ?? {} : cfItem?.extensions ?? {}).map(([k, v]) => (
+                  {customExtensionEntries.map(([k, v]) => (
                     <div key={k} className="rounded-lg border border-black/10 bg-slate-50 p-3">
                       <div className="text-sm font-semibold text-slate-700">{k}</div>
                       <div className="mt-1 text-sm text-slate-900">

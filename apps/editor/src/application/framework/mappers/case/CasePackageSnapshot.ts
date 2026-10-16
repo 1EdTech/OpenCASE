@@ -38,6 +38,12 @@ export type CaseDocumentSnapshot = {
   licenseURI?: { title?: string; identifier?: string; uri: string }
   /** OpenCASE: unauthenticated CASE API reads. Absent means sign-in is required. */
   publicAccess?: boolean
+  /**
+   * Non-OpenCASE CASE extensions (e.g. a source system's identifiers), preserved
+   * verbatim for round-trip fidelity. `ext:opencase` is excluded — the editor
+   * reads what it needs from it (e.g. publicAccess) and regenerates it on save.
+   */
+  extensions?: Record<string, unknown>
 }
 
 /**
