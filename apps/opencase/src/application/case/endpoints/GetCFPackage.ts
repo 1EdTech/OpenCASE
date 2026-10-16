@@ -1,7 +1,6 @@
 import type { CFPackageRepository } from '../ports/CFPackageRepository'
 import type { CaseVersion, SourcedId, TenantId } from '../../../domain/case/value-objects/Identifiers'
 import { logger } from '../../../infrastructure/logging/Logger'
-import { LinkData } from '../../../domain/case/value-objects/LinkData'
 import type { FileFrameworkStore } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 
 export interface GetCFPackageQuery {
@@ -29,25 +28,22 @@ export class GetCFPackage {
 
     // Note: Get by ID returns archived packages regardless - filtering only applies to list endpoints
 
-    // Generate CFPackageURI for the document — uses caseVersion for URI generation
-    const basePath = query.caseVersion === '1.1' ? '/ims/case/v1p1' : '/ims/case/v1p0'
-    const packageURI: LinkData = {
-      title: 'CFPackage',
-      identifier: query.docId,
-      uri: `${basePath}/CFPackages/${query.docId}`
-    }
-
     // Pass caseVersion to toJSON for correct field stripping (e.g. v1.0 omits v1.1-only fields)
     const serializeAs = query.loadVersion ? query.caseVersion : undefined
+    // No CFPackageURI here: a CFPackage's CFDocument is a CFPckgDocument, which
+    // doesn't carry one (only getCFDocument(s) responses do).
     const documentJSON = pkg.document.toJSON(serializeAs)
-    // Add CFPackageURI if not already present
-    if (!documentJSON.CFPackageURI) {
-      documentJSON.CFPackageURI = packageURI
+
+    // Likewise CFPckgItem has no CFDocumentURI — the package itself establishes
+    // the document; only getCFItem responses carry the back-reference.
+    const toPckgItem = (item: typeof pkg.items[number]) => {
+      const { CFDocumentURI: _documentUri, ...rest } = item.toJSON(serializeAs)
+      return rest
     }
 
     const result: any = {
       CFDocument: documentJSON,
-      CFItems: pkg.items.map(i => i.toJSON(serializeAs)),
+      CFItems: pkg.items.map(toPckgItem),
       CFAssociations: pkg.associations.map(a => a.toJSON(serializeAs))
     }
 

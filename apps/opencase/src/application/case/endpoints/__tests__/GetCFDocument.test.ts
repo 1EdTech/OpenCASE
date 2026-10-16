@@ -68,6 +68,42 @@ describe('GetCFDocument', () => {
       }))
     })
 
+    it('should point a pristine mirror\'s CFPackageURI at its import source, ignoring any stored value (CGE-59)', async () => {
+      const source = 'https://standards.example.org/ims/case/v1p1/CFPackages/doc-123'
+      const document = CFDocument.fromRaw(tenantId, caseVersion, {
+        identifier: docId,
+        uri: 'https://standards.example.org/doc-123',
+        creator: 'Source',
+        title: 'Mirrored',
+        lastChangeDateTime: '2024-01-01T00:00:00Z',
+        CFPackageURI: { title: 'Stale', identifier: 'other', uri: 'https://elsewhere.example.org/x' },
+        extensions: { 'ext:opencase': { isModifiedFromSource: false, sourcePackageURI: source } }
+      }, { preserveUris: true })
+      mockRepository.load.mockResolvedValue(new CFPackage({ document, items: [], associations: [] }))
+
+      const result = await getCFDocument.execute({ tenantId, caseVersion, sourcedId: docId })
+
+      expect(result.CFPackageURI).toEqual({ title: 'CFPackage', identifier: docId, uri: source })
+    })
+
+    it('should point a forked framework\'s CFPackageURI at this server (CGE-59)', async () => {
+      const document = CFDocument.create({
+        tenantId,
+        caseVersion,
+        sourcedId: docId,
+        uri: `/ims/case/v1p1/CFDocuments/${docId}`,
+        creator: 'Test Creator',
+        title: 'Forked',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
+        extensions: { 'ext:opencase': { isModifiedFromSource: true, sourcePackageURI: 'https://standards.example.org/x' } }
+      })
+      mockRepository.load.mockResolvedValue(new CFPackage({ document, items: [], associations: [] }))
+
+      const result = await getCFDocument.execute({ tenantId, caseVersion, sourcedId: docId })
+
+      expect(result.CFPackageURI.uri).toBe(`/ims/case/v1p1/CFPackages/${docId}`)
+    })
+
     it('should include caseVersion for a CASE 1.1 document', async () => {
       const document = CFDocument.create({
         tenantId,

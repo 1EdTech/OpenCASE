@@ -102,5 +102,49 @@ describe('CFPackage', () => {
     expect(pkg.rubrics.length).toBe(1);
     expect(pkg.rubrics[0].identifier).toBe('rubric-1');
   });
-});
 
+  describe('definitions (CGE-59)', () => {
+    it('drops unknown categories and unknown fields on definition entries, keeping extensions', () => {
+      const pkg = new CFPackage({
+        document: createDocument(),
+        items: [],
+        associations: [],
+        definitions: {
+          CFItemTypes: [{
+            identifier: 'type-1',
+            uri: '/ims/case/v1p1/CFItemTypes/type-1',
+            title: 'Standard',
+            description: 'A standard',
+            hierarchyCode: '1',
+            typeCode: 'std',
+            lastChangeDateTime: '2024-01-01T00:00:00Z',
+            extensions: { 'ext:vendor': { keep: true } },
+            bogusField: 'drop me'
+          }],
+          CFLicenses: [{ identifier: 'lic-1', uri: 'u', title: 'L', licenseText: 'T', lastChangeDateTime: 'd', junk: 1 }],
+          CFNotARealCategory: [{ identifier: 'x' }],
+          extensions: { 'ext:vendor': {} }
+        } as any
+      });
+
+      expect(pkg.definitions).toEqual({
+        CFItemTypes: [{
+          identifier: 'type-1',
+          uri: '/ims/case/v1p1/CFItemTypes/type-1',
+          title: 'Standard',
+          description: 'A standard',
+          hierarchyCode: '1',
+          typeCode: 'std',
+          lastChangeDateTime: '2024-01-01T00:00:00Z',
+          extensions: { 'ext:vendor': { keep: true } }
+        }],
+        CFLicenses: [{ identifier: 'lic-1', uri: 'u', title: 'L', licenseText: 'T', lastChangeDateTime: 'd' }],
+        extensions: { 'ext:vendor': {} }
+      });
+    });
+
+    it('returns null when no definitions are given', () => {
+      expect(new CFPackage({ document: createDocument(), items: [], associations: [] }).definitions).toBeNull();
+    });
+  });
+});

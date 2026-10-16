@@ -154,6 +154,51 @@ describe('ImportFramework', () => {
       expect(savedPkg.document.toJSON().uri).toBe('https://source.example.org/ims/case/v1p1/CFDocuments/doc-123')
     })
 
+    it('accepts a package with extra/unknown fields and does not save them (CGE-59)', async () => {
+      await importFramework.execute({
+        tenantId,
+        caseVersion,
+        cfPackage: {
+          CFPackage: {
+            CFDocument: {
+              ...cfDocument,
+              CFPackageURI: { title: 'Pkg', identifier: 'doc-123', uri: 'https://source.example.org/ims/case/v1p1/CFPackages/doc-123' },
+              somethingBogus: 'x'
+            },
+            CFItems: [{
+              identifier: 'item-1',
+              uri: '/ims/case/v1p1/CFItems/item-1',
+              fullStatement: 'Item',
+              lastChangeDateTime: '2024-01-01T00:00:00Z',
+              notInSpec: 42
+            }],
+            CFAssociations: [],
+            CFDefinitions: {
+              CFSubjects: [{ identifier: 's-1', uri: 'u', title: 'Math', hierarchyCode: '1', lastChangeDateTime: 'd', vendorJunk: true }],
+              CFMadeUp: []
+            },
+            totallyUnknownRoot: { a: 1 }
+          }
+        }
+      })
+
+      const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
+      const doc = savedPkg.document.toJSON()
+      expect(doc).not.toHaveProperty('CFPackageURI')
+      expect(doc).not.toHaveProperty('somethingBogus')
+      expect(savedPkg.items[0].toJSON()).not.toHaveProperty('notInSpec')
+      expect(savedPkg.definitions).toEqual({
+        CFSubjects: [{ identifier: 's-1', uri: 'u', title: 'Math', hierarchyCode: '1', lastChangeDateTime: 'd' }]
+      })
+    })
+
+    it('does not add a CFPackageURI when the source has none (CGE-59)', async () => {
+      await importFramework.execute({ tenantId, caseVersion, cfPackage: { CFDocument: cfDocument } })
+
+      const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
+      expect(savedPkg.document.toJSON()).not.toHaveProperty('CFPackageURI')
+    })
+
     it('throws when neither endpointUrl nor cfPackage is provided', async () => {
       await expect(
         importFramework.execute({ tenantId, caseVersion })
