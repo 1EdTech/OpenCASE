@@ -108,6 +108,7 @@ function mapDomainFrameworkToCfDocument(framework: Framework): CFDocument {
     CFPackageURI: { uri: `urn:case:package:${id}` },
     licenseURI: meta.licenseURI,
     publicAccess: meta.publicAccess === true ? true : undefined,
+    extensions: meta.extensions,
   }
 }
 
@@ -119,7 +120,8 @@ function mapDomainItemToCfItem(framework: Framework, itemId: string): CFItem {
   const s = (k: string) => (typeof md[k] === 'string' ? (md[k] as string) : undefined)
   const a = (k: string) => (Array.isArray(md[k]) ? (md[k] as unknown[]).filter((x): x is string => typeof x === 'string') : undefined)
 
-  // Extract colorBand from ext:opencase extension (may be in extensions map or flattened into metadata)
+  // Extract colorBand from ext:opencase extension (in the extensions map; a top-level
+  // metadata['ext:opencase'] key is accepted for frameworks mapped by older builds)
   const rawExtensions = md.extensions as Record<string, unknown> | undefined
   const opencaseExt = (rawExtensions?.[OPENCASE_EXT_KEY] ?? md[OPENCASE_EXT_KEY]) as Record<string, unknown> | undefined
   const colorBand = typeof opencaseExt?.colorBand === 'string' ? opencaseExt.colorBand : s('colorBand')
@@ -161,9 +163,8 @@ function mapDomainAssociationToCfAssociation(framework: Framework, association: 
   const s = (k: string) => (typeof md[k] === 'string' ? (md[k] as string) : undefined)
   const n = (k: string) => (typeof md[k] === 'number' ? (md[k] as number) : undefined)
 
-  // Reconstruct extensions: caseToDomainFramework spreads extensions directly into metadata
-  // (e.g. metadata["ext:opencase"] = {...}), while fromEditorGraph stores them as metadata.extensions.
-  // Handle both patterns.
+  // Extensions live in metadata.extensions (both caseToDomainFramework and fromEditorGraph).
+  // A top-level metadata["ext:opencase"] key is accepted for frameworks mapped by older builds.
   const rawExtensions = md.extensions as Record<string, unknown> | undefined
   const opencaseExt = md[OPENCASE_EXT_KEY] as Record<string, unknown> | undefined
   const extensions = rawExtensions ?? (opencaseExt ? { [OPENCASE_EXT_KEY]: opencaseExt } : undefined)
