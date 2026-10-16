@@ -45,6 +45,11 @@ export type FrameworkMetadata = {
    * Persisted as `ext:opencase.publicAccess`. Absent means sign-in is required.
    */
   publicAccess?: boolean
+  /**
+   * Non-OpenCASE CASE extensions on the CFDocument, preserved verbatim on save.
+   * Never contains `ext:opencase`, which is regenerated from editor state.
+   */
+  extensions?: Record<string, unknown>
 }
 
 export type ItemMetadata = Record<string, unknown>

@@ -297,7 +297,8 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
       }
     : undefined
 
-  const opencaseExt = asRecord(asRecord(doc.extensions)?.['ext:opencase'])
+  const { 'ext:opencase': rawOpencaseExt, ...customDocExtensions } = asRecord(doc.extensions) ?? {}
+  const opencaseExt = asRecord(rawOpencaseExt)
   const publicAccess = opencaseExt?.publicAccess === true ? true : undefined
 
   // Extract CFAssociationGroupings from CFDefinitions
@@ -344,6 +345,7 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
       lastChangeDateTime: asString(doc.lastChangeDateTime),
       licenseURI,
       publicAccess,
+      extensions: Object.keys(customDocExtensions).length > 0 ? customDocExtensions : undefined,
     },
     items,
     associations,

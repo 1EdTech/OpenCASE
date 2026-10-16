@@ -57,6 +57,7 @@ export function mapCaseSnapshotToDomainFramework(snapshot: CasePackageSnapshot):
     lastChangeDateTime: doc.lastChangeDateTime,
     licenseURI: doc.licenseURI,
     publicAccess: doc.publicAccess === true ? true : undefined,
+    extensions: doc.extensions,
   }
 
   const items: Framework['items'] = new Map()
@@ -84,7 +85,7 @@ export function mapCaseSnapshotToDomainFramework(snapshot: CasePackageSnapshot):
         statusEndDate: it.statusEndDate,
         caseUri: it.uri,
         lastChangeDateTime: it.lastChangeDateTime,
-        ...it.extensions,
+        extensions: it.extensions,
       },
     }
     items.set(item.id, item)
@@ -109,7 +110,7 @@ export function mapCaseSnapshotToDomainFramework(snapshot: CasePackageSnapshot):
         CFAssociationGroupingTitle: a.CFAssociationGroupingTitle,
         notes: a.notes,
         lastChangeDateTime: a.lastChangeDateTime,
-        ...a.extensions,
+        extensions: a.extensions,
       },
     }
     associations.set(assoc.id, assoc)

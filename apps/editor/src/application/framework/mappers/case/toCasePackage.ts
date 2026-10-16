@@ -155,15 +155,17 @@ function frameworkToCfDocument(
       title: docTitle,
       identifier: fwId,
     },
+    // meta.extensions holds the document's non-OpenCASE extensions (never ext:opencase),
+    // so ext:opencase is always regenerated from editor state while the rest round-trip.
     extensions: (layout || options?.edgeType || options?.linkedFrameworks || options?.remoteItemLinks || meta.publicAccess === true)
-      ? mergeOpencaseExtension(undefined, {
+      ? mergeOpencaseExtension(meta.extensions, {
           layout,
           edgeType: options?.edgeType,
           linkedFrameworks: options?.linkedFrameworks,
           remoteItemLinks: options?.remoteItemLinks,
           ...(meta.publicAccess === true ? { publicAccess: true } : {}),
         })
-      : undefined,
+      : meta.extensions,
   }
 
   return document
@@ -197,7 +199,11 @@ function itemToCfItem(
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined
   }
 
-  const existingExtensions = (md.extensions as CaseExtensions | undefined) ?? undefined
+  // Keep every non-OpenCASE extension verbatim. An item's ext:opencase only holds
+  // layout and colorBand, both regenerated below from current editor state, so the
+  // loaded copy is dropped rather than letting stale values (e.g. a cleared colorBand) survive.
+  const { [OPENCASE_EXT_KEY]: _staleOpencaseExt, ...customExtensions } = (md.extensions as CaseExtensions | undefined) ?? {}
+  const existingExtensions = Object.keys(customExtensions).length > 0 ? customExtensions : undefined
 
   const cfItem: CFItem & { sourcedId: string } = {
     identifier: itemId,

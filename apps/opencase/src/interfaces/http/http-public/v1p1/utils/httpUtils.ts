@@ -132,10 +132,42 @@ export function absolutizeCaseUris<T> (payload: T, baseUrl: string, caseVersion:
   return walk(payload)
 }
 
+const OPENCASE_EXT_KEY = 'ext:opencase'
+
 /**
- * Strip all `extensions` properties from a CFPackage response.
- * OpenCASE extensions are proprietary and should only be included
- * when the client explicitly requests them via the X-CASE-EDITOR header.
+ * Strip the OpenCASE-proprietary `ext:opencase` key from every `extensions`
+ * object in a CASE v1.1 response. It holds editor/app state and is only
+ * included when the client requests it via the X-CASE-EDITOR header.
+ * All other extensions are part of the framework data and are returned as-is;
+ * an `extensions` object left empty is removed entirely.
+ */
+export function stripOpenCaseExtensions<T> (payload: T): T {
+  if (!payload || typeof payload !== 'object') return payload
+
+  const walk = (value: any): any => {
+    if (!value || typeof value !== 'object') return value
+    if (Array.isArray(value)) return value.map(walk)
+
+    const out: any = {}
+    for (const [k, v] of Object.entries(value)) {
+      if (k === 'extensions' && v && typeof v === 'object' && !Array.isArray(v)) {
+        // Extension values are opaque third-party data — don't walk into them.
+        const { [OPENCASE_EXT_KEY]: _opencase, ...rest } = v as Record<string, unknown>
+        if (Object.keys(rest).length > 0) out[k] = rest
+        continue
+      }
+      out[k] = walk(v)
+    }
+    return out
+  }
+
+  return walk(payload)
+}
+
+/**
+ * Strip all `extensions` properties from a response. Used by the CASE v1.0
+ * endpoints, whose data model has no `extensions` field; v1.1 endpoints use
+ * {@link stripOpenCaseExtensions} instead.
  */
 export function stripExtensions<T> (payload: T): T {
   if (!payload || typeof payload !== 'object') return payload
