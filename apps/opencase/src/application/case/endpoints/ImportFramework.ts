@@ -11,6 +11,7 @@ import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { logger } from '../../../infrastructure/logging/Logger'
 import { OPENCASE_EXT_KEY, stripOpenCaseExtensions } from '../services/openCaseExtensions'
+import { coerceMistypedStrings } from '../services/coerceMistypedStrings'
 import type { ImportDocumentFlags } from '../types/ImportDocumentFlags'
 
 export interface ImportFrameworkCommand {
@@ -122,6 +123,16 @@ export class ImportFramework {
       CFRubrics: sourceCFPackage.CFRubrics ?? [],
       CFDefinitions: sourceCFPackage.CFDefinitions ?? null,
       extensions: sourceCFPackage.extensions
+    }
+
+    // Saves are strictly validated against the CFPackage schema, so numbers the
+    // publisher sent where a string belongs are turned into strings now — otherwise
+    // the framework imports fine but can never be saved (CGE-183). This is a type
+    // correction of the source's own values, so the import is still a pristine mirror.
+    const packageSchemaName = caseVersion === '1.1' ? 'case-v1p1-cfpackage' : 'case-v1p0-cfpackage'
+    const coercedPaths = coerceMistypedStrings(this.validator, packageSchemaName, payload)
+    if (coercedPaths.length > 0) {
+      logger.info({ tenantId, caseVersion, coercedPaths }, 'Coerced numeric values to strings during import')
     }
 
     // Collect validation warnings (non-fatal) instead of hard failing
