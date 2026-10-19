@@ -14,7 +14,8 @@ import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFrom
 import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
 import type { LayoutState } from '@/ui/editor/reactflow/mapping'
 import type { CaseVersion } from '@/application/framework/mappers/case/CasePackageSnapshot'
-import type { CFAssociationGrouping, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
+import type { CFAssociationGrouping, CFItemType, CFLicense, CFSubject, CFConcept, CFDefinition } from '@/domain/case/types'
+import { extractCfDefinitions, preferFrameworkDefinitions } from '@/application/framework/mappers/case/frameworkDefinitions'
 import LoginScreen from '@/ui/auth/LoginScreen'
 import { detectTopology } from '@/ui/editor/layout/detectTopology'
 import { applyInitialLayout } from '@/ui/editor/layout/applyInitialLayout'
@@ -24,29 +25,6 @@ function getFrameworkIdFromHash(): string | null {
   const hash = globalThis.location?.hash ?? ''
   const match = /^#\/framework\/([^/?]+)/.exec(hash)
   return match ? decodeURIComponent(match[1]) : null
-}
-
-/** Extract CFDefinitions from a raw CFPackage response and merge into tenant state */
-function extractCfDefinitions(pkg: unknown): {
-  CFItemTypes?: CFItemType[]
-  CFSubjects?: CFSubject[]
-  CFConcepts?: CFConcept[]
-  CFLicenses?: CFLicense[]
-  CFAssociationGroupings?: CFAssociationGrouping[]
-} {
-  const p = pkg as Record<string, unknown> | null
-  if (!p) return {}
-  // Handle both wrapped { CFPackage: { ... } } and unwrapped formats
-  const inner = (p.CFPackage ?? p) as Record<string, unknown>
-  const defs = inner.CFDefinitions as Record<string, unknown[]> | undefined
-  if (!defs) return {}
-  return {
-    CFItemTypes: Array.isArray(defs.CFItemTypes) ? (defs.CFItemTypes as CFItemType[]) : undefined,
-    CFSubjects: Array.isArray(defs.CFSubjects) ? (defs.CFSubjects as CFSubject[]) : undefined,
-    CFConcepts: Array.isArray(defs.CFConcepts) ? (defs.CFConcepts as CFConcept[]) : undefined,
-    CFLicenses: Array.isArray(defs.CFLicenses) ? (defs.CFLicenses as CFLicense[]) : undefined,
-    CFAssociationGroupings: Array.isArray(defs.CFAssociationGroupings) ? (defs.CFAssociationGroupings as CFAssociationGrouping[]) : undefined,
-  }
 }
 
 export default function App() {
@@ -74,7 +52,12 @@ function AppInner() {
   // Store per-framework edge type from CASE extensions (keyed by framework ID)
   const [frameworkEdgeTypes, setFrameworkEdgeTypes] = useState<Record<string, string>>({})
 
-  // Tenant-wide definitions catalogue (loaded from management endpoint)
+  // Each framework's own CFDefinitions as returned by its CFPackage (keyed by framework ID).
+  // These take precedence over the tenant catalogue when the framework is saved.
+  const [frameworkCfDefinitions, setFrameworkCfDefinitions] = useState<Record<string, CFDefinition>>({})
+
+  // Tenant-wide definitions catalogue (loaded from management endpoint). Feeds the
+  // pickers; a framework's save only uses it for definitions picked from it.
   const [tenantCfItemTypes, setTenantCfItemTypes] = useState<CFItemType[]>([])
   const [tenantCfSubjects, setTenantCfSubjects] = useState<CFSubject[]>([])
   const [tenantCfConcepts, setTenantCfConcepts] = useState<CFConcept[]>([])
@@ -86,7 +69,7 @@ function AppInner() {
 
   /** Merge CFDefinitions from a loaded CFPackage into the tenant state (additive, no overwrites) */
   const mergeCfDefinitions = useCallback((pkg: unknown) => {
-    const defs = extractCfDefinitions(pkg)
+    const defs = extractCfDefinitions(pkg) ?? {}
     if (defs.CFItemTypes?.length) {
       setTenantCfItemTypes((prev) => {
         const ids = new Set(prev.map((d) => d.identifier))
@@ -274,6 +257,19 @@ function AppInner() {
     return frameworks.find((f) => f.id === activeFrameworkId) ?? null
   }, [frameworks, activeFrameworkId])
 
+  // Definitions offered to the editor: the active framework's own, ahead of the tenant catalogue.
+  const activeCfDefinitions = activeFrameworkId ? frameworkCfDefinitions[activeFrameworkId] : undefined
+  const editorDefinitions = useMemo(
+    () => preferFrameworkDefinitions(activeCfDefinitions, {
+      cfItemTypes: tenantCfItemTypes,
+      cfSubjects: tenantCfSubjects,
+      cfConcepts: tenantCfConcepts,
+      cfLicenses: tenantCfLicenses,
+      cfAssociationGroupings: tenantCfAssociationGroupings,
+    }),
+    [activeCfDefinitions, tenantCfItemTypes, tenantCfSubjects, tenantCfConcepts, tenantCfLicenses, tenantCfAssociationGroupings],
+  )
+
   // Summaries of server frameworks passed to the crosswalk target selector (excludes alignment frameworks)
   const serverFrameworkSummaries = useMemo(
     () => serverCfDocuments
@@ -393,6 +389,13 @@ function AppInner() {
         if (pkg.CFDocument?.extensions) {
           fw.cfDocument = { ...fw.cfDocument, extensions: pkg.CFDocument.extensions }
         }
+
+        // Store the framework's own definitions
+        const ownDefinitions = extractCfDefinitions(pkg)
+        setFrameworkCfDefinitions((prev) => {
+          const { [fw.id]: _replaced, ...rest } = prev
+          return ownDefinitions ? { ...rest, [fw.id]: ownDefinitions } : rest
+        })
 
         // Store the extracted layout
         if (layout) {
@@ -574,7 +577,22 @@ function AppInner() {
           const { [oldId]: _dropped, ...rest } = prev
           return rest
         })
+        setFrameworkCfDefinitions((prev) => {
+          const { [oldId]: _dropped, ...rest } = prev
+          return rest
+        })
       } else if (activeFrameworkId) {
+        // The saved definitions are now this framework's own, including any
+        // minted in this session — record them so they survive leaving and
+        // re-entering the editor without a re-fetch.
+        const savedDefinitions = extractCfDefinitions(openCasePackage)
+        const savedId = activeFrameworkId
+        setFrameworkCfDefinitions((prev) => {
+          const { [savedId]: _replaced, ...rest } = prev
+          return savedDefinitions ? { ...rest, [savedId]: savedDefinitions } : rest
+        })
+        mergeCfDefinitions(openCasePackage)
+
         // Refresh the local cache with the just-saved Framework (items, associations,
         // metadata) so a hard refresh reflects the server state instead of the
         // pre-save snapshot. Without this, edits made and saved in this session
@@ -595,7 +613,7 @@ function AppInner() {
 
       console.log('[App] Saved successfully')
     },
-    [api, tenantId, caseApiVersion, activeFrameworkId, openRemoteFramework],
+    [api, tenantId, caseApiVersion, activeFrameworkId, openRemoteFramework, mergeCfDefinitions],
   )
 
   const handleSaveAlignments = useCallback(
@@ -738,11 +756,11 @@ function AppInner() {
       caseVersion={activeCaseVersion}
       skipAutoLayout={Boolean(frameworkLayouts[activeFramework.id]) || Boolean(autoEdgeType)}
       initialEdgeType={frameworkEdgeTypes[activeFramework.id] ?? autoEdgeType}
-      initialCfItemTypes={tenantCfItemTypes}
-      initialCfSubjects={tenantCfSubjects}
-      initialCfConcepts={tenantCfConcepts}
-      initialCfLicenses={tenantCfLicenses}
-      initialCfAssociationGroupings={tenantCfAssociationGroupings}
+      initialCfItemTypes={editorDefinitions.cfItemTypes}
+      initialCfSubjects={editorDefinitions.cfSubjects}
+      initialCfConcepts={editorDefinitions.cfConcepts}
+      initialCfLicenses={editorDefinitions.cfLicenses}
+      initialCfAssociationGroupings={editorDefinitions.cfAssociationGroupings}
     >
       <EditorCanvas
         onBack={() => navigateHome()}
@@ -756,6 +774,7 @@ function AppInner() {
         onLoadAlignmentsForTarget={tenantId ? handleLoadAlignmentsForTarget : undefined}
         onDiscoverAlignedTargets={tenantId ? handleDiscoverAlignedTargets : undefined}
         mirrorStatus={activeFramework.mirrorStatus}
+        cfDefinitionsExtensions={activeCfDefinitions?.extensions}
       />
     </EditorProvider>
   )

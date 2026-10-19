@@ -204,6 +204,11 @@ export class CreateFramework {
       cfRubricsPayload = storedPkg.rubrics.map(r => r.toJSON())
     }
     const packageExtensions = payload.extensions !== undefined ? payload.extensions : storedPkg?.extensions
+    // Same for the extensions on the CFDefinitions object itself.
+    const storedDefinitionsExtensions = storedPkg?.definitions?.extensions
+    const definitionsPayload = payload.CFDefinitions?.extensions === undefined && storedDefinitionsExtensions
+      ? { ...(payload.CFDefinitions ?? {}), extensions: storedDefinitionsExtensions }
+      : payload.CFDefinitions
 
     if (resolvedStorageKey) {
       const existingMeta = this.store.getDocumentMetadata(tenantId, caseVersion, resolvedStorageKey)
@@ -225,7 +230,7 @@ export class CreateFramework {
           CFItems: candidate.items.map(i => i.toJSON()),
           CFAssociations: candidate.associations.map(a => a.toJSON()),
           CFRubrics: candidate.rubrics.map(r => r.toJSON()),
-          CFDefinitions: payload.CFDefinitions ?? null
+          CFDefinitions: definitionsPayload ?? null
         }
         const dataChanged = stableStringifyBundle(stripNonDataFields(existingComparable)) !== stableStringifyBundle(stripNonDataFields(newComparable))
 
@@ -295,7 +300,7 @@ export class CreateFramework {
     const rubrics = cfRubricsPayload.map((r: any) =>
       CFRubric.fromRaw(tenantId, caseVersion, r, preserveUris)
     )
-    const definitions = payload.CFDefinitions ?? null
+    const definitions = definitionsPayload ?? null
 
     const pkg = new CFPackage({ document, items, associations, rubrics, definitions, extensions: packageExtensions })
 
