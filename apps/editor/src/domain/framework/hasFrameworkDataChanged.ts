@@ -4,9 +4,10 @@ import type { Association, Framework, Item } from '@/domain/framework/model/type
  * Canvas-only concerns (node position, per-node color band, edge handle
  * anchors, edge render style) show up in TWO different metadata shapes
  * depending on where the Framework snapshot came from:
- *  - Freshly loaded from CASE data (`caseToDomainFramework.ts`'s
- *    `...it.extensions`/`...a.extensions` spread): nested one level, under
- *    a literal `metadata['ext:opencase']` key.
+ *  - Stored as CASE extensions: under `metadata.extensions['ext:opencase']`
+ *    (or a top-level `metadata['ext:opencase']` key from older builds).
+ *    Other keys in `metadata.extensions` are real framework data and ARE
+ *    compared — editing a custom extension is a data change.
  *  - Re-derived from the live canvas during an editing session
  *    (`fromEditorGraph.ts`, called on every save and to capture the
  *    fork-detection baseline): `colorBand` (items) and `originHandle`/
@@ -19,7 +20,11 @@ import type { Association, Framework, Item } from '@/domain/framework/model/type
  */
 function stripLayoutMetadata(metadata: Record<string, unknown> | undefined): Record<string, unknown> {
   if (!metadata) return {}
-  const { 'ext:opencase': _omit, colorBand: _colorBand, originHandle: _originHandle, destinationHandle: _destinationHandle, ...rest } = metadata
+  const { 'ext:opencase': _omit, colorBand: _colorBand, originHandle: _originHandle, destinationHandle: _destinationHandle, extensions, ...rest } = metadata
+  if (extensions && typeof extensions === 'object') {
+    const { 'ext:opencase': _omitExt, ...customExtensions } = extensions as Record<string, unknown>
+    if (Object.keys(customExtensions).length > 0) rest.extensions = customExtensions
+  }
   return rest
 }
 

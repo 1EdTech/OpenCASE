@@ -238,5 +238,58 @@ describe('ImportFramework', () => {
         importFramework.execute({ tenantId, caseVersion, cfPackage: { CFItems: [] } })
       ).rejects.toThrow('Invalid CFPackage data: missing CFDocument')
     })
+
+    describe('extensions', () => {
+      const providerPackage = () => ({
+        CFDocument: {
+          ...cfDocument,
+          extensions: { 'ext:opencase': { publicAccess: true, readOnly: true }, sourceSystem: 'smartschool' }
+        },
+        CFItems: [{
+          identifier: 'item-1',
+          uri: '/ims/case/v1p1/CFItems/item-1',
+          fullStatement: 'Item 1',
+          lastChangeDateTime: '2024-01-01T00:00:00Z',
+          extensions: { 'ext:opencase': { colorBand: 'red' }, smartschoolId: 'ss-1' }
+        }],
+        CFAssociations: [{
+          identifier: 'assoc-1',
+          uri: '/ims/case/v1p1/CFAssociations/assoc-1',
+          associationType: 'isChildOf',
+          originNodeURI: { identifier: 'item-1', uri: '/ims/case/v1p1/CFItems/item-1', title: 'Item 1' },
+          destinationNodeURI: { identifier: 'doc-123', uri: '/ims/case/v1p1/CFDocuments/doc-123', title: 'Test Document' },
+          lastChangeDateTime: '2024-01-01T00:00:00Z',
+          extensions: { 'ext:opencase': { originHandle: 'top' } }
+        }],
+        CFRubrics: [],
+        extensions: { syncRunId: 'run-42', 'ext:opencase': { anything: true } }
+      })
+
+      const expectProviderExtensionsKeptAndOpenCaseDiscarded = () => {
+        const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
+        const docOpencase = savedPkg.document.toJSON().extensions['ext:opencase']
+
+        expect(savedPkg.document.toJSON().extensions.sourceSystem).toBe('smartschool')
+        // Only server-injected provenance survives — nothing from the import file.
+        expect(docOpencase.isModifiedFromSource).toBe(false)
+        expect(docOpencase).not.toHaveProperty('publicAccess')
+        expect(docOpencase).not.toHaveProperty('readOnly')
+
+        expect(savedPkg.items[0].toJSON().extensions).toEqual({ smartschoolId: 'ss-1' })
+        expect(savedPkg.associations[0].toJSON().extensions).toBeUndefined()
+        expect(savedPkg.extensions).toEqual({ syncRunId: 'run-42' })
+      }
+
+      it('keeps provider extensions and discards ext:opencase when importing pasted JSON', async () => {
+        await importFramework.execute({ tenantId, caseVersion, cfPackage: { CFPackage: providerPackage() } })
+        expectProviderExtensionsKeptAndOpenCaseDiscarded()
+      })
+
+      it('keeps provider extensions and discards ext:opencase when importing from a URL', async () => {
+        mockApiClient.fetchCFPackage.mockResolvedValue({ CFPackage: providerPackage() } as any)
+        await importFramework.execute({ tenantId, caseVersion, endpointUrl: 'https://example.org/ims/case/v1p1/CFPackages/doc-123' })
+        expectProviderExtensionsKeptAndOpenCaseDiscarded()
+      })
+    })
   })
 })

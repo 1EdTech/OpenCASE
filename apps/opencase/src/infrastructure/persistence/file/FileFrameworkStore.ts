@@ -387,7 +387,7 @@ export class FileFrameworkStore {
     tenantId: TenantId,
     version: CaseVersion,
     storageKey: string
-  ): Promise<{ document: any, items?: any[], associations?: any[], rubrics?: any[], definitions?: any } | null> {
+  ): Promise<{ document: any, items?: any[], associations?: any[], rubrics?: any[], definitions?: any, extensions?: Record<string, unknown> } | null> {
     logger.info({ tenantId, version, storageKey }, 'loadDocumentBundle')
     const meta = this.documents.get(tenantId)?.get(version)?.get(storageKey)
     if (!meta) return null

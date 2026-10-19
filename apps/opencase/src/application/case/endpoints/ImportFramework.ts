@@ -10,6 +10,7 @@ import { CFAssociation } from '../../../domain/case/entities/CFAssociation'
 import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { logger } from '../../../infrastructure/logging/Logger'
+import { OPENCASE_EXT_KEY, stripOpenCaseExtensions } from '../services/openCaseExtensions'
 import type { ImportDocumentFlags } from '../types/ImportDocumentFlags'
 
 export interface ImportFrameworkCommand {
@@ -33,9 +34,11 @@ export interface ImportFrameworkResult {
 }
 
 /**
- * Merge or create the `ext:opencase` extension on a CFDocument payload,
- * marking it as a pristine mirror of the source. `endpointUrl` is only known
- * when the framework was imported by URL (as opposed to a pasted JSON payload).
+ * Create the `ext:opencase` extension on a CFDocument payload, marking it as a
+ * pristine mirror of the source. The payload must already have had any incoming
+ * `ext:opencase` discarded (see execute) — OpenCASE's own state is never taken
+ * from an import source. `endpointUrl` is only known when the framework was
+ * imported by URL (as opposed to a pasted JSON payload).
  */
 function injectSourceProvenance (
   docPayload: any,
@@ -43,12 +46,8 @@ function injectSourceProvenance (
   documentFlags?: ImportDocumentFlags
 ): any {
   const existing = docPayload.extensions ?? {}
-  const existingOpencase = (existing['ext:opencase'] && typeof existing['ext:opencase'] === 'object')
-    ? existing['ext:opencase']
-    : {}
 
   const extPatch: Record<string, unknown> = {
-    ...existingOpencase,
     // Only record a source URL when one is known — pasted JSON has no
     // publisher endpoint, so the field is left off entirely rather than
     // written as undefined.
@@ -74,7 +73,7 @@ function injectSourceProvenance (
     ...docPayload,
     extensions: {
       ...existing,
-      'ext:opencase': extPatch
+      [OPENCASE_EXT_KEY]: extPatch
     }
   }
 }
@@ -93,17 +92,21 @@ export class ImportFramework {
       throw new Error('Either endpointUrl or cfPackage must be provided')
     }
 
+    // Provider extensions are kept verbatim, but any `ext:opencase` in the source is
+    // discarded on every entity — OpenCASE's own state (publicAccess, readOnly, layout…)
+    // must never be settable through an imported file.
     let sourceCFPackage: CFPackageResponse['CFPackage']
     if (endpointUrl) {
       logger.info({ tenantId, caseVersion, endpointUrl }, 'Importing framework from endpoint')
       const response = await this.apiClient.fetchCFPackage(endpointUrl, accessToken)
+      const source = stripOpenCaseExtensions(response.CFPackage)
       sourceCFPackage = {
-        ...response.CFPackage,
-        CFDocument: injectSourceProvenance(response.CFPackage.CFDocument, endpointUrl, documentFlags)
+        ...source,
+        CFDocument: injectSourceProvenance(source.CFDocument, endpointUrl, documentFlags)
       }
     } else {
       logger.info({ tenantId, caseVersion }, 'Importing framework from provided JSON')
-      const normalized = normalizeCfPackageData(cfPackage)
+      const normalized = stripOpenCaseExtensions(normalizeCfPackageData(cfPackage))
       const provenanceUri = (sourcePackageUri ?? endpointUrl ?? '').trim()
       sourceCFPackage = {
         ...normalized,
@@ -153,7 +156,7 @@ export class ImportFramework {
     )
     const definitions = payload.CFDefinitions ?? null
 
-    const pkg = new CFPackage({ document, items, associations, rubrics, definitions })
+    const pkg = new CFPackage({ document, items, associations, rubrics, definitions, extensions: payload.extensions })
 
     // Every new document gets a storage key that's independent of any
     // CASE identifier from the moment it's created — never inferred from

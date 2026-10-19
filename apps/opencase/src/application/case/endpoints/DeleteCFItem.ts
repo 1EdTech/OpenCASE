@@ -71,7 +71,8 @@ export class DeleteCFItem {
       items,
       associations,
       rubrics: existingPkg.rubrics,
-      definitions: existingPkg.definitions
+      definitions: existingPkg.definitions,
+      extensions: existingPkg.extensions
     })
 
     await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg, storageKey)

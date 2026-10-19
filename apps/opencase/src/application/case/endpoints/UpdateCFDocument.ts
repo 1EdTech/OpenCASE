@@ -77,7 +77,8 @@ export class UpdateCFDocument {
       items,
       associations,
       rubrics,
-      definitions
+      definitions,
+      extensions: existingPkg.extensions
     })
 
     await this.pkgRepo.saveNewVersion(tenantId, caseVersion, updatedPkg, storageKey)

@@ -44,8 +44,9 @@ export class FileCFPackageRepository implements CFPackageRepository {
       CFRubric.fromRaw(tenantId, version, r, preserveUris)
     )
     const definitions = bundle.definitions ?? null
+    const extensions = bundle.extensions
 
-    return new CFPackage({ document, items, associations, rubrics, definitions })
+    return new CFPackage({ document, items, associations, rubrics, definitions, extensions })
   }
 
   /**
@@ -63,7 +64,7 @@ export class FileCFPackageRepository implements CFPackageRepository {
     storageKey: string
   ): Promise<void> {
     const docId = pkg.document.sourcedId
-    const bundle: { document: unknown, items: unknown[], associations: unknown[], rubrics: unknown[], definitions?: unknown } = {
+    const bundle: { document: unknown, items: unknown[], associations: unknown[], rubrics: unknown[], definitions?: unknown, extensions?: Record<string, unknown> } = {
       document: pkg.document.toJSON(),
       items: pkg.items.map(i => i.toJSON()),
       associations: pkg.associations.map(a => a.toJSON()),
@@ -72,6 +73,10 @@ export class FileCFPackageRepository implements CFPackageRepository {
 
     if (pkg.definitions) {
       bundle.definitions = pkg.definitions
+    }
+    // CFPackage-level extensions (CASE 1.1, [0..1])
+    if (pkg.extensions) {
+      bundle.extensions = pkg.extensions
     }
 
     // Guard against GUID reuse across different frameworks/entities before writing.

@@ -167,6 +167,32 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
       expect(body.CFDocuments[0]).not.toHaveProperty('extensions')
     })
 
+    it('should strip only ext:opencase and keep other extensions when X-CASE-EDITOR header is absent', async () => {
+      const result = {
+        CFDocuments: [
+          {
+            identifier: 'doc-123',
+            uri: '/ims/case/v1p1/CFDocuments/doc-123',
+            title: 'Document With Custom Extensions',
+            lastChangeDateTime: '2024-01-01T00:00:00.000Z',
+            extensions: {
+              'ext:opencase': { publicAccess: true },
+              smartschoolId: 'ss-42'
+            }
+          }
+        ]
+      }
+
+      mockGetAllCFDocuments.execute.mockResolvedValue(result)
+      ;(mockRequest as any).tenantId = 'test-tenant'
+      ;(mockRequest as any).isAuthenticated = true
+
+      await controller.getAll(mockRequest as Request, mockResponse as Response)
+
+      const body = responseJson.mock.calls[0][0]
+      expect(body.CFDocuments[0].extensions).toEqual({ smartschoolId: 'ss-42' })
+    })
+
     it('should keep extensions in the response when X-CASE-EDITOR header is present', async () => {
       const result = {
         CFDocuments: [
