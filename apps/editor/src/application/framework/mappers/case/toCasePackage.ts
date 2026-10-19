@@ -360,10 +360,12 @@ export function frameworkToCfPackage(params: {
   cfAssociationGroupings?: CFAssociationGrouping[]
   /** CFLicense definitions to include in CFDefinitions (from editor state) */
   cfLicenses?: CFLicense[]
+  /** Extensions on the framework's own CFDefinitions object, carried through unchanged */
+  definitionsExtensions?: CaseExtensions
   /** Remote framework editor data from canvas */
   remoteEditorData?: { linkedFrameworks: unknown[]; remoteItemLinks: unknown[] }
 }): CFPackage {
-  const { framework, caseVersion, layout, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses, remoteEditorData } = params
+  const { framework, caseVersion, layout, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses, definitionsExtensions, remoteEditorData } = params
   const fwId = String(framework.id)
 
   // Build CFDocument
@@ -387,50 +389,42 @@ export function frameworkToCfPackage(params: {
     associationToCfAssociation(framework, assocId)
   )
 
-  // Build CFDefinitions — only include definitions actually referenced by items.
-  // This mirrors the backend GetCFPackage filtering for spec compliance.
+  // Build CFDefinitions — only include definitions an item, the document or an
+  // association links to by URI identifier, matching the backend GetCFPackage
+  // filtering. A CFItemType / subject string on its own is just a label in CASE:
+  // it doesn't refer to a definition, so titles are never used to pick one —
+  // doing so pulled in same-titled definitions belonging to other frameworks.
+  // Callers pass lists with the framework's own definitions first (see
+  // preferFrameworkDefinitions), so the first copy of an identifier wins.
   // Ensure every definition has all fields required by the CASE v1.1 schema.
   let cfDefinitions: CFDefinition | undefined
   const now = nowIso()
 
-  // Collect referenced identifiers and titles from the built CFItems
+  // Collect referenced identifiers from the built CFItems
   const refItemTypeIds = new Set<string>()
-  const refItemTypeTitles = new Set<string>()
   const refSubjectIds = new Set<string>()
-  const refSubjectTitles = new Set<string>()
   const refConceptIds = new Set<string>()
 
   for (const item of items) {
-    // CFItemType: match by CFItemTypeURI.identifier or by CFItemType title string
     if (item.CFItemTypeURI?.identifier) refItemTypeIds.add(item.CFItemTypeURI.identifier)
-    if (item.CFItemType) refItemTypeTitles.add(item.CFItemType)
-
-    // CFSubject: match by subjectURI[].identifier or by subject[] title string
     if (Array.isArray(item.subjectURI)) {
       for (const s of item.subjectURI) {
         if (s.identifier) refSubjectIds.add(s.identifier)
       }
     }
-    if (Array.isArray(item.subject)) {
-      for (const s of item.subject) {
-        if (s) refSubjectTitles.add(s)
-      }
-    }
-
-    // CFConcept: match by conceptKeywordsURI.identifier
     if (item.conceptKeywordsURI?.identifier) refConceptIds.add(item.conceptKeywordsURI.identifier)
+  }
+  // CFDocument.subjectURI also links to CFSubjects
+  if (Array.isArray(document.subjectURI)) {
+    for (const s of document.subjectURI) {
+      if (s.identifier) refSubjectIds.add(s.identifier)
+    }
   }
 
   // Filter each category to only referenced definitions
-  const filteredItemTypes = cfItemTypes?.filter(
-    (t) => refItemTypeIds.has(t.identifier) || refItemTypeTitles.has(t.title ?? ''),
-  ) ?? []
-  const filteredSubjects = cfSubjects?.filter(
-    (s) => refSubjectIds.has(s.identifier) || refSubjectTitles.has(s.title ?? ''),
-  ) ?? []
-  const filteredConcepts = cfConcepts?.filter(
-    (c) => refConceptIds.has(c.identifier),
-  ) ?? []
+  const filteredItemTypes = pickReferenced(cfItemTypes, refItemTypeIds)
+  const filteredSubjects = pickReferenced(cfSubjects, refSubjectIds)
+  const filteredConcepts = pickReferenced(cfConcepts, refConceptIds)
 
   // Collect referenced license identifiers from document and items
   const refLicenseIds = new Set<string>()
@@ -438,20 +432,17 @@ export function frameworkToCfPackage(params: {
   for (const item of items) {
     if (item.licenseURI?.identifier) refLicenseIds.add(item.licenseURI.identifier)
   }
-  const filteredLicenses = cfLicenses?.filter(
-    (l) => refLicenseIds.has(l.identifier),
-  ) ?? []
+  const filteredLicenses = pickReferenced(cfLicenses, refLicenseIds)
 
   // Collect referenced grouping identifiers from built CFAssociations
   const refGroupingIds = new Set<string>()
   for (const assoc of associations) {
     if (assoc.CFAssociationGroupingURI?.identifier) refGroupingIds.add(assoc.CFAssociationGroupingURI.identifier)
   }
-  const filteredGroupings = cfAssociationGroupings?.filter(
-    (g) => refGroupingIds.has(g.identifier),
-  ) ?? []
+  const filteredGroupings = pickReferenced(cfAssociationGroupings, refGroupingIds)
 
-  if (filteredItemTypes.length > 0 || filteredSubjects.length > 0 || filteredConcepts.length > 0 || filteredGroupings.length > 0 || filteredLicenses.length > 0) {
+  const hasDefinitionsExtensions = definitionsExtensions !== undefined && Object.keys(definitionsExtensions).length > 0
+  if (filteredItemTypes.length > 0 || filteredSubjects.length > 0 || filteredConcepts.length > 0 || filteredGroupings.length > 0 || filteredLicenses.length > 0 || hasDefinitionsExtensions) {
     cfDefinitions = {}
 
     if (filteredItemTypes.length > 0) {
@@ -497,6 +488,10 @@ export function frameworkToCfPackage(params: {
         lastChangeDateTime: g.lastChangeDateTime || now,
       }))
     }
+
+    if (hasDefinitionsExtensions) {
+      cfDefinitions.extensions = definitionsExtensions
+    }
   }
 
   const cfPackage: CFPackage = {
@@ -507,6 +502,17 @@ export function frameworkToCfPackage(params: {
   }
 
   return cfPackage
+}
+
+/** The definitions whose identifier is in `ids`, keeping the first copy of each identifier. */
+function pickReferenced<T extends { identifier: string }>(list: T[] | undefined, ids: Set<string>): T[] {
+  if (!list || ids.size === 0) return []
+  const seen = new Set<string>()
+  return list.filter((d) => {
+    if (!ids.has(d.identifier) || seen.has(d.identifier)) return false
+    seen.add(d.identifier)
+    return true
+  })
 }
 
 /**

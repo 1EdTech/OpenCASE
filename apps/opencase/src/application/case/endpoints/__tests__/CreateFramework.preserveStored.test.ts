@@ -6,7 +6,8 @@ import { CFItem } from '../../../../domain/case/entities/CFItem'
 import { CFRubric } from '../../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../../domain/case/entities/CFPackage'
 
-// The editor can't author rubrics or CFPackage-level extensions and never sends them
+// The editor can't author rubrics, CFPackage-level extensions or CFDefinitions-level
+// extensions and never sends the first two (the last only as it loaded them)
 // on save. Omitting them must keep what's stored rather than wiping it.
 describe('CreateFramework — keeps stored rubrics and package extensions when omitted', () => {
   let mockRepository: jest.Mocked<CFPackageRepository>
@@ -17,8 +18,24 @@ describe('CreateFramework — keeps stored rubrics and package extensions when o
   const caseVersion = '1.1'
   const docId = 'doc-123'
   const packageExtensions = { syncedFrom: 'smartschool', syncRunId: 'run-42' }
+  const storedItemType = {
+    identifier: 'type-1',
+    uri: '/ims/case/v1p1/CFItemTypes/type-1',
+    title: 'Standard',
+    description: 'Standard',
+    hierarchyCode: '1',
+    lastChangeDateTime: '2024-01-01T00:00:00Z',
+    extensions: { providerTypeCode: 'STD' }
+  }
+  const definitionsExtensions = { definitionsSource: 'provider-sync' }
+  const itemTypeLink = {
+    CFItemType: 'Standard',
+    CFItemTypeURI: { title: 'Standard', identifier: storedItemType.identifier, uri: storedItemType.uri }
+  }
 
-  const buildStoredPkg = (opts: { pristineMirror?: boolean } = {}) => {
+  type StoredOpts = { pristineMirror?: boolean; withDefinitions?: boolean }
+
+  const buildStoredPkg = (opts: StoredOpts = {}) => {
     const preserveUris = { preserveUris: opts.pristineMirror === true }
     const document = CFDocument.fromRaw(tenantId, caseVersion, {
       sourcedId: docId,
@@ -34,7 +51,8 @@ describe('CreateFramework — keeps stored rubrics and package extensions when o
       sourcedId: 'item-1',
       uri: '/ims/case/v1p1/CFItems/item-1',
       fullStatement: 'Original statement',
-      lastChangeDateTime: '2024-01-01T00:00:00Z'
+      lastChangeDateTime: '2024-01-01T00:00:00Z',
+      ...(opts.withDefinitions ? itemTypeLink : {})
     }, docId, document.toJSON().uri, preserveUris)
     const rubric = CFRubric.fromRaw(tenantId, caseVersion, {
       identifier: 'rubric-1',
@@ -43,7 +61,8 @@ describe('CreateFramework — keeps stored rubrics and package extensions when o
       lastChangeDateTime: '2024-01-01T00:00:00Z',
       extensions: { rubricSourceId: 'rs-1' }
     }, preserveUris)
-    return new CFPackage({ document, items: [item], associations: [], rubrics: [rubric], definitions: null, extensions: packageExtensions })
+    const definitions = opts.withDefinitions ? { CFItemTypes: [storedItemType], extensions: definitionsExtensions } : null
+    return new CFPackage({ document, items: [item], associations: [], rubrics: [rubric], definitions, extensions: packageExtensions })
   }
 
   // Shaped like an editor save: no CFRubrics and no package-level extensions.
@@ -64,7 +83,7 @@ describe('CreateFramework — keeps stored rubrics and package extensions when o
     CFAssociations: []
   })
 
-  const existingDocument = (opts: { pristineMirror?: boolean } = {}) => {
+  const existingDocument = (opts: StoredOpts = {}) => {
     const meta: DocumentMetadata = {
       sourcedId: docId,
       title: 'Framework',
@@ -131,5 +150,57 @@ describe('CreateFramework — keeps stored rubrics and package extensions when o
     const result = await createFramework.execute({ tenantId, caseVersion, payload: editorPayload() })
 
     expect((result as any).forked).toBeFalsy()
+  })
+
+  describe('CFDefinitions-level extensions', () => {
+    const withItemTypeLink = (payload: ReturnType<typeof editorPayload>) => ({
+      ...payload,
+      CFItems: payload.CFItems.map(i => ({ ...i, ...itemTypeLink }))
+    })
+
+    it('keeps the stored CFDefinitions extensions when the save sends definitions without them', async () => {
+      existingDocument({ withDefinitions: true })
+
+      await createFramework.execute({
+        tenantId,
+        caseVersion,
+        payload: { ...withItemTypeLink(editorPayload('Edited statement')), CFDefinitions: { CFItemTypes: [storedItemType] } }
+      })
+
+      expect(savedPkg().definitions).toEqual({ CFItemTypes: [storedItemType], extensions: definitionsExtensions })
+    })
+
+    it('keeps the stored CFDefinitions extensions when the save sends no CFDefinitions at all', async () => {
+      existingDocument({ withDefinitions: true })
+
+      await createFramework.execute({ tenantId, caseVersion, payload: editorPayload('Edited statement') })
+
+      expect(savedPkg().definitions?.extensions).toEqual(definitionsExtensions)
+    })
+
+    it('replaces the stored CFDefinitions extensions when the payload provides them explicitly', async () => {
+      existingDocument({ withDefinitions: true })
+
+      await createFramework.execute({
+        tenantId,
+        caseVersion,
+        payload: { ...editorPayload('Edited statement'), CFDefinitions: { extensions: { replaced: true } } }
+      })
+
+      expect(savedPkg().definitions).toEqual({ extensions: { replaced: true } })
+    })
+
+    it("re-saving a pristine mirror's own definitions unchanged neither forks nor writes a new version", async () => {
+      existingDocument({ pristineMirror: true, withDefinitions: true })
+
+      const result = await createFramework.execute({
+        tenantId,
+        caseVersion,
+        payload: { ...withItemTypeLink(editorPayload()), CFDefinitions: { CFItemTypes: [storedItemType], extensions: definitionsExtensions } }
+      })
+
+      expect((result as any).forked).toBeFalsy()
+      expect(mockRepository.saveNewVersion).not.toHaveBeenCalled()
+    })
   })
 })

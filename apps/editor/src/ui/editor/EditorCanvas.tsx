@@ -32,7 +32,7 @@ import {
 import { useEditor } from '@/ui/editor/state/EditorContext'
 import { isFrameworkNode, getNodeSize } from '@/ui/editor/state/helpers/nodeGeometry'
 import type { CaseEditorNodeType, CaseEditorEdge } from '@/ui/editor/reactflow/types'
-import type { CFAssociationGrouping, CFDocument, CFItem, CFPackage } from '@/domain/case/types'
+import type { CFAssociationGrouping, CFDocument, CFItem, CFPackage, CaseExtensions } from '@/domain/case/types'
 import type { HomeFramework } from '@/ui/home/frameworkStore'
 import { useAuth } from '@/app/providers/AuthProvider'
 import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
@@ -214,6 +214,8 @@ type EditorCanvasProps = {
   onDiscoverAlignedTargets?: (sourceId: string) => Promise<Array<{ targetId: string; alignmentDocId: string }>>
   /** Mirror/fork status of the open framework, if it was ever imported */
   mirrorStatus?: MirrorStatus
+  /** Extensions on the open framework's own CFDefinitions object — the editor can't author them, so they're carried through on save */
+  cfDefinitionsExtensions?: CaseExtensions
 }
 
 function RemoteLinkInternalsSync({
@@ -245,7 +247,7 @@ function RemoteLinkInternalsSync({
   return null
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus, cfDefinitionsExtensions }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -399,8 +401,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
   // ── Refs for save/export (keeps callbacks stable, avoids re-renders) ──
   const graphRef = useRef({ nodes, edges: editorEdges, remoteLinks })
   graphRef.current = { nodes, edges: editorEdges, remoteLinks }
-  const saveCtxRef = useRef({ caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings })
-  saveCtxRef.current = { caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings }
+  const saveCtxRef = useRef({ caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings, cfDefinitionsExtensions })
+  saveCtxRef.current = { caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings, cfDefinitionsExtensions }
 
   // Open the CFPackage viewer. Every framework open in the editor has been saved to the
   // server, so the server copy (absolute URIs, no OpenCASE extensions) is the export.
@@ -455,6 +457,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
       caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
       cfItemTypes: ctx.cfItemTypes, cfSubjects: ctx.cfSubjects,
       cfConcepts: ctx.cfConcepts, cfLicenses: ctx.cfLicenses, cfAssociationGroupings: ctx.cfAssociationGroupings,
+      definitionsExtensions: ctx.cfDefinitionsExtensions,
       remoteEditorData,
     })
     const openCasePackage = toOpenCaseFormat(cfPackage)
