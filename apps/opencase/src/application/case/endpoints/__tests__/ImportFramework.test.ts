@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { ImportFramework } from '../ImportFramework'
 import { CFPackageRepository } from '../../ports/CFPackageRepository'
 import { CaseApiClient } from '../../../../infrastructure/http/CaseApiClient'
@@ -237,6 +239,56 @@ describe('ImportFramework', () => {
       await expect(
         importFramework.execute({ tenantId, caseVersion, cfPackage: { CFItems: [] } })
       ).rejects.toThrow('Invalid CFPackage data: missing CFDocument')
+    })
+
+    describe('mistyped string fields (CGE-183)', () => {
+      // A real validator with the official schema — the same check every later save must pass.
+      const realValidator = () => {
+        const v = new JsonSchemaValidator()
+        const schemaPath = join(__dirname, '../../../../../schemas/official/case-v1p1-cfpackage.json')
+        v.addSchema('case-v1p1-cfpackage', JSON.parse(readFileSync(schemaPath, 'utf-8')))
+        return v
+      }
+
+      const itemType = (n: number, hierarchyCode: unknown) => ({
+        identifier: `00000000-0000-4000-8000-00000000000${n}`,
+        uri: `https://example.org/ims/case/v1p1/CFItemTypes/${n}`,
+        title: `Type ${n}`,
+        description: `Type ${n}`,
+        hierarchyCode,
+        lastChangeDateTime: '2024-01-01T00:00:00+00:00'
+      })
+
+      it('saves numeric hierarchyCodes as strings and still treats the import as a pristine mirror', async () => {
+        importFramework = new ImportFramework(mockRepository, mockApiClient, realValidator())
+
+        await importFramework.execute({
+          tenantId,
+          caseVersion,
+          cfPackage: {
+            CFDocument: cfDocument,
+            CFDefinitions: { CFItemTypes: [itemType(1, '1'), itemType(2, 2), itemType(3, 3)] }
+          }
+        })
+
+        const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
+        expect(savedPkg.definitions?.CFItemTypes?.map((t: any) => t.hierarchyCode)).toEqual(['1', '2', '3'])
+        expect(savedPkg.document.toJSON().extensions['ext:opencase'].isModifiedFromSource).toBe(false)
+      })
+
+      it('no longer reports the coerced fields as validation warnings', async () => {
+        importFramework = new ImportFramework(mockRepository, mockApiClient, realValidator())
+
+        const result = await importFramework.execute({
+          tenantId,
+          caseVersion,
+          cfPackage: { CFDocument: cfDocument, CFDefinitions: { CFItemTypes: [itemType(1, 1)] } },
+          validateSchema: true,
+          schemaName: 'case-v1p1-cfpackage'
+        })
+
+        expect((result.validationWarnings ?? []).join()).not.toMatch(/hierarchyCode/)
+      })
     })
 
     describe('extensions', () => {
