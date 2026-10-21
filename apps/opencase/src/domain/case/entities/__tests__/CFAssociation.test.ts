@@ -227,6 +227,56 @@ describe('CFAssociation', () => {
       });
     });
 
+    describe('nodes outside CASE (targetType, #49)', () => {
+      const itemId = '22222222-2222-4222-8222-222222222222';
+      const external = {
+        title: 'External goal 1.2.3',
+        identifier: '44444444-4444-4444-8444-444444444444',
+        uri: 'https://standards.example.org/goals/1.2.3',
+        targetType: 'ext:external'
+      };
+      const raw = {
+        identifier: '55555555-5555-4555-8555-555555555555',
+        associationType: 'isRelatedTo',
+        originNodeURI: { title: 'Item', identifier: itemId, uri: `/ims/case/v1p1/CFItems/${itemId}` },
+        destinationNodeURI: external
+      };
+
+      it('keeps a non-CASE destination exactly as supplied', () => {
+        const json = CFAssociation.fromRaw(tenantId, caseVersion, raw).toJSON();
+        expect(json.destinationNodeURI).toEqual(external);
+        expect(json.originNodeURI.uri).toBe(`/ims/case/v1p1/CFItems/${itemId}`);
+      });
+
+      it('round-trips unchanged (fromRaw → toJSON → fromRaw)', () => {
+        const first = CFAssociation.fromRaw(tenantId, caseVersion, raw).toJSON();
+        const second = CFAssociation.fromRaw(tenantId, caseVersion, first).toJSON();
+        expect(second).toEqual(first);
+      });
+
+      it('keeps targetType CASE and still rebases the uri onto the local host', () => {
+        const json = CFAssociation.fromRaw(tenantId, caseVersion, {
+          ...raw,
+          destinationNodeURI: { title: 'Item 2', identifier: 'item-2', uri: 'https://standards.example.org/ims/case/v1p1/CFItems/item-2', targetType: 'CASE' }
+        }).toJSON();
+        expect(json.destinationNodeURI).toEqual({
+          title: 'Item 2', identifier: 'item-2', uri: '/ims/case/v1p1/CFItems/item-2', targetType: 'CASE'
+        });
+      });
+
+      it('drops targetType when serialized as CASE 1.0', () => {
+        const json = CFAssociation.fromRaw(tenantId, caseVersion, raw).toJSON('1.0');
+        expect(json.destinationNodeURI.targetType).toBeUndefined();
+        expect(json.destinationNodeURI.uri).toBe(external.uri);
+      });
+
+      it('does not lose targetType on the entity after a CASE 1.0 serialization', () => {
+        const assoc = CFAssociation.fromRaw(tenantId, caseVersion, raw);
+        assoc.toJSON('1.0');
+        expect(assoc.toJSON().destinationNodeURI.targetType).toBe('ext:external');
+      });
+    });
+
     it('should rewrite CFAssociationGroupingURI to the local host on import', () => {
       const raw = {
         sourcedId: 'assoc-123',
