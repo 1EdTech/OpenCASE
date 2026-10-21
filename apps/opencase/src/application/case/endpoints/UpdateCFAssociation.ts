@@ -54,7 +54,9 @@ export class UpdateCFAssociation {
     }
 
     // Update the specific association
-    const updatedAssociation = CFAssociation.fromRaw(tenantId, caseVersion, payload)
+    const updatedAssociation = CFAssociation.fromRaw(tenantId, caseVersion, payload, {
+      documentIdentifiers: [existingPkg.document.sourcedId]
+    })
     
     // Replace the association in the associations array
     const associations = existingPkg.associations.map(a => 

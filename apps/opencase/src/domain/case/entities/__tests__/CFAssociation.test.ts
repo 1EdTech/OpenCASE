@@ -129,6 +129,104 @@ describe('CFAssociation', () => {
       expect(json.destinationNodeURI.identifier).toBe('item-2');
     });
 
+    describe('node URIs pointing at a CFDocument (#44)', () => {
+      const docId = '11111111-1111-4111-8111-111111111111';
+      const itemId = '22222222-2222-4222-8222-222222222222';
+
+      it('keeps a /CFDocuments/ destination when the source URI points at a CFDocument', () => {
+        const raw = {
+          identifier: '33333333-3333-4333-8333-333333333333',
+          associationType: 'exactMatchOf',
+          originNodeURI: { title: 'Mathematics', identifier: itemId, uri: `https://opencase.example.org/ims/case/v1p1/CFItems/${itemId}` },
+          destinationNodeURI: { title: 'Primary Education – Mathematics', identifier: docId, uri: `https://opencase.example.org/ims/case/v1p1/CFDocuments/${docId}` }
+        };
+
+        const json = CFAssociation.fromRaw(tenantId, caseVersion, raw).toJSON();
+
+        expect(json.originNodeURI.uri).toBe(`/ims/case/v1p1/CFItems/${itemId}`);
+        expect(json.destinationNodeURI.uri).toBe(`/ims/case/v1p1/CFDocuments/${docId}`);
+        expect(json.destinationNodeURI.identifier).toBe(docId);
+      });
+
+      it('recognises relative, foreign-host and other-version CFDocuments URIs', () => {
+        for (const uri of [
+          `/ims/case/v1p1/CFDocuments/${docId}`,
+          `https://standards.example.org/ims/case/v1p0/CFDocuments/${docId}/`,
+          `https://standards.example.org/ims/case/v1p1/CFDocuments/${docId}?x=1`
+        ]) {
+          const raw = {
+            identifier: 'assoc-1',
+            associationType: 'isChildOf',
+            originNodeURI: { title: 'Item', identifier: itemId, uri: `/ims/case/v1p1/CFItems/${itemId}` },
+            destinationNodeURI: { title: 'Doc', identifier: docId, uri }
+          };
+          expect(CFAssociation.fromRaw(tenantId, caseVersion, raw).toJSON().destinationNodeURI.uri)
+            .toBe(`/ims/case/v1p1/CFDocuments/${docId}`);
+        }
+      });
+
+      it('uses the CASE version of the package for the CFDocuments path', () => {
+        const raw = {
+          identifier: 'assoc-1',
+          associationType: 'isChildOf',
+          originNodeURI: { title: 'Item', identifier: itemId, uri: `/ims/case/v1p0/CFItems/${itemId}` },
+          destinationNodeURI: { title: 'Doc', identifier: docId, uri: `/ims/case/v1p1/CFDocuments/${docId}` }
+        };
+        expect(CFAssociation.fromRaw(tenantId, '1.0', raw).toJSON().destinationNodeURI.uri)
+          .toBe(`/ims/case/v1p0/CFDocuments/${docId}`);
+      });
+
+      it('treats a urn:case:document: URN as a CFDocument', () => {
+        const raw = {
+          identifier: 'assoc-1',
+          associationType: 'isChildOf',
+          originNodeURI: { title: 'Item', identifier: itemId, uri: `urn:case:item:${itemId}` },
+          destinationNodeURI: { title: 'Doc', identifier: docId, uri: `urn:case:document:${docId}` }
+        };
+        const json = CFAssociation.fromRaw(tenantId, caseVersion, raw).toJSON();
+        expect(json.originNodeURI.uri).toBe(`/ims/case/v1p1/CFItems/${itemId}`);
+        expect(json.destinationNodeURI.uri).toBe(`/ims/case/v1p1/CFDocuments/${docId}`);
+      });
+
+      it('uses /CFDocuments/ for a known document identifier, even when the source URI says CFItems or is missing', () => {
+        const raw = {
+          identifier: 'assoc-1',
+          associationType: 'isChildOf',
+          originNodeURI: { title: 'Item', identifier: itemId, uri: `/ims/case/v1p1/CFItems/${itemId}` },
+          destinationNodeURI: { title: 'Doc', identifier: docId, uri: `/ims/case/v1p1/CFItems/${docId}` }
+        };
+        expect(CFAssociation.fromRaw(tenantId, caseVersion, raw, { documentIdentifiers: [docId] }).toJSON().destinationNodeURI.uri)
+          .toBe(`/ims/case/v1p1/CFDocuments/${docId}`);
+
+        const legacy = { sourcedId: 'assoc-2', originNode: itemId, destinationNode: docId, associationType: 'isChildOf' };
+        expect(CFAssociation.fromRaw(tenantId, caseVersion, legacy, { documentIdentifiers: [docId] }).toJSON().destinationNodeURI.uri)
+          .toBe(`/ims/case/v1p1/CFDocuments/${docId}`);
+      });
+
+      it('does not treat a CFDocuments URI for a different identifier as a document', () => {
+        const raw = {
+          identifier: 'assoc-1',
+          associationType: 'isChildOf',
+          originNodeURI: { title: 'Item', identifier: itemId, uri: `/ims/case/v1p1/CFItems/${itemId}` },
+          destinationNodeURI: { title: 'Other', identifier: 'item-2', uri: `/ims/case/v1p1/CFDocuments/${docId}` }
+        };
+        expect(CFAssociation.fromRaw(tenantId, caseVersion, raw).toJSON().destinationNodeURI.uri)
+          .toBe('/ims/case/v1p1/CFItems/item-2');
+      });
+
+      it('is stable on reload: a stored /CFDocuments/ URI stays a /CFDocuments/ URI', () => {
+        const raw = {
+          identifier: 'assoc-1',
+          associationType: 'isChildOf',
+          originNodeURI: { title: 'Item', identifier: itemId, uri: `/ims/case/v1p1/CFItems/${itemId}` },
+          destinationNodeURI: { title: 'Doc', identifier: docId, uri: `https://opencase.example.org/ims/case/v1p1/CFDocuments/${docId}` }
+        };
+        const first = CFAssociation.fromRaw(tenantId, caseVersion, raw).toJSON();
+        const second = CFAssociation.fromRaw(tenantId, caseVersion, first).toJSON();
+        expect(second.destinationNodeURI).toEqual(first.destinationNodeURI);
+      });
+    });
+
     it('should rewrite CFAssociationGroupingURI to the local host on import', () => {
       const raw = {
         sourcedId: 'assoc-123',
