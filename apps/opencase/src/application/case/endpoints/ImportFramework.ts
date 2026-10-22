@@ -160,7 +160,7 @@ export class ImportFramework {
     const docURI = docJSON.uri
     const items = (payload.CFItems ?? []).map(i => CFItem.fromRaw(tenantId, caseVersion, i, docId, docURI, preserveUris))
     const associations = (payload.CFAssociations ?? []).map(a =>
-      CFAssociation.fromRaw(tenantId, caseVersion, a, preserveUris)
+      CFAssociation.fromRaw(tenantId, caseVersion, a, { ...preserveUris, documentIdentifiers: [docId] })
     )
     const rubrics = (payload.CFRubrics ?? []).map(r =>
       CFRubric.fromRaw(tenantId, caseVersion, r, preserveUris)

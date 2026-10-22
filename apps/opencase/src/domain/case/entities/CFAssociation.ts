@@ -28,7 +28,17 @@ export class CFAssociation {
     return new CFAssociation(props);
   }
 
-  static fromRaw(tenantId: TenantId, caseVersion: CaseVersion, raw: any, options?: { preserveUris?: boolean }): CFAssociation {
+  /**
+   * @param options.preserveUris        keep the source's identifiers and URIs exactly as supplied (mirrored frameworks)
+   * @param options.documentIdentifiers identifiers known to be CFDocuments (e.g. the package's own CFDocument);
+   *                                    association nodes with one of these identifiers get a /CFDocuments/{id} URI
+   */
+  static fromRaw(
+    tenantId: TenantId,
+    caseVersion: CaseVersion,
+    raw: any,
+    options?: { preserveUris?: boolean, documentIdentifiers?: Iterable<string> }
+  ): CFAssociation {
     // Extract identifier from URN if present (priority over sourcedId/identifier)
     let identifier = raw.sourcedId || raw.identifier
     let uri = raw.uri
@@ -56,38 +66,15 @@ export class CFAssociation {
       originNodeURI = raw.originNodeURI
       destinationNodeURI = raw.destinationNodeURI
     } else {
-      // originNodeURI/destinationNodeURI always reference a CFItem (or CFDocument)
-      // within the SAME package being imported, so — like CFItem.CFDocumentURI —
-      // their uri is always regenerated to point at the local host, regardless of
-      // what URI shape (URN, absolute foreign-host URL, or relative path) the
-      // source supplied. Only the identifier is trusted from the source data.
-      let originId = raw.originNodeURI?.identifier ?? raw.originNode ?? 'unknown'
-      const originUriFromSource = raw.originNodeURI?.uri
-      if (originUriFromSource && UrnCaseUriHelper.isUrnCaseUri(originUriFromSource)) {
-        const parsed = UrnCaseUriHelper.parseUrnCaseUri(originUriFromSource)
-        if (parsed) {
-          originId = parsed.identifier || originId
-        }
-      }
-      originNodeURI = {
-        title: raw.originNodeURI?.title ?? String(originId),
-        identifier: originId,
-        uri: this.generateItemURI(tenantId, caseVersion, originId)
-      }
-
-      let destinationId = raw.destinationNodeURI?.identifier ?? raw.destinationNode ?? 'unknown'
-      const destinationUriFromSource = raw.destinationNodeURI?.uri
-      if (destinationUriFromSource && UrnCaseUriHelper.isUrnCaseUri(destinationUriFromSource)) {
-        const parsed = UrnCaseUriHelper.parseUrnCaseUri(destinationUriFromSource)
-        if (parsed) {
-          destinationId = parsed.identifier || destinationId
-        }
-      }
-      destinationNodeURI = {
-        title: raw.destinationNodeURI?.title ?? String(destinationId),
-        identifier: destinationId,
-        uri: this.generateItemURI(tenantId, caseVersion, destinationId)
-      }
+      // originNodeURI/destinationNodeURI reference a CFItem or a CFDocument, so —
+      // like CFItem.CFDocumentURI — their uri is always regenerated to point at the
+      // local host, regardless of what URI shape (URN, absolute foreign-host URL, or
+      // relative path) the source supplied. Only the identifier, and whether the node
+      // is a CFDocument or a CFItem, are trusted from the source data. Nodes with a
+      // non-CASE targetType are kept as supplied (see buildNodeLinkData).
+      const documentIdentifiers = new Set<string>(options?.documentIdentifiers ?? [])
+      originNodeURI = this.buildNodeLinkData(tenantId, caseVersion, raw.originNodeURI, raw.originNode, documentIdentifiers)
+      destinationNodeURI = this.buildNodeLinkData(tenantId, caseVersion, raw.destinationNodeURI, raw.destinationNode, documentIdentifiers)
     }
 
     // CFAssociationGroupingURI references a per-tenant definition entity that
@@ -127,6 +114,77 @@ export class CFAssociation {
     return `${basePath}/CFItems/${identifier}`;
   }
 
+  private static generateDocumentURI(tenantId: TenantId, caseVersion: CaseVersion, identifier: string): string {
+    const basePath = caseVersion === '1.1' ? '/ims/case/v1p1' : '/ims/case/v1p0';
+    return `${basePath}/CFDocuments/${identifier}`;
+  }
+
+  /**
+   * Builds the local LinkData for an association node (origin or destination).
+   * The node is treated as a CFDocument when its identifier is a known document
+   * identifier, when the source supplied a `urn:case:document:` URN, or when the
+   * source URI (relative or absolute, any CASE version) points at
+   * `/CFDocuments/{identifier}`. Otherwise it is a CFItem.
+   */
+  private static buildNodeLinkData(
+    tenantId: TenantId,
+    caseVersion: CaseVersion,
+    link: any,
+    legacyNodeId: unknown,
+    documentIdentifiers: Set<string>
+  ): LinkData {
+    // CASE 1.1 lets an association point outside CASE (spec §1.9.3). A node whose
+    // targetType is anything other than 'CASE' is not served by OpenCASE, so it is
+    // kept exactly as supplied: original uri and targetType.
+    const targetType: unknown = link?.targetType
+    if (typeof targetType === 'string' && targetType !== 'CASE' && link?.uri) {
+      return {
+        title: link.title ?? String(link.identifier ?? legacyNodeId ?? link.uri),
+        identifier: link.identifier ?? legacyNodeId ?? link.uri,
+        uri: link.uri,
+        targetType
+      }
+    }
+
+    let id = link?.identifier ?? legacyNodeId ?? 'unknown'
+    const uriFromSource: unknown = link?.uri
+    let isDocument = false
+
+    if (typeof uriFromSource === 'string' && UrnCaseUriHelper.isUrnCaseUri(uriFromSource)) {
+      const parsed = UrnCaseUriHelper.parseUrnCaseUri(uriFromSource)
+      if (parsed) {
+        id = parsed.identifier || id
+        isDocument = parsed.type === 'document'
+      }
+    } else if (typeof uriFromSource === 'string') {
+      isDocument = this.isDocumentUri(uriFromSource, String(id))
+    }
+
+    if (documentIdentifiers.has(String(id))) isDocument = true
+
+    const result: LinkData = {
+      title: link?.title ?? String(id),
+      identifier: id,
+      uri: isDocument
+        ? this.generateDocumentURI(tenantId, caseVersion, id)
+        : this.generateItemURI(tenantId, caseVersion, id)
+    }
+    if (targetType === 'CASE') result.targetType = targetType
+    return result
+  }
+
+  /** True when `uri` is a CASE CFDocuments URI for `identifier` (e.g. `…/ims/case/v1p1/CFDocuments/{identifier}`). */
+  private static isDocumentUri(uri: string, identifier: string): boolean {
+    const path = uri.split(/[?#]/)[0].replace(/\/+$/, '')
+    const match = path.match(/\/CFDocuments\/([^/]+)$/)
+    if (!match) return false
+    try {
+      return decodeURIComponent(match[1]) === identifier
+    } catch {
+      return match[1] === identifier
+    }
+  }
+
   private static createLinkDataFromString(nodeId: string, tenantId: TenantId, caseVersion: CaseVersion): LinkData {
     return {
       title: nodeId,
@@ -155,10 +213,13 @@ export class CFAssociation {
     if (effectiveVersion === '1.0') {
       delete result.notes
       delete result.extensions
-      if (result.originNodeURI && typeof result.originNodeURI === 'object') delete result.originNodeURI.targetType
-      if (result.destinationNodeURI && typeof result.destinationNodeURI === 'object') delete result.destinationNodeURI.targetType
-      if (result.CFDocumentURI && typeof result.CFDocumentURI === 'object') delete result.CFDocumentURI.targetType
-      if (result.CFAssociationGroupingURI && typeof result.CFAssociationGroupingURI === 'object') delete result.CFAssociationGroupingURI.targetType
+      // Copy before stripping so the entity's own LinkData keeps targetType.
+      for (const key of ['originNodeURI', 'destinationNodeURI', 'CFDocumentURI', 'CFAssociationGroupingURI']) {
+        if (result[key] && typeof result[key] === 'object') {
+          const { targetType: _targetType, ...link } = result[key]
+          result[key] = link
+        }
+      }
     }
     
     return result;

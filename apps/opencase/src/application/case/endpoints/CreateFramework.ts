@@ -169,7 +169,7 @@ export class CreateFramework {
       return {
         document: doc,
         items: itemsPayload.map((i: any) => CFItem.fromRaw(tenantId, caseVersion, i, dId, dURI, uriOptions)),
-        associations: assocPayload.map((a: any) => CFAssociation.fromRaw(tenantId, caseVersion, a, uriOptions)),
+        associations: assocPayload.map((a: any) => CFAssociation.fromRaw(tenantId, caseVersion, a, { ...uriOptions, documentIdentifiers: [dId] })),
         rubrics: rubricsPayload.map((r: any) => CFRubric.fromRaw(tenantId, caseVersion, r, uriOptions))
       }
     }
@@ -295,7 +295,7 @@ export class CreateFramework {
       CFItem.fromRaw(tenantId, caseVersion, i, docId, docURI, preserveUris)
     )
     const associations = cfAssociationsPayload.map((a: any) =>
-      CFAssociation.fromRaw(tenantId, caseVersion, a, preserveUris)
+      CFAssociation.fromRaw(tenantId, caseVersion, a, { ...preserveUris, documentIdentifiers: [docId] })
     )
     const rubrics = cfRubricsPayload.map((r: any) =>
       CFRubric.fromRaw(tenantId, caseVersion, r, preserveUris)
