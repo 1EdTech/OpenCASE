@@ -63,6 +63,15 @@ function ensureUuid(id: string): string {
  * URI format specification for CASE entities.
  * Uses the official CASE v1p1 REST endpoint format.
  */
+/**
+ * CASE 1.1 (§1.9.3): a node whose targetType is anything other than 'CASE' points
+ * outside CASE. Its identifier, uri and title belong to the external source and
+ * must be kept verbatim.
+ */
+function isNonCaseTarget(targetType: string | undefined): targetType is string {
+  return targetType !== undefined && targetType !== 'CASE'
+}
+
 function makeDocumentUri(uuid: string): string {
   return `/ims/case/v1p1/CFDocuments/${uuid}`
 }
@@ -262,8 +271,6 @@ function associationToCfAssociation(
   // Get item titles for the link URIs
   const fromItem = framework.items.get(assoc.fromItemId)
   const toItem = framework.items.get(assoc.toItemId)
-  const fromTitle = fromItem?.statement ?? `Item ${fromId}`
-  const toTitle = toItem?.statement ?? `Item ${toId}`
   
   const s = (k: string): string | undefined => {
     const v = md[k]
@@ -273,6 +280,11 @@ function associationToCfAssociation(
     const v = md[k]
     return typeof v === 'number' ? v : undefined
   }
+
+  const fromTitle = fromItem?.statement ?? s('originTitle') ?? `Item ${fromId}`
+  const toTitle = toItem?.statement ?? s('destinationTitle') ?? `Item ${toId}`
+  const originTargetType = s('originTargetType')
+  const destinationTargetType = s('destinationTargetType')
 
   const existingExtensions = (md.extensions as CaseExtensions | undefined) ?? undefined
   const remoteExt = (existingExtensions?.[OPENCASE_EXT_KEY] as { remoteLink?: boolean; remoteItemUri?: string; remoteItemIdentifier?: string; remoteLabel?: string; localItemUri?: string } | undefined)
@@ -301,6 +313,7 @@ function associationToCfAssociation(
           identifier: fromId,
           uri: s('originUri') ?? `urn:case:item:${fromId}`,
           title: fromTitle,
+          ...(originTargetType ? { targetType: originTargetType } : {}),
         },
     destinationNodeURI: isRemoteLink
       ? {
@@ -312,6 +325,7 @@ function associationToCfAssociation(
           identifier: toId,
           uri: s('destinationUri') ?? `urn:case:item:${toId}`,
           title: toTitle,
+          ...(destinationTargetType ? { targetType: destinationTargetType } : {}),
         },
     sequenceNumber: n('sequenceNumber'),
     CFAssociationGroupingURI: s('CFAssociationGroupingIdentifier')
@@ -522,6 +536,7 @@ export type CaseLinkURI = {
   title: string
   identifier: string
   uri: string
+  targetType?: string
 }
 
 /**
@@ -752,21 +767,25 @@ export function toOpenCaseFormat(cfPackage: CFPackage): CaseV1p1Package {
     // Only fall back to reconstruction for a genuinely new/placeholder value.
     const originUri = resolveUri(a.originNodeURI.uri, `urn:case:item:${originInternalId}`, () => resolveNodeUri(originInternalId, originId))
     const destUri = resolveUri(a.destinationNodeURI.uri, `urn:case:item:${destInternalId}`, () => resolveNodeUri(destInternalId, destId))
+    const toNodeLink = (link: CFAssociation['originNodeURI'], internalId: string, id: string, uri: string, defaultTitle: string): CaseLinkURI => {
+      // Non-CASE targets are not ours to normalize: no UUID coercion, no uri rewrite.
+      if (isNonCaseTarget(link.targetType)) {
+        return { title: link.title ?? internalId, identifier: internalId, uri: link.uri, targetType: link.targetType }
+      }
+      return {
+        title: link.title ?? defaultTitle,
+        identifier: id,
+        uri,
+        ...(link.targetType ? { targetType: link.targetType } : {}),
+      }
+    }
 
     return {
       identifier: assocId,
       uri: assocUri,
       associationType: a.associationType,
-      originNodeURI: {
-        title: a.originNodeURI.title ?? 'Origin',
-        identifier: originId,
-        uri: originUri,
-      },
-      destinationNodeURI: {
-        title: a.destinationNodeURI.title ?? 'Destination',
-        identifier: destId,
-        uri: destUri,
-      },
+      originNodeURI: toNodeLink(a.originNodeURI, originInternalId, originId, originUri, 'Origin'),
+      destinationNodeURI: toNodeLink(a.destinationNodeURI, destInternalId, destId, destUri, 'Destination'),
       lastChangeDateTime: a.lastChangeDateTime,
       sequenceNumber: a.sequenceNumber,
       CFAssociationGroupingURI: a.CFAssociationGroupingURI ? {

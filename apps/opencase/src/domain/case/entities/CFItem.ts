@@ -172,18 +172,11 @@ export class CFItem {
       delete result.subjectURI
       delete result.extensions
       // LinkGenURI.targetType is a CASE 1.1 addition; if present in LinkData, remove it.
-      if (result.CFDocumentURI && typeof result.CFDocumentURI === 'object') {
-        delete result.CFDocumentURI.targetType
-      }
-      if (result.CFItemTypeURI && typeof result.CFItemTypeURI === 'object') {
-        delete result.CFItemTypeURI.targetType
-      }
-      if (result.conceptKeywordsURI && typeof result.conceptKeywordsURI === 'object') {
-        delete result.conceptKeywordsURI.targetType
-      }
-      if (Array.isArray(result.subjectURI)) {
-        for (const s of result.subjectURI) {
-          if (s && typeof s === 'object') delete s.targetType
+      // Copy before stripping so the entity's own LinkData keeps targetType.
+      for (const key of ['CFDocumentURI', 'CFItemTypeURI', 'conceptKeywordsURI']) {
+        if (result[key] && typeof result[key] === 'object') {
+          const { targetType: _targetType, ...link } = result[key]
+          result[key] = link
         }
       }
     }
