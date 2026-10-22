@@ -100,6 +100,12 @@ export type CaseAssociationSnapshot = {
   destinationIdentifier?: string
   originUri?: string
   destinationUri?: string
+  /** Title supplied on the origin/destination node link */
+  originTitle?: string
+  destinationTitle?: string
+  /** v1p1: targetType of the origin/destination node (absent or 'CASE' for CASE targets) */
+  originTargetType?: string
+  destinationTargetType?: string
   /**
    * v1p1: Sequence number for ordering associations.
    * Lower numbers appear first in ordered contexts.

@@ -107,7 +107,7 @@ function extractIdFromUri(uri?: string): string | undefined {
  * v1p0 format: "https://example.com/CFItems/123" (string)
  * v1p1 format: { identifier: "123", uri: "https://...", title?: "...", targetType?: "..." }
  */
-function extractLinkIdentifier(link: unknown): { identifier?: string; uri?: string } {
+function extractLinkIdentifier(link: unknown): { identifier?: string; uri?: string; title?: string; targetType?: string } {
   const obj = asRecord(link)
 
   // v1p0: Plain URI string
@@ -121,7 +121,12 @@ function extractLinkIdentifier(link: unknown): { identifier?: string; uri?: stri
   const identifier = asString(obj.identifier) ?? asString(obj.sourcedId) ?? undefined
   const uri = asString(obj.uri) ?? undefined
 
-  return { identifier: identifier ?? extractIdFromUri(uri), uri }
+  return {
+    identifier: identifier ?? extractIdFromUri(uri),
+    uri,
+    title: asString(obj.title) ?? undefined,
+    targetType: asString(obj.targetType) ?? undefined,
+  }
 }
 
 /**
@@ -276,6 +281,10 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
         destinationIdentifier: dest.identifier,
         originUri: origin.uri,
         destinationUri: dest.uri,
+        originTitle: origin.title,
+        destinationTitle: dest.title,
+        originTargetType: origin.targetType,
+        destinationTargetType: dest.targetType,
         // v1p1: sequenceNumber for ordering within associations
         sequenceNumber: asNumber(r.sequenceNumber),
         CFAssociationGroupingIdentifier: groupingLink.identifier,

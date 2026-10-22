@@ -169,6 +169,26 @@ describe('CFItem', () => {
       expect(json.caseVersion).toBeUndefined();
       expect(json.sourcedId).toBeUndefined();
     });
+
+    it('drops targetType for CASE 1.0 without losing it on the entity', () => {
+      const item = CFItem.create({
+        tenantId,
+        caseVersion,
+        sourcedId: 'item-123',
+        uri: '/ims/case/v1p1/CFItems/item-123',
+        fullStatement: 'Test statement',
+        lastChangeDateTime: new Date('2024-01-01T00:00:00Z'),
+        CFDocumentURI: {
+          title: 'Document',
+          identifier: 'doc-123',
+          uri: '/ims/case/v1p1/CFDocuments/doc-123',
+          targetType: 'CASE'
+        }
+      });
+
+      expect(item.toJSON('1.0').CFDocumentURI.targetType).toBeUndefined();
+      expect(item.toJSON().CFDocumentURI.targetType).toBe('CASE');
+    });
   });
 });
 

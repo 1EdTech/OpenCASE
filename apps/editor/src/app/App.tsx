@@ -775,6 +775,7 @@ function AppInner() {
         onDiscoverAlignedTargets={tenantId ? handleDiscoverAlignedTargets : undefined}
         mirrorStatus={activeFramework.mirrorStatus}
         cfDefinitionsExtensions={activeCfDefinitions?.extensions}
+        loadedFramework={activeFramework.framework}
       />
     </EditorProvider>
   )

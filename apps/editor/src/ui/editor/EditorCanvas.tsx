@@ -39,6 +39,7 @@ import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
 import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
 import type { Framework } from '@/domain/framework/model/types'
 import { hasFrameworkDataChanged } from '@/domain/framework/hasFrameworkDataChanged'
+import { withOffCanvasAssociations } from '@/domain/framework/offCanvasAssociations'
 
 // ── Stable ReactFlow config (module scope — never recreated) ──────────────
 //
@@ -216,6 +217,8 @@ type EditorCanvasProps = {
   mirrorStatus?: MirrorStatus
   /** Extensions on the open framework's own CFDefinitions object — the editor can't author them, so they're carried through on save */
   cfDefinitionsExtensions?: CaseExtensions
+  /** The framework as loaded — its associations to nodes outside this framework have no canvas edge, so they're carried through on save */
+  loadedFramework?: Framework
 }
 
 function RemoteLinkInternalsSync({
@@ -247,7 +250,7 @@ function RemoteLinkInternalsSync({
   return null
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus, cfDefinitionsExtensions }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus, cfDefinitionsExtensions, loadedFramework }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -353,7 +356,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
   // gate below — so a single per-mount baseline is sufficient.
   const baselineFrameworkRef = useRef<Framework | null>(null)
   if (baselineFrameworkRef.current === null) {
-    baselineFrameworkRef.current = fromEditorGraph({ graph: { nodes, edges: editorEdges } }).framework
+    const baseline = fromEditorGraph({ graph: { nodes, edges: editorEdges } }).framework
+    baselineFrameworkRef.current = loadedFramework ? withOffCanvasAssociations(loadedFramework, baseline) : baseline
   }
   const pendingSaveRef = useRef<{ openCasePackage: ReturnType<typeof toOpenCaseFormat>; framework: Framework } | null>(null)
 
@@ -401,8 +405,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
   // ── Refs for save/export (keeps callbacks stable, avoids re-renders) ──
   const graphRef = useRef({ nodes, edges: editorEdges, remoteLinks })
   graphRef.current = { nodes, edges: editorEdges, remoteLinks }
-  const saveCtxRef = useRef({ caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings, cfDefinitionsExtensions })
-  saveCtxRef.current = { caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings, cfDefinitionsExtensions }
+  const saveCtxRef = useRef({ caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings, cfDefinitionsExtensions, loadedFramework })
+  saveCtxRef.current = { caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings, cfDefinitionsExtensions, loadedFramework }
 
   // Open the CFPackage viewer. Every framework open in the editor has been saved to the
   // server, so the server copy (absolute URIs, no OpenCASE extensions) is the export.
@@ -451,7 +455,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
   const handleSave = useCallback(async () => {
     const { nodes: n, edges: e, remoteLinks: rl } = graphRef.current
     const ctx = saveCtxRef.current
-    const { framework, layout, remoteEditorData } = fromEditorGraph({ graph: { nodes: n, edges: e, remoteLinks: rl } })
+    const fromGraph = fromEditorGraph({ graph: { nodes: n, edges: e, remoteLinks: rl } })
+    const { layout, remoteEditorData } = fromGraph
+    const framework = ctx.loadedFramework ? withOffCanvasAssociations(ctx.loadedFramework, fromGraph.framework) : fromGraph.framework
     const cfPackage = frameworkToCfPackage({
       framework, layout,
       caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,

@@ -61,6 +61,14 @@ export type AssociationMetadata = {
   originUri?: string
   /** Canonical URI of the destination (to) item — must be preserved verbatim for cross-framework associations */
   destinationUri?: string
+  /** Title supplied on the origin node link — used when the origin is not an item in this framework */
+  originTitle?: string
+  /** Title supplied on the destination node link — used when the destination is not an item in this framework */
+  destinationTitle?: string
+  /** CASE 1.1 targetType of the origin node; anything other than 'CASE' is a non-CASE target, kept verbatim */
+  originTargetType?: string
+  /** CASE 1.1 targetType of the destination node; anything other than 'CASE' is a non-CASE target, kept verbatim */
+  destinationTargetType?: string
   sequenceNumber?: number
   /** Edge handle position on the origin node — persists user-defined anchor points */
   originHandle?: string
