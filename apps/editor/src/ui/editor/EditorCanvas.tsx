@@ -219,6 +219,8 @@ type EditorCanvasProps = {
   cfDefinitionsExtensions?: CaseExtensions
   /** The framework as loaded — its associations to nodes outside this framework have no canvas edge, so they're carried through on save */
   loadedFramework?: Framework
+  /** Resolve which framework holds each item (item id → framework id); used by the tree view for inline associations */
+  onResolveItemFrameworks?: (itemIds: string[]) => Promise<Record<string, string>>
 }
 
 function RemoteLinkInternalsSync({
@@ -250,7 +252,7 @@ function RemoteLinkInternalsSync({
   return null
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus, cfDefinitionsExtensions, loadedFramework }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus, cfDefinitionsExtensions, loadedFramework, onResolveItemFrameworks }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -1787,6 +1789,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
             onSaveAlignments={onSaveAlignments}
             onLoadAlignmentsForTarget={onLoadAlignmentsForTarget}
             onDiscoverAlignedTargets={onDiscoverAlignedTargets}
+            loadedFramework={loadedFramework}
+            onResolveItemFrameworks={onResolveItemFrameworks}
           />
         </div>
       ) : null}

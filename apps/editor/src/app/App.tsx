@@ -5,6 +5,7 @@ import HomeScreen from '@/ui/home/HomeScreen'
 import { createNewFrameworkDraft, createHomeFrameworkFromDomain, loadFrameworks, saveFrameworks, type HomeFramework } from '@/ui/home/frameworkStore'
 import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 import type { Framework } from '@/domain/framework/model/types'
+import type { ItemId } from '@/domain/shared/types'
 import { AuthProvider, useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
 import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/CaseApiClient'
@@ -657,6 +658,38 @@ function AppInner() {
     [api, tenantId],
   )
 
+  // Frameworks already in the session, read through a ref so the resolver below keeps a stable identity.
+  const frameworksRef = useRef(frameworks)
+  frameworksRef.current = frameworks
+
+  // Which framework holds each item: frameworks already in the session first, then the server
+  // (an item's CFDocumentURI). Used to place inline associations to other frameworks in the tree view.
+  const handleResolveItemFrameworks = useCallback(
+    async (itemIds: string[]): Promise<Record<string, string>> => {
+      const result: Record<string, string> = {}
+      const queue: string[] = []
+      for (const id of itemIds) {
+        const local = frameworksRef.current.find((f) => f.framework.items.has(id as ItemId))
+        if (local) result[id] = local.id
+        else queue.push(id)
+      }
+
+      const worker = async () => {
+        for (let id = queue.shift(); id !== undefined; id = queue.shift()) {
+          try {
+            const docId = await api.getCfItemDocumentId({ itemId: id, caseVersion: caseApiVersion })
+            if (docId) result[id] = docId
+          } catch (err) {
+            console.warn('[App] Failed to resolve the framework of item', id, err)
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(6, queue.length) }, worker))
+      return result
+    },
+    [api, caseApiVersion],
+  )
+
   const handleLoadAlignmentsForTarget = useCallback(
     async (targetId: string): Promise<{
       docId: string
@@ -773,6 +806,7 @@ function AppInner() {
         onSaveAlignments={tenantId ? handleSaveAlignments : undefined}
         onLoadAlignmentsForTarget={tenantId ? handleLoadAlignmentsForTarget : undefined}
         onDiscoverAlignedTargets={tenantId ? handleDiscoverAlignedTargets : undefined}
+        onResolveItemFrameworks={handleResolveItemFrameworks}
         mirrorStatus={activeFramework.mirrorStatus}
         cfDefinitionsExtensions={activeCfDefinitions?.extensions}
         loadedFramework={activeFramework.framework}

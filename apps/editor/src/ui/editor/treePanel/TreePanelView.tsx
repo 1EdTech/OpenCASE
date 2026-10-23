@@ -5,6 +5,8 @@ import { buildFrameworkTree, type FrameworkEdgeRecord, type FrameworkTreeNode } 
 import type { CFItem } from '@/domain/case/types'
 import type { HomeFramework } from '@/ui/home/frameworkStore'
 import type { Framework } from '@/domain/framework/model/types'
+import type { ItemId } from '@/domain/shared/types'
+import { groupInlineAlignmentsByTarget, inlineAlignmentsOf } from '@/domain/framework/inlineAlignments'
 import FrameworkTreeList from './FrameworkTreeList'
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -19,6 +21,11 @@ type PendingAssociation = {
   originUri: string
   /** Canonical URI of the destination item — preserved for correct serialization when external frameworks are involved */
   destinationUri: string
+  /**
+   * True for an association stored in the framework's own CFPackage (not in an alignment document).
+   * Shown read-only and never written to an alignment document, so it isn't duplicated there.
+   */
+  inline?: boolean
 }
 
 // Module-scope stable reference (never recreated) — passed as a no-op
@@ -40,6 +47,8 @@ type LineCoord = {
   midY: number
   /** True when one or both endpoints are ancestors (item is collapsed). Clicking expands to reveal items. */
   isDashed: boolean
+  /** True for an association stored in the framework itself (see PendingAssociation.inline) */
+  isInline: boolean
 }
 
 type PopoverState = {
@@ -80,6 +89,10 @@ type Props = {
   onLoadAlignmentsForTarget?: (targetId: string) => Promise<AlignmentPreload>
   /** Called once on mount to discover all frameworks that already have saved alignments with the source. Used to pre-populate the target list. */
   onDiscoverAlignedTargets?: (sourceId: string) => Promise<Array<{ targetId: string; alignmentDocId: string }>>
+  /** The framework as loaded — its own non-hierarchical associations are shown as (read-only) alignments. */
+  loadedFramework?: Framework
+  /** Resolves which framework holds each item (item id → framework id), to place inline associations to other frameworks. */
+  onResolveItemFrameworks?: (itemIds: string[]) => Promise<Record<string, string>>
 }
 
 // ── Helpers: build tree data from a domain Framework ──────────────────────
@@ -172,7 +185,7 @@ function findNearestVisible(
 
 // ── Component ─────────────────────────────────────────────────────────────
 
-export default function TreePanelView({ availableFrameworks = [], serverFrameworks = [], onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets }: Props) {
+export default function TreePanelView({ availableFrameworks = [], serverFrameworks = [], onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, loadedFramework, onResolveItemFrameworks }: Props) {
   const {
     nodes,
     cfItems,
@@ -192,6 +205,13 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
   const [targets, setTargets] = useState<TargetEntry[]>([])
   const [expandedTargetId, setExpandedTargetId] = useState<string | null>(null)
   const [pendingAssociations, setPendingAssociations] = useState<PendingAssociation[]>([])
+  // Associations stored in the framework itself (CASE 1.1 keeps an association in the document of its origin).
+  const [inlineAssociations, setInlineAssociations] = useState<PendingAssociation[]>([])
+  // Everything drawn in the panel: alignment-document associations (editable) and inline ones (read-only).
+  const shownAssociations = useMemo(
+    () => (inlineAssociations.length > 0 ? [...pendingAssociations, ...inlineAssociations] : pendingAssociations),
+    [pendingAssociations, inlineAssociations],
+  )
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null)
   const [loadingTargetIds, setLoadingTargetIds] = useState<Set<string>>(() => new Set())
   const [loadedTargetIds, setLoadedTargetIds] = useState<Set<string>>(() => new Set())
@@ -241,8 +261,8 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
   const [leftHeaderHeight, setLeftHeaderHeight] = useState<number | undefined>(undefined)
 
   // Stable refs for values used inside recalculateLines (avoids stale closures)
-  const pendingRef = useRef(pendingAssociations)
-  pendingRef.current = pendingAssociations
+  const shownRef = useRef(shownAssociations)
+  shownRef.current = shownAssociations
   const expandedTargetIdRef = useRef(expandedTargetId)
   expandedTargetIdRef.current = expandedTargetId
 
@@ -342,23 +362,23 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
 
   const leftAssociationCounts = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const a of pendingAssociations) {
+    for (const a of shownAssociations) {
       if (a.toFrameworkId === expandedTargetId) {
         counts.set(a.fromItemId, (counts.get(a.fromItemId) ?? 0) + 1)
       }
     }
     return counts
-  }, [pendingAssociations, expandedTargetId])
+  }, [shownAssociations, expandedTargetId])
 
   const rightAssociationCounts = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const a of pendingAssociations) {
+    for (const a of shownAssociations) {
       if (a.toFrameworkId === expandedTargetId) {
         counts.set(a.toItemId, (counts.get(a.toItemId) ?? 0) + 1)
       }
     }
     return counts
-  }, [pendingAssociations, expandedTargetId])
+  }, [shownAssociations, expandedTargetId])
 
   // ── SVG line calculation ──
 
@@ -375,7 +395,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
     const leftScrollEl = leftPanel.querySelector('[data-scroll-container]')
     const rightScrollEl = rightPanel.querySelector('[data-scroll-container]')
 
-    const computed = pendingRef.current
+    const computed = shownRef.current
       .filter((assoc) => assoc.toFrameworkId === expandedTargetIdRef.current)
       .flatMap((assoc) => {
       // Use nearest visible ancestor if the exact item is collapsed inside a parent
@@ -408,7 +428,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
       const cpOffset = Math.min(100, Math.abs(x2 - x1) * 0.45)
       const d = `M ${x1} ${y1} C ${x1 + cpOffset} ${y1}, ${x2 - cpOffset} ${y2}, ${x2} ${y2}`
 
-      return [{ id: assoc.id, d, midX: (x1 + x2) / 2, midY: (y1 + y2) / 2, isDashed: !(leftHit.isExact && rightHit.isExact) }]
+      return [{ id: assoc.id, d, midX: (x1 + x2) / 2, midY: (y1 + y2) / 2, isDashed: !(leftHit.isExact && rightHit.isExact), isInline: assoc.inline === true }]
     })
 
     setLineCoords(computed)
@@ -422,7 +442,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
     const id = requestAnimationFrame(recalculateLines)
     return () => cancelAnimationFrame(id)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAssociations, expandedTargetId, expandedTargetFramework?.id ?? null, leftExpandedIds, rightExpandedIds, recalculateLines])
+  }, [shownAssociations, expandedTargetId, expandedTargetFramework?.id ?? null, leftExpandedIds, rightExpandedIds, recalculateLines])
 
   // Recalculate on scroll and resize
   useEffect(() => {
@@ -515,6 +535,43 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
       )
     })()
   }, [activeFrameworkId, onDiscoverAlignedTargets, onLoadAlignmentsForTarget])
+
+  // The framework's own non-hierarchical associations, grouped by the framework that holds their
+  // destination: local destinations form the self target, others are resolved via the server.
+  // Each such framework is added to the target list; its associations are shown read-only.
+  useEffect(() => {
+    const alignments = loadedFramework ? inlineAlignmentsOf(loadedFramework) : []
+    if (!loadedFramework || alignments.length === 0) {
+      setInlineAssociations([])
+      return
+    }
+
+    let cancelled = false
+    const show = (frameworkOfItem: Record<string, string>) => {
+      if (cancelled) return
+      const { byTarget } = groupInlineAlignmentsByTarget(loadedFramework, alignments, (id) => frameworkOfItem[id])
+      setInlineAssociations([...byTarget].flatMap(([targetId, list]) =>
+        list.map((a) => ({ ...a, toFrameworkId: targetId, inline: true }))))
+      setTargets((prev) => {
+        const existingIds = new Set(prev.map((t) => t.id))
+        const toAdd = [...byTarget.keys()]
+          .filter((id) => !existingIds.has(id))
+          .map((id) => ({ id, alignmentDocId: globalThis.crypto?.randomUUID?.() ?? `align-${Date.now()}-${id}`, hasUnsavedChanges: false }))
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev
+      })
+    }
+
+    show({})
+    const externalItemIds = [...new Set(alignments
+      .map((a) => a.toItemId)
+      .filter((id) => !loadedFramework.items.has(id as ItemId)))]
+    if (externalItemIds.length > 0 && onResolveItemFrameworks) {
+      void onResolveItemFrameworks(externalItemIds)
+        .then(show)
+        .catch((err: unknown) => console.warn('[TreePanelView] Failed to resolve frameworks of inline associations:', err))
+    }
+    return () => { cancelled = true }
+  }, [loadedFramework, onResolveItemFrameworks])
 
   // When expanding a pre-populated target whose framework data isn't loaded yet, fetch it
   useEffect(() => {
@@ -629,7 +686,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
 
   // Clicking a solid line collapses both panels by one level (inverse of dashed-line click).
   const handleSolidLineClick = useCallback((assocId: string) => {
-    const assoc = pendingRef.current.find((a) => a.id === assocId)
+    const assoc = shownRef.current.find((a) => a.id === assocId)
     if (!assoc) return
     const leftParentId = leftParentMapRef.current.get(assoc.fromItemId)
     const rightParentId = rightParentMapRef.current.get(assoc.toItemId)
@@ -643,7 +700,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
 
   // Clicking a dashed line expands both panels to reveal the actual aligned items.
   const handleDashedLineClick = useCallback((assocId: string) => {
-    const assoc = pendingRef.current.find((a) => a.id === assocId)
+    const assoc = shownRef.current.find((a) => a.id === assocId)
     if (!assoc) return
     const leftAncestors = ancestorsFromParentMap(assoc.fromItemId, leftParentMapRef.current)
     const rightAncestors = ancestorsFromParentMap(assoc.toItemId, rightParentMapRef.current)
@@ -678,10 +735,11 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
   // Associations relevant to the open popover
   const popoverAssociations = useMemo(() => {
     if (!popover) return []
-    return pendingAssociations.filter((a) =>
-      popover.side === 'left' ? a.fromItemId === popover.itemId : a.toItemId === popover.itemId,
+    return shownAssociations.filter((a) =>
+      a.toFrameworkId === expandedTargetId &&
+      (popover.side === 'left' ? a.fromItemId === popover.itemId : a.toItemId === popover.itemId),
     )
-  }, [popover, pendingAssociations])
+  }, [popover, shownAssociations, expandedTargetId])
 
   // ── Save alignments ──
 
@@ -859,7 +917,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                   {/* Visible stroke: solid when both items are visible, dashed when proxied via ancestor */}
                   <path
                     d={line.d}
-                    stroke={isHovered ? '#9333ea' : '#c084fc'}
+                    stroke={line.isInline ? (isHovered ? '#0d9488' : '#5eead4') : (isHovered ? '#9333ea' : '#c084fc')}
                     strokeWidth={isHovered ? 2.5 : 1.5}
                     strokeDasharray={line.isDashed ? '5 3' : undefined}
                     fill="none"
@@ -941,7 +999,8 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                 sortedTargets.map((target) => {
                   const fw = availableFrameworks.find((f) => f.id === target.id)
                   const isExpanded = target.id === expandedTargetId
-                  const targetAssocCount = pendingAssociations.filter((a) => a.toFrameworkId === target.id).length
+                  const targetAssocCount = shownAssociations.filter((a) => a.toFrameworkId === target.id).length
+                  const pendingAssocCount = pendingAssociations.filter((a) => a.toFrameworkId === target.id).length
                   const isLoading = loadingTargetIds.has(target.id)
                   const isSelf = target.id === activeFrameworkId
 
@@ -996,8 +1055,8 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                           {onSaveAlignments && target.hasUnsavedChanges && (
                             <div className="flex shrink-0 items-center justify-between gap-3 border-t border-black/10 bg-slate-50 px-4 py-2.5">
                               <span className="text-xs text-slate-600">
-                                {targetAssocCount > 0
-                                  ? `${targetAssocCount} association${targetAssocCount !== 1 ? 's' : ''} — unsaved`
+                                {pendingAssocCount > 0
+                                  ? `${pendingAssocCount} association${pendingAssocCount !== 1 ? 's' : ''} — unsaved`
                                   : 'Unsaved changes'}
                               </span>
                               <div className="flex items-center gap-2">
@@ -1060,6 +1119,14 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                 key={assoc.id}
                 className="flex items-center gap-2 rounded-lg px-1 py-1.5 hover:bg-slate-50"
               >
+                {assoc.inline ? (
+                  <span
+                    className="shrink-0 rounded-full bg-teal-100 px-1.5 py-0.5 text-[10px] font-medium text-teal-700"
+                    title="Stored in this framework — edit it in the framework itself"
+                  >
+                    {ALIGNMENT_ASSOCIATION_TYPES.find((t) => t.value === assoc.associationType)?.label ?? assoc.associationType}
+                  </span>
+                ) : (
                 <select
                   className="shrink-0 rounded-full bg-purple-100 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 border-none focus:outline-none focus:ring-1 focus:ring-purple-400 cursor-pointer"
                   value={assoc.associationType}
@@ -1074,23 +1141,26 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                     <option value={assoc.associationType}>{assoc.associationType}</option>
                   )}
                 </select>
+                )}
                 <span
                   className="min-w-0 flex-1 truncate text-xs text-slate-700"
                   title={connectedItem?.fullStatement}
                 >
                   {label}
                 </span>
-                <button
-                  type="button"
-                  className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 focus:outline-none"
-                  onClick={() => {
-                    removePendingAssociation(assoc.id)
-                    if (popoverAssociations.length <= 1) setPopover(null)
-                  }}
-                  title="Remove association"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                {!assoc.inline && (
+                  <button
+                    type="button"
+                    className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600 focus:outline-none"
+                    onClick={() => {
+                      removePendingAssociation(assoc.id)
+                      if (popoverAssociations.length <= 1) setPopover(null)
+                    }}
+                    title="Remove association"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
               </div>
             )
           })}
