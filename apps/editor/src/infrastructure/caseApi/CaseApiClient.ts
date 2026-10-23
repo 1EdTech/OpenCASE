@@ -1,5 +1,5 @@
 import type { CFDocument, CFLicense, CFPackage, CFDefinition } from '@/domain/case/types'
-import type { HttpClient } from './http'
+import { HttpError, type HttpClient } from './http'
 import type { CgeImportResult, CachedFrameworkItemSummary } from './cgeTypes'
 export type { CgeImportResult, CachedFrameworkItemSummary, CgeFrameworkSummary, CgeSubscriptionSummary } from './cgeTypes'
 export { normalizeCgeFrameworkList, normalizeCgeSubscriptionList } from './cgeTypes'
@@ -132,6 +132,24 @@ export class CaseApiClient {
       if (Array.isArray(any.CFPackages)) return any.CFPackages as CfDocumentSummary[]
     }
     return []
+  }
+
+  /**
+   * Identifier of the CFDocument that holds an item, read from the item's CFDocumentURI.
+   *
+   * Uses the public endpoint: GET /ims/case/{version}/CFItems/{itemId}
+   * Returns undefined when the item is not on this server (404).
+   */
+  async getCfItemDocumentId(params: { itemId: string; caseVersion?: 'v1p0' | 'v1p1' }): Promise<string | undefined> {
+    const v = params.caseVersion ?? 'v1p1'
+    try {
+      const res = (await this._http.get(`/ims/case/${v}/CFItems/${encodeURIComponent(params.itemId)}`)) as
+        { CFDocumentURI?: { identifier?: string } } | null
+      return res?.CFDocumentURI?.identifier || undefined
+    } catch (err) {
+      if (err instanceof HttpError && err.status === 404) return undefined
+      throw err
+    }
   }
 
   async getCfPackage(params: { docId: string; caseVersion?: 'v1p0' | 'v1p1'; includeExtensions?: boolean }): Promise<CFPackage> {
