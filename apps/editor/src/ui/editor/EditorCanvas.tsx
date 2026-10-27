@@ -215,6 +215,8 @@ type EditorCanvasProps = {
   onDiscoverAlignedTargets?: (sourceId: string) => Promise<Array<{ targetId: string; alignmentDocId: string }>>
   /** Mirror/fork status of the open framework, if it was ever imported */
   mirrorStatus?: MirrorStatus
+  /** Read-only cached remote framework (CGE cache) */
+  readOnly?: boolean
   /** Extensions on the open framework's own CFDefinitions object — the editor can't author them, so they're carried through on save */
   cfDefinitionsExtensions?: CaseExtensions
   /** The framework as loaded — its associations to nodes outside this framework have no canvas edge, so they're carried through on save */
@@ -250,7 +252,7 @@ function RemoteLinkInternalsSync({
   return null
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus, cfDefinitionsExtensions, loadedFramework }: Readonly<EditorCanvasProps>) {
+export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus, readOnly, cfDefinitionsExtensions, loadedFramework }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -1741,6 +1743,15 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
       <CanvasHeader
         frameworkTitle={frameworkInfo.title}
         frameworkSubtitle={frameworkInfo.subtitle}
+        // Labels mirror the home screen's framework card, so they reflect the
+        // last-saved framework rather than unsaved edits.
+        frameworkLabels={{
+          adoptionStatus: loadedFramework?.metadata?.adoptionStatus,
+          readOnly,
+          publicAccess: loadedFramework?.metadata?.publicAccess === true,
+          sourcePackageURI: mirrorStatus?.sourcePackageURI,
+          isModifiedFromSource: mirrorStatus?.isModifiedFromSource,
+        }}
         userName={userName ?? undefined}
         tenantId={tenantId ?? undefined}
         onChangePassword={authStatus === 'authenticated' && changePassword ? () => void changePassword() : undefined}

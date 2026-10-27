@@ -32,6 +32,11 @@ export type HomeFramework = {
    * see `openRemoteFramework` in App.tsx.
    */
   mirrorStatus?: { isModifiedFromSource?: boolean; sourcePackageURI?: string }
+  /**
+   * Read-only cached remote framework (CGE cache). Extracted from the
+   * CFDocument's `ext:opencase` extension alongside `mirrorStatus`.
+   */
+  readOnly?: boolean
 }
 
 const STORAGE_KEY = 'case-editor:frameworks:v1'

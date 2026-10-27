@@ -436,7 +436,7 @@ export function EditorProvider({
     const doc = fw?.data.cfDocument
     return {
       title: doc?.title ?? 'Framework',
-      subtitle: [doc?.adoptionStatus, doc?.frameworkType].filter(Boolean).join(' • ') || undefined,
+      subtitle: doc?.frameworkType || undefined,
       creator: doc?.creator,
     }
   }, [state.nodes])
