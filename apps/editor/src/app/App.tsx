@@ -377,7 +377,7 @@ function AppInner() {
         // extension (always present in this response — the editor's HTTP
         // client sends X-CASE-EDITOR, which asks the backend to include it).
         const opencaseExt = (pkg.CFDocument?.extensions as Record<string, unknown> | undefined)?.['ext:opencase'] as
-          | { isModifiedFromSource?: boolean; sourcePackageURI?: string }
+          | { isModifiedFromSource?: boolean; sourcePackageURI?: string; readOnly?: boolean }
           | undefined
         const mirrorStatus = opencaseExt?.isModifiedFromSource !== undefined
           ? { isModifiedFromSource: opencaseExt.isModifiedFromSource, sourcePackageURI: opencaseExt.sourcePackageURI }
@@ -385,6 +385,7 @@ function AppInner() {
 
         // Create a HomeFramework entry from the domain Framework
         const fw = createHomeFrameworkFromDomain(framework, mirrorStatus)
+        if (opencaseExt?.readOnly === true) fw.readOnly = true
         markServerVerified(fw.id)
         if (pkg.CFDocument?.extensions) {
           fw.cfDocument = { ...fw.cfDocument, extensions: pkg.CFDocument.extensions }
@@ -605,7 +606,7 @@ function AppInner() {
             ? { isModifiedFromSource: result.isModifiedFromSource, sourcePackageURI: result.sourcePackageURI }
             : prev[existingIdx].mirrorStatus
           const next = [...prev]
-          next[existingIdx] = createHomeFrameworkFromDomain(framework, mirrorStatus)
+          next[existingIdx] = { ...createHomeFrameworkFromDomain(framework, mirrorStatus), readOnly: prev[existingIdx].readOnly }
           saveFrameworks(next)
           return next
         })
@@ -774,6 +775,7 @@ function AppInner() {
         onLoadAlignmentsForTarget={tenantId ? handleLoadAlignmentsForTarget : undefined}
         onDiscoverAlignedTargets={tenantId ? handleDiscoverAlignedTargets : undefined}
         mirrorStatus={activeFramework.mirrorStatus}
+        readOnly={activeFramework.readOnly}
         cfDefinitionsExtensions={activeCfDefinitions?.extensions}
         loadedFramework={activeFramework.framework}
       />

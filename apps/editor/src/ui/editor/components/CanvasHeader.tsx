@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ComponentType } from 'react'
+import type { ComponentProps, ComponentType } from 'react'
 import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon, ShareIcon, QueueListIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
 import type { CFAssociationGrouping } from '@/domain/case/types'
 import { CANVAS_VIEW_ENABLED } from '@/ui/editor/featureFlags'
+import { FrameworkLabels } from '@/ui/shared/components/FrameworkLabels'
 
 type MenuItem = {
   label: string
@@ -189,6 +190,7 @@ export type SaveStatus = 'idle' | 'saving' | 'success' | 'error'
 export default function CanvasHeader({
   frameworkTitle,
   frameworkSubtitle,
+  frameworkLabels,
   userName,
   tenantId: _tenantId,
   reserveRightForPanel,
@@ -212,6 +214,8 @@ export default function CanvasHeader({
 }: {
   frameworkTitle: string
   frameworkSubtitle?: string
+  /** Status badges shown beside the title — the same ones as the home screen's framework card */
+  frameworkLabels?: ComponentProps<typeof FrameworkLabels>
   userName?: string
   tenantId?: string
   reserveRightForPanel?: boolean
@@ -305,6 +309,9 @@ export default function CanvasHeader({
             </div>
             {frameworkSubtitle ? <div className="truncate text-xs text-gray-500">{frameworkSubtitle}</div> : null}
           </div>
+
+          {/* Outside the title block so they stay vertically centred when a subtitle is shown */}
+          {frameworkLabels ? <FrameworkLabels {...frameworkLabels} className="shrink-0" /> : null}
 
           {/* Save button / status indicator */}
           {onSave ? (
