@@ -22,8 +22,6 @@ export interface DocumentMetadata {
   currentFile: string // relative to tenant/version root
   adoptionStatus?: string // CASE domain field — NOT used for server-level archive filtering
   licenseIdentifier?: string // UUID of the assigned CFLicense
-  /** Server-level archive flag — independent of CASE adoptionStatus */
-  archived?: boolean
   /** When true, framework is a cached remote reference and cannot be mutated. */
   readOnly?: boolean
   /** CASE Global coalition registry ID (read-only caches). */
@@ -65,6 +63,11 @@ export function getOpenCaseSourcePackageURI (meta: DocumentMetadata | undefined 
  */
 export function getOpenCasePublicAccess (meta: DocumentMetadata | undefined | null): boolean {
   return meta?.openCaseExtensions?.publicAccess === true
+}
+
+/** True when the framework is archived (server-level soft delete, independent of CASE adoptionStatus). */
+export function getOpenCaseArchived (meta: DocumentMetadata | undefined | null): boolean {
+  return meta?.openCaseExtensions?.archived === true
 }
 
 export interface DocumentVersionInfo {
@@ -245,12 +248,13 @@ export class FileFrameworkStore {
           currentFile: d.currentFile,
           adoptionStatus: d.adoptionStatus,
           licenseIdentifier: d.licenseIdentifier,
-          archived: d.archived,
           readOnly: d.readOnly === true,
           cgeFrameworkId: typeof d.cgeFrameworkId === 'string' ? d.cgeFrameworkId : undefined,
           linkedFromDocId: typeof d.linkedFromDocId === 'string' ? d.linkedFromDocId : undefined,
           cgeCachedAt: d.cgeCachedAt ? new Date(d.cgeCachedAt as string | number | Date) : undefined,
-          openCaseExtensions: d.openCaseExtensions,
+          // `archived` used to be a top-level index field — fold it into openCaseExtensions,
+          // where it now lives. The old field is dropped the next time the index is written.
+          openCaseExtensions: d.archived === true ? { ...d.openCaseExtensions, archived: true } : d.openCaseExtensions,
         })
       }
     } catch {
@@ -748,7 +752,6 @@ export class FileFrameworkStore {
       currentFile: meta.currentFile,
       adoptionStatus: meta.adoptionStatus,
       licenseIdentifier: meta.licenseIdentifier,
-      archived: meta.archived,
       readOnly: meta.readOnly,
       cgeFrameworkId: meta.cgeFrameworkId,
       linkedFromDocId: meta.linkedFromDocId,
@@ -1127,7 +1130,8 @@ export class FileFrameworkStore {
     if (!meta) {
       throw new Error(`Document ${storageKey} not found in index for tenant ${tenantId} version ${version}`)
     }
-    meta.archived = archived || undefined // omit false to keep index clean
+    const { archived: _previous, ...rest } = meta.openCaseExtensions ?? {}
+    meta.openCaseExtensions = archived ? { ...rest, archived: true } : rest // omit false to keep index clean
   }
 
   /**
@@ -1135,7 +1139,7 @@ export class FileFrameworkStore {
    */
   isDocumentArchived (tenantId: TenantId, version: CaseVersion, storageKey: string): boolean {
     const meta = this.getDocumentMetadata(tenantId, version, storageKey)
-    return meta?.archived === true
+    return getOpenCaseArchived(meta)
   }
 
   removeDefinitionsFromIndexForDocument (tenantId: TenantId, version: CaseVersion, storageKey: string): void {

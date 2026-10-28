@@ -161,4 +161,77 @@ describe('FileFrameworkStore — index survives a server restart', () => {
 
     await fs.rm(baseDataDir, { recursive: true, force: true })
   })
+
+  it('stores the archived flag in openCaseExtensions alongside the existing ext:opencase keys, across a restart', async () => {
+    const baseDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'case-store-restart-archived-'))
+    const storageKey = 'doc-1'
+    const idxDir = path.join(baseDataDir, 'tenants', tenantId, 'v1p1', 'indexes')
+
+    const store1 = new FileFrameworkStore({ baseDataDir })
+    const extOpencase = { isModifiedFromSource: false, importedAt: '2026-10-19T12:20:29.751Z' }
+    const bundle = {
+      document: { sourcedId: 'doc-1', title: 'A framework', lastChangeDateTime: '2024-01-01T00:00:00Z', extensions: { 'ext:opencase': extOpencase } },
+      items: [],
+      associations: [],
+      rubrics: [],
+    }
+    const { relativePath } = await store1.writeBundleFile(tenantId, version, storageKey, bundle)
+    await store1.updateIndexesForBundle(tenantId, version, storageKey, bundle, relativePath)
+
+    store1.setDocumentArchived(tenantId, version, storageKey, true)
+    await store1.writeIndexesToDisk(tenantId, version)
+
+    const persisted = JSON.parse(await fs.readFile(path.join(idxDir, 'documents.json'), 'utf8'))
+    expect(persisted[0]).not.toHaveProperty('archived')
+    expect(persisted[0].openCaseExtensions).toEqual({ ...extOpencase, archived: true })
+
+    const store2 = new FileFrameworkStore({ baseDataDir })
+    await store2.loadAll()
+    expect(store2.isDocumentArchived(tenantId, version, storageKey)).toBe(true)
+
+    store2.setDocumentArchived(tenantId, version, storageKey, false)
+    expect(store2.isDocumentArchived(tenantId, version, storageKey)).toBe(false)
+    expect(store2.getDocumentMetadata(tenantId, version, storageKey)?.openCaseExtensions).toEqual(extOpencase)
+
+    await fs.rm(baseDataDir, { recursive: true, force: true })
+  })
+
+  it('folds a legacy top-level archived flag in documents.json into openCaseExtensions on load', async () => {
+    const baseDataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'case-store-restart-legacy-archived-'))
+    const storageKey = 'doc-1'
+    const idxDir = path.join(baseDataDir, 'tenants', tenantId, 'v1p1', 'indexes')
+    await fs.mkdir(idxDir, { recursive: true })
+
+    const extOpencase = { isModifiedFromSource: false }
+    await fs.writeFile(
+      path.join(idxDir, 'documents.json'),
+      JSON.stringify([
+        {
+          storageKey,
+          sourcedId: storageKey,
+          title: 'A framework',
+          lastChangeDateTime: '2024-01-01T00:00:00Z',
+          currentFile: 'frameworks/doc-1/doc-1_v0001.json',
+          archived: true,
+          openCaseExtensions: extOpencase,
+        },
+      ]),
+      'utf8'
+    )
+
+    const store = new FileFrameworkStore({ baseDataDir })
+    await store.loadAll()
+
+    expect(store.isDocumentArchived(tenantId, version, storageKey)).toBe(true)
+    const meta = store.getDocumentMetadata(tenantId, version, storageKey)
+    expect(meta).not.toHaveProperty('archived')
+    expect(meta?.openCaseExtensions).toEqual({ ...extOpencase, archived: true })
+
+    await store.writeIndexesToDisk(tenantId, version)
+    const persisted = JSON.parse(await fs.readFile(path.join(idxDir, 'documents.json'), 'utf8'))
+    expect(persisted[0]).not.toHaveProperty('archived')
+    expect(persisted[0].openCaseExtensions).toEqual({ ...extOpencase, archived: true })
+
+    await fs.rm(baseDataDir, { recursive: true, force: true })
+  })
 })

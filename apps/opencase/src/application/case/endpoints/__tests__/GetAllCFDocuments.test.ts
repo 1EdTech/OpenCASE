@@ -214,7 +214,7 @@ describe('GetAllCFDocuments', () => {
           lastChangeDateTime: new Date('2024-01-02T00:00:00Z'),
           currentFile: 'file2.json',
           adoptionStatus: 'Implemented',
-          archived: true
+          openCaseExtensions: { archived: true }
         },
         {
           sourcedId: 'doc-3',
@@ -253,7 +253,7 @@ describe('GetAllCFDocuments', () => {
           lastChangeDateTime: new Date('2024-01-02T00:00:00Z'),
           currentFile: 'file2.json',
           adoptionStatus: 'Implemented',
-          archived: true
+          openCaseExtensions: { archived: true }
         }
       ]
 
@@ -266,6 +266,28 @@ describe('GetAllCFDocuments', () => {
       })
 
       expect(result.CFDocuments).toHaveLength(2)
+    })
+
+    it('should serve archived only inside ext:opencase, never as a top-level CFDocument field', async () => {
+      const documents = [
+        {
+          sourcedId: 'doc-1',
+          title: 'Archived Document',
+          lastChangeDateTime: new Date('2024-01-02T00:00:00Z'),
+          currentFile: 'file1.json',
+          openCaseExtensions: { archived: true }
+        }
+      ]
+
+      mockStore.getAllDocuments.mockImplementation((_: any, v: any) => (v === '1.1' ? documents as any : []))
+
+      const v1p1 = await getAllCFDocuments.execute({ tenantId, caseVersion: '1.1', includeArchived: true })
+      expect(v1p1.CFDocuments[0]).not.toHaveProperty('archived')
+      expect(v1p1.CFDocuments[0].extensions['ext:opencase'].archived).toBe(true)
+
+      const v1p0 = await getAllCFDocuments.execute({ tenantId, caseVersion: '1.0', includeArchived: true })
+      expect(v1p0.CFDocuments[0]).not.toHaveProperty('archived')
+      expect(v1p0.CFDocuments[0]).not.toHaveProperty('extensions')
     })
 
     it('should nest the complete, untransformed ext:opencase object under extensions for CASE 1.1', async () => {

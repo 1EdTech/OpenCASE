@@ -1,5 +1,5 @@
 import { type CaseVersion, type TenantId } from '../../../domain/case/value-objects/Identifiers'
-import { type FileFrameworkStore, getOpenCaseAlignmentParticipants } from '../../../infrastructure/persistence/file/FileFrameworkStore'
+import { type FileFrameworkStore, getOpenCaseAlignmentParticipants, getOpenCaseArchived } from '../../../infrastructure/persistence/file/FileFrameworkStore'
 import { logger } from '../../../infrastructure/logging/Logger'
 
 export interface ListFrameworksQuery {
@@ -39,7 +39,7 @@ export class ListFrameworks {
     for (const version of versions) {
       const documents = this.store.getAllDocuments(query.tenantId, version)
       for (const doc of documents) {
-        if (!query.includeArchived && doc.archived === true) continue
+        if (!query.includeArchived && getOpenCaseArchived(doc)) continue
         if (query.frameworkType && doc.frameworkType !== query.frameworkType) continue
         if (query.participantId) {
           const participates = getOpenCaseAlignmentParticipants(doc)?.some(p => p.identifier === query.participantId)
