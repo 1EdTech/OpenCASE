@@ -18,6 +18,8 @@ export type OpenCaseListExtensions = {
   alignmentParticipants?: Array<{ identifier?: string; uri: string }>
   /** When true, the CASE API serves this framework without authentication. */
   publicAccess?: boolean
+  /** Server-level archive flag — independent of CASE adoptionStatus. */
+  archived?: boolean
 }
 
 export type AlignmentFrameworkSummary = {
@@ -54,8 +56,6 @@ export type CfDocumentSummary = {
   adoptionStatus?: string
   lastChangeDateTime?: string
   caseVersion?: string
-  /** Server-level archive flag — independent of CASE adoptionStatus */
-  archived?: boolean
   readOnly?: boolean
   cgeFrameworkId?: string
   /** OpenCASE-proprietary data (e.g. sourcePackageURI/isModifiedFromSource for the mirror/fork badge) — only present when the request sends X-CASE-EDITOR. */

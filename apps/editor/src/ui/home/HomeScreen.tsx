@@ -266,7 +266,7 @@ export default function HomeScreen({
     try {
       const docs = await api.listCfDocuments({ caseVersion: 'v1p1' })
       // Filter to only server-level archived frameworks
-      const archived = docs.filter((d) => d.archived === true)
+      const archived = docs.filter((d) => d.extensions?.['ext:opencase']?.archived === true)
       setArchivedFrameworks(archived)
     } catch (e: unknown) {
       setArchivedFrameworks([])

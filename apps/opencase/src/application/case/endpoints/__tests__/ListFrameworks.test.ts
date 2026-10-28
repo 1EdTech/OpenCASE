@@ -150,7 +150,7 @@ describe('ListFrameworks', () => {
           lastChangeDateTime: new Date('2024-01-02T00:00:00Z'),
           currentFile: 'frameworks/doc-2/doc-2_v0001.json',
           adoptionStatus: 'Implemented',
-          archived: true
+          openCaseExtensions: { archived: true }
         },
         {
           sourcedId: 'doc-3',
@@ -189,7 +189,7 @@ describe('ListFrameworks', () => {
           lastChangeDateTime: new Date('2024-01-02T00:00:00Z'),
           currentFile: 'frameworks/doc-2/doc-2_v0001.json',
           adoptionStatus: 'Implemented',
-          archived: true
+          openCaseExtensions: { archived: true }
         }
       ]
 
