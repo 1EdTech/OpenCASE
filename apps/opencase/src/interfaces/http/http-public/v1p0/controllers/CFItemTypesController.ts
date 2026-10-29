@@ -40,6 +40,7 @@ export class CFItemTypesControllerV1p0 {
       }
       let body = absolutizeCaseUris(entity, baseUrl, '1.0')
       if (!wantsOpenCaseExtensions(req)) { body = stripExtensions(body) }
+      res.setHeader('X-Total-Count', String(result.CFItemTypes.length))
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)
     } catch (error: any) {

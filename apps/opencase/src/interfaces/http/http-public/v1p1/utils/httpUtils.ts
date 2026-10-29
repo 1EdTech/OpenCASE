@@ -175,10 +175,50 @@ export function applyFieldSelectionToEntity (entity: Record<string, any>, fields
   return filtered
 }
 
+/**
+ * Set the CASE pagination headers on a list response. Per the CASE REST binding (§3.1),
+ * the total collection size goes in X-Total-Count — never in the JSON body, whose schemas
+ * forbid additional properties. When the request was paginated (limit/offset supplied),
+ * first/prev/next/last links are also returned in the Link header (RFC 8288).
+ */
+export function setPaginationHeaders (req: Request, res: Response, total: number, q: CaseQueryParams): void {
+  res.setHeader('X-Total-Count', String(total))
+  if (q.limit === undefined && q.offset === undefined) return
+
+  const url = new URL(req.originalUrl ?? req.url ?? '/', getBaseUrl(req))
+  const link = (offset: number, rel: string): string => {
+    url.searchParams.set('offset', String(offset))
+    return `<${url.toString()}>; rel="${rel}"`
+  }
+
+  const offset = q.offset ?? 0
+  const limit = q.limit
+  // Without a limit the response already runs to the end of the collection,
+  // so the only other meaningful page is the start of it.
+  if (limit === undefined) {
+    res.setHeader('Link', link(0, 'first'))
+    return
+  }
+
+  // "last" is the final page reachable by following "next" from this offset, so
+  // the links stay consistent when a caller pages from a non-aligned offset.
+  const last = total === 0
+    ? 0
+    : offset < total
+      ? offset + Math.floor((total - 1 - offset) / limit) * limit
+      : Math.floor((total - 1) / limit) * limit
+
+  const links = [link(0, 'first')]
+  if (offset > 0) links.push(link(Math.max(0, offset - limit), 'prev'))
+  if (offset + limit < total) links.push(link(offset + limit, 'next'))
+  links.push(link(last, 'last'))
+  res.setHeader('Link', links.join(', '))
+}
+
 export function applyQueryToArray<T extends Record<string, any>> (
   items: T[],
   q: CaseQueryParams
-): { ok: true, items: Array<Record<string, any>> } | { ok: false, status: number, body: any } {
+): { ok: true, items: Array<Record<string, any>>, total: number } | { ok: false, status: number, body: any } {
   let out: Array<Record<string, any>> = items
 
   if (q.filter) {
@@ -210,6 +250,8 @@ export function applyQueryToArray<T extends Record<string, any>> (
     })
   }
 
+  // Total is the filtered collection size, before the page is cut from it
+  const total = out.length
   const offset = q.offset ?? 0
   const limit = q.limit
   out = limit !== undefined ? out.slice(offset, offset + limit) : out.slice(offset)
@@ -218,7 +260,7 @@ export function applyQueryToArray<T extends Record<string, any>> (
     out = out.map(it => applyFieldSelectionToEntity(it, q.fields) as T)
   }
 
-  return { ok: true, items: out }
+  return { ok: true, items: out, total }
 }
 
 export function setEtagAndHandleNotModified (req: Request, res: Response, body: unknown): boolean {

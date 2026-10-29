@@ -147,14 +147,12 @@ export class GetAllCFDocuments {
       return doc
     })
 
+    // `total` is the collection size before pagination. It is not part of the CFDocumentSet
+    // body (the CASE schema forbids additional properties) — controllers send it in the
+    // X-Total-Count header.
     return {
       CFDocuments: cfDocuments,
-      // Pagination metadata (if pagination is used)
-      ...(limit !== undefined && {
-        total,
-        limit,
-        offset
-      })
+      total
     }
   }
 }
