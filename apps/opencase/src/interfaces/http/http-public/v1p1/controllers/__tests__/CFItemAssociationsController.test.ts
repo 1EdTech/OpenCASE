@@ -83,7 +83,24 @@ describe('CFItemAssociationsControllerV1p1', () => {
       expect(responseJson).toHaveBeenCalledWith(absolutizeCaseUris(result as any, 'http://localhost'))
     })
 
-    it('should return 404 when item is not found', async () => {
+    it('should send X-Total-Count and Link headers for a paginated request', async () => {
+      const assoc = (i: number) => ({ identifier: `assoc-${i}`, uri: `/ims/case/v1p1/CFAssociations/assoc-${i}`, associationType: 'isChildOf' })
+      mockGetCFItemAssociations.execute.mockResolvedValue({
+        CFItem: { identifier: '550e8400-e29b-41d4-a716-446655440000' },
+        CFAssociations: [assoc(0), assoc(1), assoc(2)]
+      } as any)
+      ;(mockRequest as any).originalUrl = '/ims/case/v1p1/CFItemAssociations/550e8400-e29b-41d4-a716-446655440000?limit=2'
+      mockRequest.query = { limit: '2' }
+
+      await controller.getById(mockRequest as Request, mockResponse as Response)
+
+      expect(responseStatus).toHaveBeenCalledWith(200)
+      expect(responseJson.mock.calls[0][0].CFAssociations).toHaveLength(2)
+      expect(mockResponse.setHeader).toHaveBeenCalledWith('X-Total-Count', '3')
+      expect(mockResponse.setHeader).toHaveBeenCalledWith('Link', expect.stringContaining('offset=2>; rel="next"'))
+    })
+
+        it('should return 404 when item is not found', async () => {
       mockStore.resolveItemGlobal.mockReturnValue(null)
       ;(mockRequest as any).tenantId = 'test-tenant'
 

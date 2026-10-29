@@ -23,7 +23,8 @@ describe('GetAllCFDocuments', () => {
       const result = await getAllCFDocuments.execute({ tenantId, caseVersion })
 
       expect(result).toEqual({
-        CFDocuments: []
+        CFDocuments: [],
+        total: 0
       })
     })
 
@@ -79,7 +80,8 @@ describe('GetAllCFDocuments', () => {
               identifier: 'doc-2'
             })
           })
-        ])
+        ]),
+        total: 2
       })
     })
 
@@ -108,10 +110,10 @@ describe('GetAllCFDocuments', () => {
           expect.objectContaining({ identifier: 'doc-5' }),
           expect.objectContaining({ identifier: 'doc-6' })
         ]),
-        total: 10,
-        limit: 5,
-        offset: 2
+        total: 10
       })
+      expect(result).not.toHaveProperty('limit')
+      expect(result).not.toHaveProperty('offset')
       expect(result.CFDocuments).toHaveLength(5)
     })
 

@@ -45,6 +45,7 @@ export class CFSubjectsControllerV1p1 {
       }
       let body = absolutizeCaseUris(entity, baseUrl)
       if (!wantsOpenCaseExtensions(req)) { body = stripOpenCaseExtensions(body) }
+      res.setHeader('X-Total-Count', String(result.CFSubjects.length))
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)
     } catch (error: any) {

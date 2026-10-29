@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express'
 import { GetAllCFDocuments } from '../../../../../application/case/endpoints/GetAllCFDocuments'
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
-import { absolutizeCaseUris, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified, stripOpenCaseExtensions, wantsOpenCaseExtensions } from '../utils/httpUtils'
+import { absolutizeCaseUris, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified, setPaginationHeaders, stripOpenCaseExtensions, wantsOpenCaseExtensions } from '../utils/httpUtils'
 
 export class GetAllCFDocumentsControllerV1p1 {
   constructor (private readonly getAllCFDocuments: GetAllCFDocuments) {}
@@ -22,7 +22,7 @@ export class GetAllCFDocumentsControllerV1p1 {
       // by default. Callers can opt out with includeArchived=false.
       const includeArchived = req.query.includeArchived !== 'false'
 
-      const result = await this.getAllCFDocuments.execute({
+      const { total, ...documentSet } = await this.getAllCFDocuments.execute({
         tenantId,
         caseVersion: '1.1',
         limit,
@@ -35,8 +35,9 @@ export class GetAllCFDocumentsControllerV1p1 {
       })
 
       const baseUrl = getBaseUrl(req)
-      let body = absolutizeCaseUris(result, baseUrl)
+      let body = absolutizeCaseUris(documentSet, baseUrl)
       if (!wantsOpenCaseExtensions(req)) { body = stripOpenCaseExtensions(body) }
+      setPaginationHeaders(req, res, total, parsed.value)
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)
     } catch (error: any) {

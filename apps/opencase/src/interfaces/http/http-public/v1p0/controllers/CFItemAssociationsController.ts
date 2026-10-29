@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express'
 import { GetCFItemAssociations } from '../../../../../application/case/endpoints/GetCFItemAssociations'
 import { StatusInfoFormatter } from '../../../../../infrastructure/http/StatusInfoFormatter'
-import { absolutizeCaseUris, applyQueryToArray, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified, stripExtensions, wantsOpenCaseExtensions } from '../utils/httpUtils'
+import { absolutizeCaseUris, applyQueryToArray, getBaseUrl, parseCaseQueryParams, setEtagAndHandleNotModified, setPaginationHeaders, stripExtensions, wantsOpenCaseExtensions } from '../utils/httpUtils'
 import { getParam } from '../../../utils/expressParams'
 import type { FileFrameworkStore } from '../../../../../infrastructure/persistence/file/FileFrameworkStore'
 
@@ -48,6 +48,7 @@ export class CFItemAssociationsControllerV1p0 {
       }
 
       let responseBody: any = { ...result }
+      let total = 0
       if (result?.CFAssociations) {
         const applied = applyQueryToArray(result.CFAssociations, parsed.value)
         if (!applied.ok) return res.status(applied.status).json(applied.body)
@@ -55,11 +56,13 @@ export class CFItemAssociationsControllerV1p0 {
           CFItem: result.CFItem,
           CFAssociations: applied.items
         }
+        total = applied.total
       }
 
       const baseUrl = getBaseUrl(req)
       let body = absolutizeCaseUris(responseBody, baseUrl, '1.0')
       if (!wantsOpenCaseExtensions(req)) { body = stripExtensions(body) }
+      setPaginationHeaders(req, res, total, parsed.value)
       if (setEtagAndHandleNotModified(req, res, body)) return
       return res.status(200).json(body)
     } catch (error: any) {

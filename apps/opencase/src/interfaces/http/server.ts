@@ -15,7 +15,9 @@ export function createServer (container: Container): express.Express {
     origin: true, // Allow all origins (for development) - restrict in production
     credentials: true, // Allow credentials (cookies, authorization headers)
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    // CASE pagination headers (REST binding §3.1) must be exposed for browser clients to read them
+    exposedHeaders: ['X-Total-Count', 'Link']
   }))
 
   app.use(express.json({ limit: '50mb' }))

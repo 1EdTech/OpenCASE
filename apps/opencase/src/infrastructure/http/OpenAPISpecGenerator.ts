@@ -205,6 +205,10 @@ export class OpenAPISpecGenerator {
             responses: {
               200: {
                 description: 'This is the response when the request has been completed successfully.',
+                headers: {
+                  'X-Total-Count': { $ref: '#/components/headers/X-Total-Count' },
+                  Link: { $ref: '#/components/headers/Link' }
+                },
                 content: {
                   'application/json': {
                     schema: { $ref: '#/components/schemas/CFDocumentSetDType' }
@@ -310,6 +314,10 @@ export class OpenAPISpecGenerator {
             responses: {
               200: {
                 description: 'This is the response when the request has been completed successfully.',
+                headers: {
+                  'X-Total-Count': { $ref: '#/components/headers/X-Total-Count' },
+                  Link: { $ref: '#/components/headers/Link' }
+                },
                 content: {
                   'application/json': {
                     schema: { $ref: '#/components/schemas/CFAssociationSetDType' }
@@ -1620,6 +1628,16 @@ export class OpenAPISpecGenerator {
         // Note: legacy /oauth/* endpoints were removed in favor of external OIDC (Keycloak).
       },
       components: {
+        headers: {
+          'X-Total-Count': {
+            description: 'The total number of records in the collection (CASE REST binding §3.1).',
+            schema: { type: 'integer', minimum: 0 }
+          },
+          Link: {
+            description: 'Pagination links (first, prev, next, last) per RFC 8288. Only supplied when the request includes limit or offset.',
+            schema: { type: 'string' }
+          }
+        },
         schemas: {
           CFPackageDType: {
             type: 'object',
@@ -1895,10 +1913,7 @@ export class OpenAPISpecGenerator {
               CFDocuments: {
                 type: 'array',
                 items: { $ref: '#/components/schemas/CFDocumentDType' }
-              },
-              total: { type: 'integer' },
-              limit: { type: 'integer' },
-              offset: { type: 'integer' }
+              }
             }
           },
           CFAssociationSetDType: {

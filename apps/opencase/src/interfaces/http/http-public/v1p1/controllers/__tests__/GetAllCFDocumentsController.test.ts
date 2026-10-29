@@ -46,7 +46,8 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
             title: 'Test Document',
             lastChangeDateTime: '2024-01-01T00:00:00.000Z'
           }
-        ]
+        ],
+        total: 1
       }
 
       mockGetAllCFDocuments.execute.mockResolvedValue(result)
@@ -67,15 +68,15 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
         includeArchived: true
       })
       expect(responseStatus).toHaveBeenCalledWith(200)
-      expect(responseJson).toHaveBeenCalledWith(absolutizeCaseUris(result as any, 'http://localhost'))
+      expect(responseJson).toHaveBeenCalledWith(absolutizeCaseUris({ CFDocuments: result.CFDocuments } as any, 'http://localhost'))
+      expect(mockResponse.setHeader).toHaveBeenCalledWith('X-Total-Count', '1')
+      expect(mockResponse.setHeader).not.toHaveBeenCalledWith('Link', expect.anything())
     })
 
     it('should handle query parameters', async () => {
       const result = {
         CFDocuments: [],
-        total: 10,
-        limit: 5,
-        offset: 0
+        total: 10
       }
 
       mockGetAllCFDocuments.execute.mockResolvedValue(result)
@@ -106,8 +107,27 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
       expect(responseStatus).toHaveBeenCalledWith(200)
     })
 
+    it('should keep pagination metadata out of the body and send it as headers (CGE-19)', async () => {
+      mockGetAllCFDocuments.execute.mockResolvedValue({ CFDocuments: [], total: 25 })
+      ;(mockRequest as any).isAuthenticated = false
+      ;(mockRequest as any).originalUrl = '/ims/case/v1p1/CFDocuments?limit=4&offset=1'
+      mockRequest.query = { limit: '4', offset: '1' }
+
+      await controller.getAll(mockRequest as Request, mockResponse as Response)
+
+      expect(responseStatus).toHaveBeenCalledWith(200)
+      expect(Object.keys(responseJson.mock.calls[0][0])).toEqual(['CFDocuments'])
+      expect(mockResponse.setHeader).toHaveBeenCalledWith('X-Total-Count', '25')
+      expect(mockResponse.setHeader).toHaveBeenCalledWith('Link', [
+        '<http://localhost/ims/case/v1p1/CFDocuments?limit=4&offset=0>; rel="first"',
+        '<http://localhost/ims/case/v1p1/CFDocuments?limit=4&offset=0>; rel="prev"',
+        '<http://localhost/ims/case/v1p1/CFDocuments?limit=4&offset=5>; rel="next"',
+        '<http://localhost/ims/case/v1p1/CFDocuments?limit=4&offset=21>; rel="last"'
+      ].join(', '))
+    })
+
     it('should exclude archived documents when includeArchived=false', async () => {
-      mockGetAllCFDocuments.execute.mockResolvedValue({ CFDocuments: [] })
+      mockGetAllCFDocuments.execute.mockResolvedValue({ CFDocuments: [], total: 0 })
       ;(mockRequest as any).tenantId = 'test-tenant'
       ;(mockRequest as any).isAuthenticated = true
       mockRequest.query = { includeArchived: 'false' }
@@ -119,15 +139,13 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
       )
     })
 
-    it('should return every document, total and all, to unauthenticated requests', async () => {
+    it('should return every document to unauthenticated requests', async () => {
       const result = {
         CFDocuments: [
           { identifier: 'doc-public', uri: '/ims/case/v1p1/CFDocuments/doc-public', title: 'Public', lastChangeDateTime: '2024-01-01T00:00:00.000Z' },
           { identifier: 'doc-private', uri: '/ims/case/v1p1/CFDocuments/doc-private', title: 'Private', lastChangeDateTime: '2024-01-01T00:00:00.000Z' }
         ],
-        total: 2,
-        limit: 10,
-        offset: 0
+        total: 2
       }
       mockGetAllCFDocuments.execute.mockResolvedValue(result)
       ;(mockRequest as any).isAuthenticated = false
@@ -141,7 +159,6 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
       expect(responseStatus).toHaveBeenCalledWith(200)
       const body = responseJson.mock.calls[0][0]
       expect(body.CFDocuments.map((d: any) => d.identifier)).toEqual(['doc-public', 'doc-private'])
-      expect(body.total).toBe(2)
     })
 
     it('should strip extensions from the response when X-CASE-EDITOR header is absent', async () => {
@@ -154,7 +171,8 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
             lastChangeDateTime: '2024-01-01T00:00:00.000Z',
             extensions: { 'ext:opencase': { sourcePackageURI: 'https://example.org/ims/case/v1p1/CFPackages/abc' } }
           }
-        ]
+        ],
+        total: 1
       }
 
       mockGetAllCFDocuments.execute.mockResolvedValue(result)
@@ -180,7 +198,8 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
               smartschoolId: 'ss-42'
             }
           }
-        ]
+        ],
+        total: 1
       }
 
       mockGetAllCFDocuments.execute.mockResolvedValue(result)
@@ -203,7 +222,8 @@ describe('GetAllCFDocumentsControllerV1p1', () => {
             lastChangeDateTime: '2024-01-01T00:00:00.000Z',
             extensions: { 'ext:opencase': { sourcePackageURI: 'https://example.org/ims/case/v1p1/CFPackages/abc' } }
           }
-        ]
+        ],
+        total: 1
       }
 
       mockGetAllCFDocuments.execute.mockResolvedValue(result)
