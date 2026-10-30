@@ -142,6 +142,26 @@ export interface ManagementDeps {
  *     responses:
  *       200: { description: Deleted }
  *
+ * /management/tenants/{tenantId}/ims/case/v1p0/CFItems/lookup-documents:
+ *   post:
+ *     operationId: lookupItemDocumentsV1p0
+ *     summary: Resolve item identifiers to the hosted CFDocuments that hold them (non-CASE extension) (CASE v1p0)
+ *     tags: [ItemsManager]
+ *     parameters:
+ *       - { name: tenantId, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: "{ documents: { [itemId]: { identifier, title } } } — identifiers not on this server are omitted" }
+ *
+ * /management/tenants/{tenantId}/ims/case/v1p1/CFItems/lookup-documents:
+ *   post:
+ *     operationId: lookupItemDocumentsV1p1
+ *     summary: Resolve item identifiers to the hosted CFDocuments that hold them (non-CASE extension) (CASE v1p1)
+ *     tags: [ItemsManager]
+ *     parameters:
+ *       - { name: tenantId, in: path, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: "{ documents: { [itemId]: { identifier, title } } } — identifiers not on this server are omitted" }
+ *
  * /management/tenants/{tenantId}/ims/case/v1p0/CFAssociations/{id}:
  *   put:
  *     operationId: updateCFAssociationV1p0
@@ -325,6 +345,16 @@ export function registerManagementRoutes (app: Express, deps: ManagementDeps): v
     '/management/tenants/:tenantId/ims/case/v1p1/CFItems/:id',
     requireScope('case.write'),
     withCaseVersion('1.1', deps.cfItemsController.delete as unknown as RequestHandler)
+  )
+  app.post(
+    '/management/tenants/:tenantId/ims/case/v1p0/CFItems/lookup-documents',
+    requireScope('case.read'),
+    withCaseVersion('1.0', deps.cfItemsController.lookupDocuments as unknown as RequestHandler)
+  )
+  app.post(
+    '/management/tenants/:tenantId/ims/case/v1p1/CFItems/lookup-documents',
+    requireScope('case.read'),
+    withCaseVersion('1.1', deps.cfItemsController.lookupDocuments as unknown as RequestHandler)
   )
 
   app.put(

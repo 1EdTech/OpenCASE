@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { editorReducer, type EditorState } from './editorReducer'
 import { makeFrameworkNode, makeItemNode, makeEdge } from '@/__tests__/fixtures'
+import { NO_INLINE_ALIGNMENT_EDITS } from '@/domain/framework/inlineAlignmentEdits'
+import type { Association } from '@/domain/framework/model/types'
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -9,6 +11,7 @@ function makeState(overrides: Partial<EditorState> = {}): EditorState {
     nodes: [makeFrameworkNode(), makeItemNode('item-1'), makeItemNode('item-2')],
     edges: [makeEdge('fw-1', 'item-1'), makeEdge('fw-1', 'item-2')],
     remoteLinks: [],
+    inlineAlignmentEdits: NO_INLINE_ALIGNMENT_EDITS,
     selectedNodeId: null,
     selectedEdgeId: null,
     selectedNodeIds: [],
@@ -473,5 +476,40 @@ describe('unknown action', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const next = editorReducer(state, { type: 'unknown/action' } as any)
     expect(next).toBe(state)
+  })
+})
+
+describe('inline alignment edits', () => {
+  const association = {
+    id: 'assoc-new' as Association['id'],
+    fromItemId: 'item-1' as Association['fromItemId'],
+    toItemId: 'other-item' as Association['toItemId'],
+    associationType: 'isRelatedTo' as Association['associationType'],
+  }
+
+  it('records an added inline alignment and marks the framework dirty', () => {
+    const next = editorReducer(makeState(), { type: 'inlineAlignment/add', association })
+    expect(next.inlineAlignmentEdits.added).toEqual([association])
+    expect(next.dirty).toBe(true)
+  })
+
+  it('records removals and type changes as dirty edits', () => {
+    let next = editorReducer(makeState(), { type: 'inlineAlignment/updateType', associationId: 'a-1', associationType: 'exactMatchOf' })
+    next = editorReducer(next, { type: 'inlineAlignment/remove', associationId: 'a-2' })
+    expect(next.inlineAlignmentEdits).toEqual({ added: [], removedIds: ['a-2'], typeChanges: { 'a-1': 'exactMatchOf' } })
+    expect(next.dirty).toBe(true)
+  })
+
+  it('clears the edits once they are saved, without touching the dirty flag', () => {
+    const edited = editorReducer(makeState(), { type: 'inlineAlignment/add', association })
+    const cleared = editorReducer({ ...edited, dirty: false }, { type: 'inlineAlignment/clearEdits' })
+    expect(cleared.inlineAlignmentEdits).toEqual(NO_INLINE_ALIGNMENT_EDITS)
+    expect(cleared.dirty).toBe(false)
+  })
+
+  it('drops pending edits when another graph is loaded', () => {
+    const edited = editorReducer(makeState(), { type: 'inlineAlignment/add', association })
+    const loaded = editorReducer(edited, { type: 'graph/load', graph: { nodes: [], edges: [] } })
+    expect(loaded.inlineAlignmentEdits).toEqual(NO_INLINE_ALIGNMENT_EDITS)
   })
 })

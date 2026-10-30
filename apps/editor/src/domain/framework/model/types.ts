@@ -13,6 +13,12 @@ export type AssociationType =
   | 'precedes'
   | 'isReplacedBy'
 
+/**
+ * Where a framework stores its associations to other frameworks: in its own
+ * CFPackage (`inline`), or in alignment frameworks it owns (`alignmentFramework`).
+ */
+export type AlignmentStorage = 'inline' | 'alignmentFramework'
+
 export type FrameworkMetadata = {
   title?: string
   description?: string
@@ -45,6 +51,11 @@ export type FrameworkMetadata = {
    * Persisted as `ext:opencase.publicAccess`. Absent means sign-in is required.
    */
   publicAccess?: boolean
+  /**
+   * Where the framework stores its associations to other frameworks.
+   * Persisted as `ext:opencase.alignmentStorage`. Absent means inline.
+   */
+  alignmentStorage?: AlignmentStorage
   /**
    * Non-OpenCASE CASE extensions on the CFDocument, preserved verbatim on save.
    * Never contains `ext:opencase`, which is regenerated from editor state.

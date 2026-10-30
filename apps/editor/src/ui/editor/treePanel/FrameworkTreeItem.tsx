@@ -1,5 +1,5 @@
 import { memo, useState } from 'react'
-import { ChevronDown, ChevronRight, Link, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Link, Plus } from 'lucide-react'
 import type { FrameworkTreeNode } from '@/domain/framework/treeDerivation'
 import type { CFItem } from '@/domain/case/types'
 
@@ -23,6 +23,8 @@ type Props = {
   associationCounts?: Map<string, number>
   /** Called when the association-count badge is clicked */
   onBadgeClick?: (_id: string, _e: React.MouseEvent<HTMLButtonElement>) => void
+  /** Show a link out to the item's URI (for rows that aren't on this server) */
+  showUriLinks?: boolean
 }
 
 function FrameworkTreeItem({
@@ -42,6 +44,7 @@ function FrameworkTreeItem({
   dragOverItemId,
   associationCounts,
   onBadgeClick,
+  showUriLinks,
 }: Readonly<Props>) {
   const [hovered, setHovered] = useState(false)
   const cfItem = cfItemsById.get(node.id)
@@ -50,6 +53,7 @@ function FrameworkTreeItem({
   const hasChildren = node.children.length > 0
   const isDraggedOver = dragOverItemId === node.id
   const associationCount = associationCounts?.get(node.id) ?? 0
+  const linkUri = showUriLinks && cfItem?.uri && /^https?:\/\//.test(cfItem.uri) ? cfItem.uri : undefined
 
   const rowClass = [
     'flex w-full items-start gap-2 rounded-lg border px-3 py-2 transition-colors',
@@ -137,6 +141,19 @@ function FrameworkTreeItem({
                 {associationCount}
               </button>
             )}
+            {linkUri && (
+              <a
+                href={linkUri}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-slate-200 hover:text-slate-600"
+                title={`Open ${linkUri}`}
+                onClick={(e) => e.stopPropagation()}
+                tabIndex={-1}
+              >
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
           </div>
           {cfItem?.abbreviatedStatement?.trim() ? (
             <p className="mt-1 text-xs leading-snug text-slate-600">
@@ -190,6 +207,7 @@ function FrameworkTreeItem({
               dragOverItemId={dragOverItemId}
               associationCounts={associationCounts}
               onBadgeClick={onBadgeClick}
+              showUriLinks={showUriLinks}
             />
           ))}
         </div>
@@ -220,6 +238,7 @@ function areEqual(prev: Readonly<Props>, next: Readonly<Props>): boolean {
     prev.dragOverItemId === next.dragOverItemId &&
     prev.associationCounts === next.associationCounts &&
     prev.onBadgeClick === next.onBadgeClick &&
+    prev.showUriLinks === next.showUriLinks &&
     prev.cfItemsById.get(next.node.id) === next.cfItemsById.get(next.node.id)
   )
 }

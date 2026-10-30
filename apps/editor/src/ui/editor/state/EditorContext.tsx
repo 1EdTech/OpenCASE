@@ -20,6 +20,8 @@ import type { SidePanelMode, RemoteItemLink } from '@/ui/editor/remoteFramework/
 import { nextRemoteFrameworkColor } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
 import type { CFAssociationGrouping, CFDocument, CFItem, CFItemType, CFLicense, CFSubject, CFConcept } from '@/domain/case/types'
 import type { FrameworkEdgeRecord } from '@/domain/framework/treeDerivation'
+import type { Association } from '@/domain/framework/model/types'
+import { NO_INLINE_ALIGNMENT_EDITS, type InlineAlignmentEdits } from '@/domain/framework/inlineAlignmentEdits'
 import type { AddItemDraft } from '@/ui/editor/components/AddItemDialog'
 import type { EditorSettings } from '@/ui/editor/components/SettingsModal'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
@@ -89,6 +91,12 @@ type EditorContextValue = {
   addRemoteLink: (_link: RemoteItemLink) => void
   removeRemoteLink: (_linkId: string) => void
   updateRemoteLinkType: (_linkId: string, _associationType: string) => void
+  inlineAlignmentEdits: InlineAlignmentEdits
+  addInlineAlignment: (_association: Association) => void
+  removeInlineAlignment: (_associationId: string) => void
+  updateInlineAlignmentType: (_associationId: string, _associationType: string) => void
+  /** Call once the edits have been saved and the loaded framework includes them */
+  clearInlineAlignmentEdits: () => void
   removeRemoteFramework: (_nodeId: string) => void
   sidePanelMode: SidePanelMode
   setSidePanelMode: (_mode: SidePanelMode) => void
@@ -339,7 +347,7 @@ export function EditorProvider({
   // ── Reducer state ────────────────────────────────────────────────────
   const seed = useMemo(() => initialGraph ?? DEFAULT_GRAPH, [initialGraph])
   const initialState: EditorState = useMemo(
-    () => ({ nodes: seed.nodes, edges: seed.edges, remoteLinks: seed.remoteLinks ?? [], selectedNodeId: null, selectedEdgeId: null, selectedNodeIds: [], selectedEdgeIds: [], layoutVersion: 0, dirty: false }),
+    () => ({ nodes: seed.nodes, edges: seed.edges, remoteLinks: seed.remoteLinks ?? [], inlineAlignmentEdits: NO_INLINE_ALIGNMENT_EDITS, selectedNodeId: null, selectedEdgeId: null, selectedNodeIds: [], selectedEdgeIds: [], layoutVersion: 0, dirty: false }),
     [seed],
   )
   const [state, dispatch] = useReducer(editorReducer, initialState)
@@ -514,6 +522,22 @@ export function EditorProvider({
 
   const updateRemoteLinkType = useCallback((linkId: string, associationType: string) => {
     dispatch({ type: 'remoteLink/updateType', linkId, associationType })
+  }, [])
+
+  const addInlineAlignment = useCallback((association: Association) => {
+    dispatch({ type: 'inlineAlignment/add', association })
+  }, [])
+
+  const removeInlineAlignment = useCallback((associationId: string) => {
+    dispatch({ type: 'inlineAlignment/remove', associationId })
+  }, [])
+
+  const updateInlineAlignmentType = useCallback((associationId: string, associationType: string) => {
+    dispatch({ type: 'inlineAlignment/updateType', associationId, associationType })
+  }, [])
+
+  const clearInlineAlignmentEdits = useCallback(() => {
+    dispatch({ type: 'inlineAlignment/clearEdits' })
   }, [])
 
   const removeRemoteFramework = useCallback((nodeId: string) => {
@@ -860,6 +884,11 @@ export function EditorProvider({
       addRemoteLink,
       removeRemoteLink,
       updateRemoteLinkType,
+      inlineAlignmentEdits: state.inlineAlignmentEdits,
+      addInlineAlignment,
+      removeInlineAlignment,
+      updateInlineAlignmentType,
+      clearInlineAlignmentEdits,
       removeRemoteFramework,
       sidePanelMode,
       setSidePanelMode,
@@ -897,6 +926,7 @@ export function EditorProvider({
       clearSelection, updateNodeData, updateEdgeData, flipEdge, reconnectEdge,
       addChild, addDetachedItem, addExternalFramework,
       addRemoteLink, removeRemoteLink, updateRemoteLinkType, removeRemoteFramework,
+      state.inlineAlignmentEdits, addInlineAlignment, removeInlineAlignment, updateInlineAlignmentType, clearInlineAlignmentEdits,
       sidePanelMode, setSidePanelMode, previousSidePanelMode,
       activeRemoteFrameworkNodeId, setActiveRemoteFrameworkNodeId,
       openCgeSearchPanel, openRemoteItemsPanel, closeSidePanel, openExternalFrameworkSettings,

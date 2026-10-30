@@ -38,6 +38,8 @@ type Props = {
   associationCounts?: Map<string, number>
   /** Called when an association-count badge is clicked */
   onBadgeClick?: (_id: string, _e: React.MouseEvent<HTMLButtonElement>) => void
+  /** Show a link out to each item's URI (for rows that aren't on this server) */
+  showUriLinks?: boolean
 }
 
 export default function FrameworkTreeList({
@@ -65,6 +67,7 @@ export default function FrameworkTreeList({
   dragOverItemId,
   associationCounts,
   onBadgeClick,
+  showUriLinks,
 }: Readonly<Props>) {
   const frameworkSelected = frameworkNodeId !== null && selectedId === frameworkNodeId
 
@@ -142,6 +145,7 @@ export default function FrameworkTreeList({
                 dragOverItemId={dragOverItemId}
                 associationCounts={associationCounts}
                 onBadgeClick={onBadgeClick}
+                showUriLinks={showUriLinks}
               />
             ))}
           </div>
