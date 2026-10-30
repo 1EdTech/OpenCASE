@@ -73,6 +73,7 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     lastChangeDateTime: doc?.lastChangeDateTime,
     licenseURI: doc?.licenseURI,
     publicAccess: doc?.publicAccess === true ? true : undefined,
+    alignmentStorage: doc?.alignmentStorage,
     extensions: doc?.extensions,
   }
 
@@ -124,8 +125,8 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
         uri?: string
         sequenceNumber?: number
         associationType?: string
-        originNodeURI?: { uri?: string }
-        destinationNodeURI?: { uri?: string }
+        originNodeURI?: { uri?: string; title?: string }
+        destinationNodeURI?: { uri?: string; title?: string }
         CFAssociationGroupingURI?: { identifier?: string; title?: string; uri?: string }
         notes?: string
         lastChangeDateTime?: string
@@ -155,6 +156,8 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
           caseUri: edgeData?.cfAssociation?.uri,
           originUri: edgeData?.cfAssociation?.originNodeURI?.uri,
           destinationUri: edgeData?.cfAssociation?.destinationNodeURI?.uri,
+          originTitle: edgeData?.cfAssociation?.originNodeURI?.title,
+          destinationTitle: edgeData?.cfAssociation?.destinationNodeURI?.title,
           sequenceNumber: edgeData?.sequenceNumber ?? edgeData?.cfAssociation?.sequenceNumber,
           originHandle,
           destinationHandle,
@@ -197,6 +200,8 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
         caseUri: edgeData?.cfAssociation?.uri,
         originUri: edgeData?.cfAssociation?.originNodeURI?.uri,
         destinationUri: edgeData?.cfAssociation?.destinationNodeURI?.uri,
+        originTitle: edgeData?.cfAssociation?.originNodeURI?.title,
+        destinationTitle: edgeData?.cfAssociation?.destinationNodeURI?.title,
         sequenceNumber: edgeData?.cfAssociation?.sequenceNumber,
         originHandle,
         destinationHandle,

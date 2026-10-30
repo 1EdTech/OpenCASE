@@ -121,6 +121,19 @@ describe('ImportFramework', () => {
       expect(savedExtensions?.['ext:opencase']?.isModifiedFromSource).toBe(false)
     })
 
+    it('stores associations to other frameworks inline, whatever the source file says', async () => {
+      await importFramework.execute({
+        tenantId,
+        caseVersion,
+        cfPackage: {
+          CFDocument: { ...cfDocument, extensions: { 'ext:opencase': { alignmentStorage: 'alignmentFramework' } } }
+        }
+      })
+
+      const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
+      expect(savedPkg.document.toJSON().extensions['ext:opencase'].alignmentStorage).toBe('inline')
+    })
+
     it('preserves the source uri as-is (does not rewrite it onto this instance) when importing from a URL', async () => {
       const foreignDocument = {
         ...cfDocument,

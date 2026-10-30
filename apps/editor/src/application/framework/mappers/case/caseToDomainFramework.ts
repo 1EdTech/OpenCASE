@@ -57,6 +57,7 @@ export function mapCaseSnapshotToDomainFramework(snapshot: CasePackageSnapshot):
     lastChangeDateTime: doc.lastChangeDateTime,
     licenseURI: doc.licenseURI,
     publicAccess: doc.publicAccess === true ? true : undefined,
+    alignmentStorage: doc.alignmentStorage,
     extensions: doc.extensions,
   }
 

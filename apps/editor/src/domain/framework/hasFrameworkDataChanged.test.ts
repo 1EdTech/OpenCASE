@@ -55,6 +55,21 @@ describe('hasFrameworkDataChanged', () => {
     expect(hasFrameworkDataChanged(a, b)).toBe(false)
   })
 
+  it('ignores changing where associations to other frameworks are stored', () => {
+    const a = baseFramework()
+    const b = clone(a)
+    b.metadata = { ...b.metadata, alignmentStorage: 'alignmentFramework' }
+    expect(hasFrameworkDataChanged(a, b)).toBe(false)
+  })
+
+  it('ignores the timestamp stamped when a setting is changed', () => {
+    const a = baseFramework()
+    a.metadata = { ...a.metadata, lastChangeDateTime: '2026-10-28T13:42:05.098Z' }
+    const b = clone(a)
+    b.metadata = { ...b.metadata, publicAccess: true, lastChangeDateTime: '2026-10-30T14:17:21.646Z' }
+    expect(hasFrameworkDataChanged(a, b)).toBe(false)
+  })
+
   it('ignores canvas-only changes nested under metadata["ext:opencase"]', () => {
     const a = baseFramework()
     const b = clone(a)

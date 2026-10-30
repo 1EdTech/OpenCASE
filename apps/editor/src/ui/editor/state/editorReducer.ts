@@ -20,6 +20,14 @@ import type { CFItem } from '@/domain/case/types'
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
 import { DEFAULT_EDGE_MARKER, getEdgeMarkers, getEdgeStyle, makeEdgeLabel } from '@/ui/editor/state/editorFactories'
 import type { RemoteItemLink } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
+import type { Association } from '@/domain/framework/model/types'
+import {
+  NO_INLINE_ALIGNMENT_EDITS,
+  addInlineAlignment,
+  changeInlineAlignmentType,
+  removeInlineAlignment,
+  type InlineAlignmentEdits,
+} from '@/domain/framework/inlineAlignmentEdits'
 import { DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH, HEADER_SAFE_Y, WRAPPER_NODE_CLASS, findNonOverlappingPosition, getClosestHandles, getNodeSize, isFrameworkNode, isItemNode } from '@/ui/editor/state/helpers/nodeGeometry'
 
 // ── State ──────────────────────────────────────────────────────────────
@@ -28,6 +36,8 @@ export type EditorState = {
   nodes: CaseEditorNodeType[]
   edges: CaseEditorEdge[]
   remoteLinks: RemoteItemLink[]
+  /** Tree View edits to the framework's inline associations to other frameworks (not canvas edges) */
+  inlineAlignmentEdits: InlineAlignmentEdits
   selectedNodeId: string | null
   selectedEdgeId: string | null
   /** IDs of all selected nodes (for multi-selection) */
@@ -59,6 +69,10 @@ export type Action =
   | { type: 'remoteLink/add'; link: RemoteItemLink }
   | { type: 'remoteLink/remove'; linkId: string }
   | { type: 'remoteLink/updateType'; linkId: string; associationType: string }
+  | { type: 'inlineAlignment/add'; association: Association }
+  | { type: 'inlineAlignment/remove'; associationId: string }
+  | { type: 'inlineAlignment/updateType'; associationId: string; associationType: string }
+  | { type: 'inlineAlignment/clearEdits' }
   | { type: 'graph/delete'; nodeIds: string[]; edgeIds: string[]; reattachChildren: boolean }
   | { type: 'layout/apply'; positions: Record<string, { x: number; y: number }> }
   | { type: 'layout/applyHierarchy'; positions: Record<string, { x: number; y: number }>; edgeHandles: Record<string, { sourceHandle: string; targetHandle: string; edgeType?: string; labelPosition?: 'center' | 'target' }> }
@@ -550,6 +564,23 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         dirty: true,
       }
     }
+    case 'inlineAlignment/add': {
+      return { ...state, inlineAlignmentEdits: addInlineAlignment(state.inlineAlignmentEdits, action.association), dirty: true }
+    }
+    case 'inlineAlignment/remove': {
+      return { ...state, inlineAlignmentEdits: removeInlineAlignment(state.inlineAlignmentEdits, action.associationId), dirty: true }
+    }
+    case 'inlineAlignment/updateType': {
+      return {
+        ...state,
+        inlineAlignmentEdits: changeInlineAlignmentType(state.inlineAlignmentEdits, action.associationId, action.associationType),
+        dirty: true,
+      }
+    }
+    case 'inlineAlignment/clearEdits': {
+      // Once saved, the edits are part of the loaded framework.
+      return { ...state, inlineAlignmentEdits: NO_INLINE_ALIGNMENT_EDITS }
+    }
     case 'node/addExternalFramework': {
       const existingNodes = state.nodes
       const nodeSize = { w: 280, h: 120 }
@@ -704,6 +735,7 @@ export function editorReducer(state: EditorState, action: Action): EditorState {
         nodes: action.graph.nodes,
         edges: action.graph.edges,
         remoteLinks: action.graph.remoteLinks ?? [],
+        inlineAlignmentEdits: NO_INLINE_ALIGNMENT_EDITS,
         selectedNodeId: null,
         selectedEdgeId: null,
         selectedNodeIds: [],

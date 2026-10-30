@@ -16,6 +16,8 @@ export type OpenCaseListExtensions = {
   sourcePackageURI?: string
   isModifiedFromSource?: boolean
   alignmentParticipants?: Array<{ identifier?: string; uri: string }>
+  /** Alignment frameworks only: the framework whose associations it holds (its owner). */
+  alignmentSource?: { identifier?: string; uri: string }
   /** When true, the CASE API serves this framework without authentication. */
   publicAccess?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus. */
@@ -167,18 +169,27 @@ export class CaseApiClient {
     tenantId: string
     cfPackage: unknown // OpenCaseCFPackage format
     caseVersion?: 'v1p0' | 'v1p1'
-  }): Promise<{ docId: string; version: string; forked?: boolean; isModifiedFromSource?: boolean; sourcePackageURI?: string }> {
+  }): Promise<{
+    docId: string
+    version: string
+    forked?: boolean
+    /** On a fork: each old document and item identifier → its new one. */
+    forkedIdentifiers?: Record<string, string>
+    isModifiedFromSource?: boolean
+    sourcePackageURI?: string
+  }> {
     const v = params.caseVersion ?? 'v1p1'
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFPackages`
 
     const res = (await this._http.post(url, params.cfPackage)) as unknown
 
     if (res && typeof res === 'object') {
-      const obj = res as { docId?: string; version?: string; identifier?: string; forked?: boolean; isModifiedFromSource?: boolean; sourcePackageURI?: string }
+      const obj = res as { docId?: string; version?: string; identifier?: string; forked?: boolean; forkedIdentifiers?: Record<string, string>; isModifiedFromSource?: boolean; sourcePackageURI?: string }
       return {
         docId: obj.docId ?? obj.identifier ?? '',
         version: obj.version ?? '',
         forked: obj.forked,
+        forkedIdentifiers: obj.forkedIdentifiers,
         isModifiedFromSource: obj.isModifiedFromSource,
         sourcePackageURI: obj.sourcePackageURI,
       }
@@ -374,6 +385,26 @@ export class CaseApiClient {
     }
     if (Array.isArray(res)) return res as AlignmentFrameworkSummary[]
     return []
+  }
+
+  /**
+   * Resolve item identifiers to the hosted CFDocuments that hold them.
+   * Identifiers not on this server (or in an archived framework) are absent from the result.
+   *
+   * Uses the management endpoint:
+   *   POST /management/tenants/{tenantId}/ims/case/{version}/CFItems/lookup-documents
+   */
+  async lookupItemDocuments(params: {
+    tenantId: string
+    identifiers: string[]
+    caseVersion?: 'v1p0' | 'v1p1'
+  }): Promise<Record<string, { identifier: string; title: string }>> {
+    if (params.identifiers.length === 0) return {}
+    const v = params.caseVersion ?? 'v1p1'
+    const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/ims/case/${v}/CFItems/lookup-documents`
+    const res = (await this._http.post(url, { identifiers: params.identifiers })) as
+      { documents?: Record<string, { identifier: string; title: string }> } | null
+    return res?.documents ?? {}
   }
 
   // ── API Key Management ──────────────────────────────────────────

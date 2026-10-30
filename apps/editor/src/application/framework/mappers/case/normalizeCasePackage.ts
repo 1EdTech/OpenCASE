@@ -309,6 +309,9 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
   const { 'ext:opencase': rawOpencaseExt, ...customDocExtensions } = asRecord(doc.extensions) ?? {}
   const opencaseExt = asRecord(rawOpencaseExt)
   const publicAccess = opencaseExt?.publicAccess === true ? true : undefined
+  const alignmentStorage = opencaseExt?.alignmentStorage === 'inline' || opencaseExt?.alignmentStorage === 'alignmentFramework'
+    ? opencaseExt.alignmentStorage
+    : undefined
 
   // Extract CFAssociationGroupings from CFDefinitions
   const defs = asRecord(pkg.CFDefinitions)
@@ -354,6 +357,7 @@ export function normalizeCasePackageResponse(res: unknown): CasePackageSnapshot 
       lastChangeDateTime: asString(doc.lastChangeDateTime),
       licenseURI,
       publicAccess,
+      alignmentStorage,
       extensions: Object.keys(customDocExtensions).length > 0 ? customDocExtensions : undefined,
     },
     items,

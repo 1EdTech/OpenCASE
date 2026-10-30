@@ -54,6 +54,12 @@ function basePath (caseVersion: CaseVersion): string {
  *    CFDefinitions preserved from its source. Comparing CFDefinitions raw
  *    forked on the very first save of any mirror that referenced such a
  *    definition, regardless of what the user actually edited.
+ *  - The `title` of an association's `originNodeURI`/`destinationNodeURI`
+ *    — a display label copied from the node it names, not part of the
+ *    relationship. The frontend rebuilds it from the item on every save
+ *    (e.g. a source's "MATH.313 Count on." comes back as "Count on."), so
+ *    comparing it forked a mirror on its first save whatever was edited.
+ *    Which nodes an association connects, and how, are still compared.
  * No other fields are excluded — remaining reference URIs on
  * CFDocument/CFItems/CFAssociations themselves (licenseURI, CFItemTypeURI,
  * etc.) are stable given the framework id and don't produce false positives.
@@ -71,10 +77,20 @@ export function stripNonDataFields (bundle: RawComparableBundle): RawComparableB
     return rest
   }
 
+  const stripNodeTitles = (association: any): any => {
+    if (!association || typeof association !== 'object') return association
+    const withoutTitle = (node: any): any => {
+      if (!node || typeof node !== 'object') return node
+      const { title: _title, ...rest } = node
+      return rest
+    }
+    return { ...association, originNodeURI: withoutTitle(association.originNodeURI), destinationNodeURI: withoutTitle(association.destinationNodeURI) }
+  }
+
   return {
     CFDocument: stripEntity(bundle.CFDocument),
     CFItems: (bundle.CFItems ?? []).map(stripEntity),
-    CFAssociations: (bundle.CFAssociations ?? []).map(stripEntity),
+    CFAssociations: (bundle.CFAssociations ?? []).map((a: any) => stripNodeTitles(stripEntity(a))),
     CFRubrics: (bundle.CFRubrics ?? []).map(stripEntity),
     CFDefinitions: null
   }
@@ -96,6 +112,11 @@ export function stripNonDataFields (bundle: RawComparableBundle): RawComparableB
  * this tenant's local catalog at import time and a fork is meant to be a
  * fully independent local copy, no longer pointing back at the source host.
  *
+ * Association references to nodes in other frameworks are left unchanged.
+ *
+ * Also returns each old document and item identifier's new one, so callers
+ * can update anything outside the package that refers to them.
+ *
  * The document's own identifier changes here, but its storage location does
  * not — see FileCFPackageRepository.saveNewVersion's storageKey parameter.
  */
@@ -103,7 +124,7 @@ export function mintForkedIdentifiers (
   payload: RawComparableBundle,
   tenantId: TenantId,
   caseVersion: CaseVersion
-): RawComparableBundle {
+): { bundle: RawComparableBundle, forkedIdentifiers: Record<string, string> } {
   const base = basePath(caseVersion)
   const cloned: RawComparableBundle = JSON.parse(JSON.stringify(payload))
 
@@ -149,15 +170,18 @@ export function mintForkedIdentifiers (
     }
   }
 
+  // A reference to a node in another framework keeps its identifier and URI:
+  // only this framework is being forked.
   const resolveNode = (ref: any, label: string): { title: string, identifier: string, uri: string } => {
     if (oldDocId !== undefined && ref?.identifier === oldDocId) {
       return { title: ref?.title ?? newDocTitle, identifier: newDocId, uri: newDocUri }
     }
     const oldId = ref?.identifier as string | undefined
-    const newId = oldId ? nodeIdMap.get(oldId) : undefined
-    if (!newId) {
-      throw new Error(`Fork failed: ${label} references unknown node '${oldId ?? '(missing)'}'`)
+    if (!oldId) {
+      throw new Error(`Fork failed: ${label} has no identifier`)
     }
+    const newId = nodeIdMap.get(oldId)
+    if (!newId) return ref
     return { title: ref?.title ?? newId, identifier: newId, uri: `${base}/CFItems/${newId}` }
   }
 
@@ -181,5 +205,5 @@ export function mintForkedIdentifiers (
     rubric.uri = `${base}/CFRubrics/${newRubricId}`
   }
 
-  return cloned
+  return { bundle: cloned, forkedIdentifiers: Object.fromEntries(nodeIdMap) }
 }

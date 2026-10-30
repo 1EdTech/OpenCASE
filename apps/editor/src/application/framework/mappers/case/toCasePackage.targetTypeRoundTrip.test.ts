@@ -13,8 +13,8 @@ const ITEM_ID = '22222222-2222-4222-8222-222222222222'
 const EXTERNAL_DEST = {
   title: 'KO 3.1.2 De kleuters kunnen:',
   identifier: 'KO|3.1.2',
-  uri: 'https://onderwijsdoelen.be/doelen/KO_V2_0?vakdiscipline=Wetenschap%20en%20techniek#3.1.2',
-  targetType: 'ext:onderwijsdoelen',
+  uri: 'https://goals.example.org/goals/KO_V2_0?subject=Science#3.1.2',
+  targetType: 'ext:curriculumGoals',
 }
 
 // A CASE item in another framework, explicitly marked targetType CASE.
@@ -97,6 +97,14 @@ describe('association node targetType round-trip (#49)', () => {
   it('keeps targetType CASE and the supplied title on a node outside this framework', () => {
     const { openCase } = saveFromEditor()
     expect(assocById(openCase, '66666666-6666-4666-8666-666666666666')?.destinationNodeURI).toEqual(CASE_DEST)
+  })
+
+  it("keeps the source's title on a node in this framework rather than rebuilding it from the item", () => {
+    const pkg = makePackage()
+    const assoc = pkg.CFAssociations![2]
+    assoc.originNodeURI = { ...assoc.originNodeURI, title: 'SCI.1 Item 1' }
+    const { openCase } = saveFromEditor(pkg)
+    expect(assocById(openCase, '66666666-6666-4666-8666-666666666666')?.originNodeURI.title).toBe('SCI.1 Item 1')
   })
 
   it('does not add a targetType to nodes that had none', () => {

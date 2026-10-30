@@ -5,11 +5,13 @@ import HomeScreen from '@/ui/home/HomeScreen'
 import { createNewFrameworkDraft, createHomeFrameworkFromDomain, loadFrameworks, saveFrameworks, type HomeFramework } from '@/ui/home/frameworkStore'
 import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
 import type { Framework } from '@/domain/framework/model/types'
+import { alignmentFrameworkSourceId, alignmentFrameworkTargetId } from '@/domain/framework/alignmentFrameworks'
 import { AuthProvider, useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
 import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/CaseApiClient'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
+import { planAlignmentStorage, saveWithAlignmentStorage, type AlignmentStoragePlan, type AlignmentStoragePort } from '@/application/framework/services/AlignmentStorage'
 import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage, extractRemoteFrameworkDataFromCfPackage, normalizeLinkedFrameworkColors } from '@/ui/editor/reactflow/mapping'
 import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
 import type { LayoutState } from '@/ui/editor/reactflow/mapping'
@@ -109,6 +111,8 @@ function AppInner() {
 
   const [authCallbackState, setAuthCallbackState] = useState<'idle' | 'processing' | 'error'>('idle')
   const [remoteOpenState, setRemoteOpenState] = useState<'idle' | 'loading'>('idle')
+  // Bumped when a save moves associations between a framework and its alignment frameworks.
+  const [alignmentsRevision, setAlignmentsRevision] = useState(0)
   // Framework ids confirmed against the server this session (fetched from it or just saved to it).
   // The localStorage cache can hold entries the server no longer has — or never had, e.g. drafts
   // from before save-on-create — so the editor only opens a framework once it's in this set.
@@ -540,19 +544,40 @@ function AppInner() {
 
   // Handler to save the CFPackage to the server
   // Must be defined before early returns (React hooks rules)
+  // What moving associations between a framework and its alignment frameworks needs from the server.
+  const alignmentStoragePort = useMemo<AlignmentStoragePort>(() => ({
+    listAlignmentFrameworks: (participantId) => api.listAlignmentFrameworks({ tenantId, participantId }),
+    getCfPackage: (docId) => api.getCfPackage({ docId, caseVersion: 'v1p1' }),
+    saveCfPackage: (cfPackage) => api.saveCfPackage({ tenantId, cfPackage, caseVersion: 'v1p1' }),
+    deleteCfPackage: (docId) => api.deleteCfPackage({ tenantId, docId, hardDelete: true }),
+    lookupItemDocuments: (identifiers) => api.lookupItemDocuments({ tenantId, identifiers, caseVersion: caseApiVersion }),
+    newIdentifier: () => globalThis.crypto.randomUUID(),
+    now: () => new Date().toISOString(),
+  }), [api, tenantId, caseApiVersion])
+
+  const handlePlanAlignmentStorage = useCallback(
+    (openCasePackage: unknown, framework: Framework) =>
+      planAlignmentStorage({ framework, cfPackage: openCasePackage as { CFAssociations?: unknown[] }, port: alignmentStoragePort }),
+    [alignmentStoragePort],
+  )
+
   const handleSaveToServer = useCallback(
-    async (openCasePackage: unknown, framework: Framework) => {
+    async (openCasePackage: unknown, framework: Framework, plan?: AlignmentStoragePlan) => {
       if (!tenantId) {
         throw new Error('Not signed in to a tenant. Please sign in to save.')
       }
 
       console.log('[App] Saving to server:', { tenantId, caseApiVersion })
 
-      const result = await api.saveCfPackage({
-        tenantId,
-        cfPackage: openCasePackage,
-        caseVersion: caseApiVersion,
+      // Associations to hosted frameworks are moved to wherever the framework's storage setting says.
+      const { result, moved } = await saveWithAlignmentStorage({
+        framework,
+        cfPackage: openCasePackage as { CFAssociations?: unknown[] },
+        saveFramework: (cfPackage) => api.saveCfPackage({ tenantId, cfPackage, caseVersion: caseApiVersion }),
+        port: alignmentStoragePort,
+        plan,
       })
+      if (moved || result.forked) setAlignmentsRevision((r) => r + 1)
 
       // A fork mints new identifiers server-side for the document AND every
       // item/association in it — not just the document. Patching the local
@@ -610,11 +635,14 @@ function AppInner() {
           saveFrameworks(next)
           return next
         })
+
+        // The saved framework's associations aren't the ones just edited: some moved in or out.
+        if (moved) await openRemoteFramework(activeFrameworkId, { replace: true })
       }
 
       console.log('[App] Saved successfully')
     },
-    [api, tenantId, caseApiVersion, activeFrameworkId, openRemoteFramework, mergeCfDefinitions],
+    [api, tenantId, caseApiVersion, activeFrameworkId, openRemoteFramework, mergeCfDefinitions, alignmentStoragePort],
   )
 
   const handleSaveAlignments = useCallback(
@@ -642,13 +670,12 @@ function AppInner() {
       if (!tenantId) return []
       try {
         const alignmentDocs = await api.listAlignmentFrameworks({ tenantId, participantId: sourceId })
+        // Only alignment frameworks this framework owns; a self (intra-framework) one targets itself.
         return alignmentDocs.flatMap((doc) => {
-          const participants = doc.extensions?.['ext:opencase']?.alignmentParticipants ?? []
-          const other = participants.find((p) => p.identifier !== sourceId)
-          // No distinct "other" participant means this is a self (intra-framework) alignment doc.
-          const targetIdentifier = other?.identifier ?? (participants.some((p) => p.identifier === sourceId) ? sourceId : undefined)
-          if (!targetIdentifier) return []
-          return [{ targetId: targetIdentifier, alignmentDocId: doc.sourcedId }]
+          const ext = doc.extensions?.['ext:opencase']
+          const targetId = alignmentFrameworkTargetId(ext)
+          if (alignmentFrameworkSourceId(ext) !== sourceId || !targetId) return []
+          return [{ targetId, alignmentDocId: doc.sourcedId }]
         })
       } catch (err) {
         console.warn('[App] Failed to discover aligned targets:', err)
@@ -656,6 +683,13 @@ function AppInner() {
       }
     },
     [api, tenantId],
+  )
+
+  // Which hosted framework holds each item — used by the tree view to place a framework's
+  // inline associations to items outside it (anything unresolved is shown as remote).
+  const handleLookupItemDocuments = useCallback(
+    (identifiers: string[]) => api.lookupItemDocuments({ tenantId, identifiers, caseVersion: caseApiVersion }),
+    [api, tenantId, caseApiVersion],
   )
 
   const handleLoadAlignmentsForTarget = useCallback(
@@ -667,15 +701,11 @@ function AppInner() {
       if (!tenantId || !activeFrameworkId) return { docId: newDocId(), associations: [] }
       try {
         const alignmentDocs = await api.listAlignmentFrameworks({ tenantId, participantId: activeFrameworkId })
-        // Every doc here already has activeFrameworkId as a participant (that's the query filter), so
-        // for a self-alignment (targetId === activeFrameworkId) matching "any participant === targetId"
-        // would match the first cross-framework doc too — instead require ALL participants to be self.
+        // Only an alignment framework this framework owns holds its associations — one where it is
+        // merely the target holds the other framework's.
         const matchingDoc = alignmentDocs.find((doc) => {
-          const participants = doc.extensions?.['ext:opencase']?.alignmentParticipants ?? []
-          if (targetId === activeFrameworkId) {
-            return participants.length > 0 && participants.every((p) => p.identifier === activeFrameworkId)
-          }
-          return participants.some((p) => p.identifier === targetId)
+          const ext = doc.extensions?.['ext:opencase']
+          return alignmentFrameworkSourceId(ext) === activeFrameworkId && alignmentFrameworkTargetId(ext) === targetId
         })
         if (!matchingDoc) return { docId: newDocId(), associations: [] }
 
@@ -766,6 +796,7 @@ function AppInner() {
       <EditorCanvas
         onBack={() => navigateHome()}
         onSaveToServer={tenantId ? handleSaveToServer : undefined}
+        onPlanAlignmentStorage={tenantId ? handlePlanAlignmentStorage : undefined}
         onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
         onFetchCfPackage={activeFrameworkId ? handleFetchCfPackage : undefined}
         availableFrameworks={frameworks}
@@ -774,10 +805,12 @@ function AppInner() {
         onSaveAlignments={tenantId ? handleSaveAlignments : undefined}
         onLoadAlignmentsForTarget={tenantId ? handleLoadAlignmentsForTarget : undefined}
         onDiscoverAlignedTargets={tenantId ? handleDiscoverAlignedTargets : undefined}
+        onLookupItemDocuments={handleLookupItemDocuments}
         mirrorStatus={activeFramework.mirrorStatus}
         readOnly={activeFramework.readOnly}
         cfDefinitionsExtensions={activeCfDefinitions?.extensions}
         loadedFramework={activeFramework.framework}
+        alignmentsRevision={alignmentsRevision}
       />
     </EditorProvider>
   )
