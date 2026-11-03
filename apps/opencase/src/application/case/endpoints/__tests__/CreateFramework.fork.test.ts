@@ -234,6 +234,11 @@ describe('CreateFramework — mirror fork behavior', () => {
     expect(savedPkg.document.sourcedId).not.toBe(docId)
     expect(savedPkg.document.toJSON().uri).toBe(`/ims/case/v1p1/CFDocuments/${savedPkg.document.sourcedId}`)
     expect(savedPkg.items[0].sourcedId).not.toBe('item-1')
+    // The caller learns each new identifier, to update anything outside the package that refers to the old ones.
+    expect((result as any).forkedIdentifiers).toEqual({
+      [docId]: savedPkg.document.sourcedId,
+      'item-1': savedPkg.items[0].sourcedId
+    })
     const ext = savedPkg.document.toJSON().extensions as any
     expect(ext['ext:opencase'].isModifiedFromSource).toBe(true)
     expect(ext['ext:opencase'].sourcePackageURI).toBe('https://source.example.org/ims/case/v1p1/CFPackages/doc-123')

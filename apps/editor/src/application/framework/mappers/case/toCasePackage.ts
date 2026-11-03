@@ -1,5 +1,5 @@
 import type { CFAssociation, CFAssociationGrouping, CFConcept, CFDefinition, CFDocument, CFItem, CFItemType, CFLicense, CFSubject, CFPackage, CaseExtensions, LinkURI } from '@/domain/case/types'
-import type { Framework } from '@/domain/framework/model/types'
+import type { AlignmentStorage, Framework } from '@/domain/framework/model/types'
 import type { CaseVersion } from './CasePackageSnapshot'
 import type { LayoutState, NodeLayout } from '@/ui/editor/reactflow/mapping/types'
 
@@ -98,6 +98,7 @@ type OpencaseExtension = {
   linkedFrameworks?: unknown[]
   remoteItemLinks?: unknown[]
   publicAccess?: boolean
+  alignmentStorage?: AlignmentStorage
 }
 
 /**
@@ -111,7 +112,7 @@ function mergeOpencaseExtension(
   const extensions = { ...base }
   
   // Only add if there's data to store
-  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType || opencaseData.colorBand || opencaseData.linkedFrameworks || opencaseData.remoteItemLinks || opencaseData.publicAccess) {
+  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType || opencaseData.colorBand || opencaseData.linkedFrameworks || opencaseData.remoteItemLinks || opencaseData.publicAccess || opencaseData.alignmentStorage) {
     const existing = (extensions[OPENCASE_EXT_KEY] as OpencaseExtension | undefined) ?? {}
     extensions[OPENCASE_EXT_KEY] = {
       ...existing,
@@ -166,13 +167,14 @@ function frameworkToCfDocument(
     },
     // meta.extensions holds the document's non-OpenCASE extensions (never ext:opencase),
     // so ext:opencase is always regenerated from editor state while the rest round-trip.
-    extensions: (layout || options?.edgeType || options?.linkedFrameworks || options?.remoteItemLinks || meta.publicAccess === true)
+    extensions: (layout || options?.edgeType || options?.linkedFrameworks || options?.remoteItemLinks || meta.publicAccess === true || meta.alignmentStorage)
       ? mergeOpencaseExtension(meta.extensions, {
           layout,
           edgeType: options?.edgeType,
           linkedFrameworks: options?.linkedFrameworks,
           remoteItemLinks: options?.remoteItemLinks,
           ...(meta.publicAccess === true ? { publicAccess: true } : {}),
+          ...(meta.alignmentStorage ? { alignmentStorage: meta.alignmentStorage } : {}),
         })
       : meta.extensions,
   }
@@ -281,8 +283,9 @@ function associationToCfAssociation(
     return typeof v === 'number' ? v : undefined
   }
 
-  const fromTitle = fromItem?.statement ?? s('originTitle') ?? `Item ${fromId}`
-  const toTitle = toItem?.statement ?? s('destinationTitle') ?? `Item ${toId}`
+  // A node's title is kept as it arrived; one is only made up for associations authored here.
+  const fromTitle = s('originTitle') ?? fromItem?.statement ?? `Item ${fromId}`
+  const toTitle = s('destinationTitle') ?? toItem?.statement ?? `Item ${toId}`
   const originTargetType = s('originTargetType')
   const destinationTargetType = s('destinationTargetType')
 

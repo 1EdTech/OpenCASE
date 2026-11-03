@@ -56,9 +56,10 @@ function sortedNormalizedEntries<K extends string, V>(map: Map<K, V>, normalize:
  */
 function comparableDocumentMetadata(metadata: Framework['metadata']): Framework['metadata'] {
   if (!metadata) return {}
-  // Public read access is an OpenCASE server setting, not CASE content.
-  // Toggling it must not fork a mirrored framework.
-  const { publicAccess: _publicAccess, ...rest } = metadata
+  // Public read access and association storage are OpenCASE settings, not CASE
+  // content. Changing them must not fork a mirrored framework. Nor does the
+  // timestamp stamped on any edit to the document — the server ignores it too.
+  const { publicAccess: _publicAccess, alignmentStorage: _alignmentStorage, lastChangeDateTime: _lastChangeDateTime, ...rest } = metadata
   return rest
 }
 

@@ -108,6 +108,7 @@ function mapDomainFrameworkToCfDocument(framework: Framework): CFDocument {
     CFPackageURI: { uri: `urn:case:package:${id}` },
     licenseURI: meta.licenseURI,
     publicAccess: meta.publicAccess === true ? true : undefined,
+    alignmentStorage: meta.alignmentStorage,
     extensions: meta.extensions,
   }
 }
@@ -183,10 +184,12 @@ function mapDomainAssociationToCfAssociation(framework: Framework, association: 
     originNodeURI: {
       identifier: fromId,
       uri: s('originUri') ?? `urn:case:item:${fromId}`,
+      title: s('originTitle'),
     },
     destinationNodeURI: {
       identifier: toId,
       uri: s('destinationUri') ?? `urn:case:item:${toId}`,
+      title: s('destinationTitle'),
     },
     sequenceNumber: n('sequenceNumber'),
     CFAssociationGroupingURI,

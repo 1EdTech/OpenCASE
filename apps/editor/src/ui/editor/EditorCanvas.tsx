@@ -40,6 +40,9 @@ import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/
 import type { Framework } from '@/domain/framework/model/types'
 import { hasFrameworkDataChanged } from '@/domain/framework/hasFrameworkDataChanged'
 import { withOffCanvasAssociations } from '@/domain/framework/offCanvasAssociations'
+import { alignmentMoveCount, type AlignmentStoragePlan } from '@/application/framework/services/AlignmentStorage'
+import type { HostedDocumentRef } from '@/domain/framework/externalAlignments'
+import { applyInlineAlignmentEdits } from '@/domain/framework/inlineAlignmentEdits'
 
 // ── Stable ReactFlow config (module scope — never recreated) ──────────────
 //
@@ -193,7 +196,9 @@ type MirrorStatus = { isModifiedFromSource?: boolean; sourcePackageURI?: string 
 
 type EditorCanvasProps = {
   onBack?: () => void
-  onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework) => Promise<void>
+  onSaveToServer?: (cfPackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework, plan?: AlignmentStoragePlan) => Promise<void>
+  /** Works out which associations a save will move for the framework's alignment storage setting, without saving */
+  onPlanAlignmentStorage?: (cfPackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework) => Promise<AlignmentStoragePlan>
   /** Archive the current framework on the server and navigate home */
   onArchiveFramework?: () => Promise<void>
   /** Fetch the published CFPackage from the server (returns CASE JSON with absolute URIs) */
@@ -213,6 +218,8 @@ type EditorCanvasProps = {
   }>
   /** Discover all frameworks that already have saved alignment docs with the given source framework */
   onDiscoverAlignedTargets?: (sourceId: string) => Promise<Array<{ targetId: string; alignmentDocId: string }>>
+  /** Resolve item identifiers to the hosted frameworks that hold them — used by the tree view to place inline external alignments */
+  onLookupItemDocuments?: (identifiers: string[]) => Promise<Record<string, HostedDocumentRef>>
   /** Mirror/fork status of the open framework, if it was ever imported */
   mirrorStatus?: MirrorStatus
   /** Read-only cached remote framework (CGE cache) */
@@ -221,6 +228,8 @@ type EditorCanvasProps = {
   cfDefinitionsExtensions?: CaseExtensions
   /** The framework as loaded — its associations to nodes outside this framework have no canvas edge, so they're carried through on save */
   loadedFramework?: Framework
+  /** Changes whenever a save moved associations between this framework and its alignment frameworks */
+  alignmentsRevision?: number
 }
 
 function RemoteLinkInternalsSync({
@@ -252,7 +261,15 @@ function RemoteLinkInternalsSync({
   return null
 }
 
-export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, mirrorStatus, readOnly, cfDefinitionsExtensions, loadedFramework }: Readonly<EditorCanvasProps>) {
+/** The fork warning's sentence about associations a save will move. */
+function describeAlignmentMove(plan: AlignmentStoragePlan, count: number): string {
+  const associations = count === 1 ? '1 association' : `${count} associations`
+  return plan.kind === 'toInline'
+    ? `${associations} to frameworks on this server will move from alignment frameworks into this framework.`
+    : `${associations} to frameworks on this server will move from this framework into alignment frameworks.`
+}
+
+export default function EditorCanvas({ onBack, onSaveToServer, onPlanAlignmentStorage, onArchiveFramework, onFetchCfPackage, availableFrameworks, serverFrameworks, onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, onLookupItemDocuments, mirrorStatus, readOnly, cfDefinitionsExtensions, loadedFramework, alignmentsRevision }: Readonly<EditorCanvasProps>) {
   const { status: authStatus, userName, tenantId, signOut, changePassword } = useAuth()
   const {
     nodes,
@@ -296,6 +313,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
     addDetachedItem,
     addExternalFramework,
     remoteLinks,
+    inlineAlignmentEdits,
+    clearInlineAlignmentEdits,
     addRemoteLink,
     removeRemoteLink,
     updateRemoteLinkType,
@@ -361,7 +380,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
     const baseline = fromEditorGraph({ graph: { nodes, edges: editorEdges } }).framework
     baselineFrameworkRef.current = loadedFramework ? withOffCanvasAssociations(loadedFramework, baseline) : baseline
   }
-  const pendingSaveRef = useRef<{ openCasePackage: ReturnType<typeof toOpenCaseFormat>; framework: Framework } | null>(null)
+  const pendingSaveRef = useRef<{ openCasePackage: ReturnType<typeof toOpenCaseFormat>; framework: Framework; plan?: AlignmentStoragePlan } | null>(null)
+  // What the fork warning says about associations the save will move, if any.
+  const [forkWarningMove, setForkWarningMove] = useState<string | null>(null)
 
   // Available licenses from context (loaded via App.tsx definitions pipeline)
   const availableLicenses = cfLicenses
@@ -405,8 +426,8 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
   const edgeReconnectSuccessful = useRef(true)
 
   // ── Refs for save/export (keeps callbacks stable, avoids re-renders) ──
-  const graphRef = useRef({ nodes, edges: editorEdges, remoteLinks })
-  graphRef.current = { nodes, edges: editorEdges, remoteLinks }
+  const graphRef = useRef({ nodes, edges: editorEdges, remoteLinks, inlineAlignmentEdits })
+  graphRef.current = { nodes, edges: editorEdges, remoteLinks, inlineAlignmentEdits }
   const saveCtxRef = useRef({ caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings, cfDefinitionsExtensions, loadedFramework })
   saveCtxRef.current = { caseVersion, edgeType: settings.edgeType, cfItemTypes, cfSubjects, cfConcepts, cfLicenses, cfAssociationGroupings, cfDefinitionsExtensions, loadedFramework }
 
@@ -426,15 +447,16 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
 
   // Actually perform the save (network call). Split out from `handleSave` so
   // the fork-warning dialog can defer this until the user confirms.
-  const doSave = useCallback(async (openCasePackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework) => {
+  const doSave = useCallback(async (openCasePackage: ReturnType<typeof toOpenCaseFormat>, framework: Framework, plan?: AlignmentStoragePlan) => {
     if (onSaveToServer) {
       setSaveStatus('saving')
       setSaveError(null)
       try {
-        await onSaveToServer(openCasePackage, framework)
+        await onSaveToServer(openCasePackage, framework, plan)
         baselineFrameworkRef.current = framework
         setSaveStatus('success')
         clearDirty()
+        clearInlineAlignmentEdits()
         setTimeout(() => setSaveStatus('idle'), 2000)
       } catch (err) {
         console.error('[Save] Failed to save to server:', err)
@@ -448,18 +470,20 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
     } else {
       setCfPackageDialogOpen(true)
     }
-  }, [onSaveToServer, clearDirty])
+  }, [onSaveToServer, clearDirty, clearInlineAlignmentEdits])
 
   // Save: Generate CFPackage and POST to server — unless this framework is
   // still a pristine mirror and the pending edits touch actual framework
   // data (not just canvas layout), in which case warn first: saving will
   // fork it into an independent local copy.
   const handleSave = useCallback(async () => {
-    const { nodes: n, edges: e, remoteLinks: rl } = graphRef.current
+    const { nodes: n, edges: e, remoteLinks: rl, inlineAlignmentEdits: inlineEdits } = graphRef.current
     const ctx = saveCtxRef.current
     const fromGraph = fromEditorGraph({ graph: { nodes: n, edges: e, remoteLinks: rl } })
     const { layout, remoteEditorData } = fromGraph
-    const framework = ctx.loadedFramework ? withOffCanvasAssociations(ctx.loadedFramework, fromGraph.framework) : fromGraph.framework
+    const withOffCanvas = ctx.loadedFramework ? withOffCanvasAssociations(ctx.loadedFramework, fromGraph.framework) : fromGraph.framework
+    // Tree View edits to inline associations to other frameworks live outside the graph.
+    const framework = applyInlineAlignmentEdits(withOffCanvas, inlineEdits)
     const cfPackage = frameworkToCfPackage({
       framework, layout,
       caseVersion: ctx.caseVersion, edgeType: ctx.edgeType,
@@ -471,18 +495,34 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
     const openCasePackage = toOpenCaseFormat(cfPackage)
     console.log('[Save] Generated OpenCASE package:', openCasePackage)
 
-    const willFork = mirrorStatus?.isModifiedFromSource === false &&
-      baselineFrameworkRef.current !== null &&
-      hasFrameworkDataChanged(baselineFrameworkRef.current, framework)
+    const baseline = baselineFrameworkRef.current
+    const isPristineMirror = mirrorStatus?.isModifiedFromSource === false && baseline !== null
+    const storageChanged = baseline !== null &&
+      (baseline.metadata.alignmentStorage ?? 'inline') !== (framework.metadata.alignmentStorage ?? 'inline')
 
-    if (willFork) {
-      pendingSaveRef.current = { openCasePackage, framework }
+    // Changing where associations to other frameworks are stored can move some on save, which is a
+    // data change. Ask the server what would move, so the warning only shows when something does.
+    let plan: AlignmentStoragePlan | undefined
+    if (isPristineMirror && storageChanged && onPlanAlignmentStorage) {
+      try {
+        plan = await onPlanAlignmentStorage(openCasePackage, framework)
+      } catch (err) {
+        setSaveStatus('error')
+        setSaveError(err instanceof Error ? err.message : 'Failed to save')
+        return
+      }
+    }
+    const moving = plan ? alignmentMoveCount(plan) : 0
+
+    if (isPristineMirror && (hasFrameworkDataChanged(baseline, framework) || moving > 0)) {
+      pendingSaveRef.current = { openCasePackage, framework, plan }
+      setForkWarningMove(plan && moving > 0 ? describeAlignmentMove(plan, moving) : null)
       setForkWarningOpen(true)
       return
     }
 
-    await doSave(openCasePackage, framework)
-  }, [mirrorStatus, doSave])
+    await doSave(openCasePackage, framework, plan)
+  }, [mirrorStatus, doSave, onPlanAlignmentStorage])
 
   // Compute in-use groupings from actual edges (for filter dropdown).
   // Pathway highlighting only affects canvas edges, so with the canvas view
@@ -1798,6 +1838,9 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
             onSaveAlignments={onSaveAlignments}
             onLoadAlignmentsForTarget={onLoadAlignmentsForTarget}
             onDiscoverAlignedTargets={onDiscoverAlignedTargets}
+            loadedFramework={loadedFramework}
+            onLookupItemDocuments={onLookupItemDocuments}
+            alignmentsRevision={alignmentsRevision}
           />
         </div>
       ) : null}
@@ -1947,7 +1990,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
       <ConfirmActionDialog
         open={forkWarningOpen}
         title="Fork this mirrored framework?"
-        description="You are making changes to a mirrored framework. Saving will turn this mirror into an independent local copy with new identifiers."
+        description={`You are making changes to a mirrored framework. Saving will turn this mirror into an independent local copy with new identifiers.${forkWarningMove ? ` ${forkWarningMove}` : ''}`}
         confirmLabel="Save & fork"
         onCancel={() => {
           setForkWarningOpen(false)
@@ -1957,7 +2000,7 @@ export default function EditorCanvas({ onBack, onSaveToServer, onArchiveFramewor
           setForkWarningOpen(false)
           const pending = pendingSaveRef.current
           pendingSaveRef.current = null
-          if (pending) void doSave(pending.openCasePackage, pending.framework)
+          if (pending) void doSave(pending.openCasePackage, pending.framework, pending.plan)
         }}
       />
 

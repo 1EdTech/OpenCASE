@@ -27,6 +27,7 @@ import { UpdateCFAssociation } from '../application/case/endpoints/UpdateCFAssoc
 import { DeleteCFDocument } from '../application/case/endpoints/DeleteCFDocument'
 import { RestoreFramework } from '../application/case/endpoints/RestoreFramework'
 import { DeleteCFItem } from '../application/case/endpoints/DeleteCFItem'
+import { LookupItemDocuments } from '../application/case/endpoints/LookupItemDocuments'
 import { DeleteCFAssociation } from '../application/case/endpoints/DeleteCFAssociation'
 import { CFPackagesControllerV1p0 } from '../interfaces/http/http-public/v1p0/controllers/CFPackagesController'
 import { CFDocumentsControllerV1p0 } from '../interfaces/http/http-public/v1p0/controllers/CFDocumentsController'
@@ -284,6 +285,7 @@ export async function buildContainer(): Promise<Container> {
   const updateCFAssociation = new UpdateCFAssociation(pkgRepo, store, jsonSchemaValidator)
   const deleteCFDocument = new DeleteCFDocument(pkgRepo, store)
   const deleteCFItem = new DeleteCFItem(pkgRepo, store)
+  const lookupItemDocuments = new LookupItemDocuments(store)
   const deleteCFAssociation = new DeleteCFAssociation(pkgRepo, store)
 
   const cfPackagesControllerV1p0 = new CFPackagesControllerV1p0(getCFPackage, store)
@@ -370,7 +372,8 @@ export async function buildContainer(): Promise<Container> {
   )
   const cfItemsManagementController = new CFItemsManagementController(
     updateCFItem,
-    deleteCFItem
+    deleteCFItem,
+    lookupItemDocuments
   )
   const cfAssociationsManagementController = new CFAssociationsManagementController(
     updateCFAssociation,

@@ -120,4 +120,15 @@ describe('CASE extensions round-trip through the editor', () => {
     expect(hasFrameworkDataChanged(framework, layoutOnly)).toBe(false)
     expect(hasFrameworkDataChanged(framework, customEdit)).toBe(true)
   })
+
+  it('keeps the association storage setting through the editor', () => {
+    const pkg = makePackage()
+    pkg.CFDocument.extensions = { 'ext:opencase': { alignmentStorage: 'alignmentFramework' } }
+    const framework = loadFrameworkFromCfPackage(pkg)
+    if (!framework) throw new Error('failed to load framework')
+
+    expect(framework.metadata.alignmentStorage).toBe('alignmentFramework')
+    const saved = saveFromEditor(toReactFlowGraph({ framework }))
+    expect(saved.CFDocument.extensions).toEqual({ 'ext:opencase': expect.objectContaining({ alignmentStorage: 'alignmentFramework' }) })
+  })
 })

@@ -16,6 +16,7 @@ import type {
   ExternalFrameworkNodeData,
 } from '../reactflow/types'
 import type { CFConcept, CFDocument, CFItem, CFItemType, CFLicense, CFSubject } from '@/domain/case/types'
+import type { AlignmentStorage } from '@/domain/framework/model/types'
 import type { ComboboxOption } from '@/ui/shared/components/ui/combobox-input'
 import { EDUCATION_LEVEL_OPTIONS } from '@/ui/editor/terminology/educationLevels'
 import type { EducationLevelOption } from '@/ui/editor/terminology/educationLevels'
@@ -648,6 +649,26 @@ export default memo(function NodePropertiesPanel({
                         Off by default, so readers must sign in. Turn this on and save to let anyone read the framework without signing in.
                       </div>
                     </div>
+                  </div>
+                </div>
+              </SidebarSection>
+            ) : null}
+
+            {/* ── Alignments (framework only) ── */}
+            {isFramework ? (
+              <SidebarSection title="Alignments" subtitle="Where associations to frameworks on this server are stored." accentColor={accentColor} defaultOpen>
+                <div className="space-y-2">
+                  <select
+                    id="node-fw-alignment-storage"
+                    className={INPUT_CLS}
+                    value={cfDocument?.alignmentStorage ?? 'inline'}
+                    onChange={(e) => updateDocument({ alignmentStorage: e.target.value as AlignmentStorage })}
+                  >
+                    <option value="inline">In this framework</option>
+                    <option value="alignmentFramework">In alignment frameworks</option>
+                  </select>
+                  <div className={HINT_CLS}>
+                    Existing associations move when you save. Associations to frameworks not on this server are always stored in this framework.
                   </div>
                 </div>
               </SidebarSection>

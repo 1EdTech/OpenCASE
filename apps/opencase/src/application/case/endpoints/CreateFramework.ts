@@ -25,7 +25,15 @@ export interface CreateFrameworkCommand {
 
 export type CreateFrameworkResult =
   | { status: 'created', docId: string }
-  | { status: 'published', docId: string, forked?: boolean, isModifiedFromSource?: boolean, sourcePackageURI?: string }
+  | {
+    status: 'published'
+    docId: string
+    forked?: boolean
+    /** On a fork: each old document and item identifier → its new one. */
+    forkedIdentifiers?: Record<string, string>
+    isModifiedFromSource?: boolean
+    sourcePackageURI?: string
+  }
   | { status: 'unchanged', docId: string, isModifiedFromSource?: boolean, sourcePackageURI?: string }
 
 function stableStringify (value: any): string {
@@ -153,6 +161,7 @@ export class CreateFramework {
     let cfRubricsPayload = payload.CFRubrics ?? []
     let preserveUris: { preserveUris: boolean } | undefined
     let forked = false
+    let forkedIdentifiers: Record<string, string> | undefined
     let resultIsModifiedFromSource: boolean | undefined
     let resultSourcePackageURI: string | undefined
 
@@ -244,7 +253,7 @@ export class CreateFramework {
           // items, associations, and rubrics. The document's storage
           // location doesn't change — it keeps living under its pre-fork
           // storage key even though its own identifier just changed.
-          const minted = mintForkedIdentifiers(
+          const { bundle: minted, forkedIdentifiers: mintedIdentifiers } = mintForkedIdentifiers(
             { CFDocument: cfDocPayload, CFItems: cfItemsPayload, CFAssociations: cfAssociationsPayload, CFRubrics: cfRubricsPayload },
             tenantId,
             caseVersion
@@ -255,6 +264,7 @@ export class CreateFramework {
           cfRubricsPayload = minted.CFRubrics ?? []
           preserveUris = { preserveUris: true }
           forked = true
+          forkedIdentifiers = mintedIdentifiers
           newIsModifiedFromSource = true
         }
 
@@ -313,6 +323,7 @@ export class CreateFramework {
         status: 'published',
         docId,
         forked: true,
+        forkedIdentifiers,
         isModifiedFromSource: resultIsModifiedFromSource,
         sourcePackageURI: resultSourcePackageURI
       }

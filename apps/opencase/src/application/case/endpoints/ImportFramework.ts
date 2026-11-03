@@ -55,6 +55,9 @@ function injectSourceProvenance (
     ...(endpointUrl ? { sourcePackageURI: endpointUrl } : {}),
     isModifiedFromSource: false,
     importedAt: new Date().toISOString(),
+    // An imported CFPackage carries its associations to other frameworks inline,
+    // and there is no way to import alignment frameworks.
+    alignmentStorage: 'inline',
   }
 
   if (documentFlags?.readOnly === true) {

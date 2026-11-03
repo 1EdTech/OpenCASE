@@ -1,3 +1,5 @@
+import type { AlignmentStorage } from '@/domain/framework/model/types'
+
 export type CaseVersion = '1.0' | '1.1' | 'unknown'
 
 /**
@@ -38,6 +40,8 @@ export type CaseDocumentSnapshot = {
   licenseURI?: { title?: string; identifier?: string; uri: string }
   /** OpenCASE: unauthenticated CASE API reads. Absent means sign-in is required. */
   publicAccess?: boolean
+  /** OpenCASE: where associations to other frameworks are stored. Absent means inline. */
+  alignmentStorage?: AlignmentStorage
   /**
    * Non-OpenCASE CASE extensions (e.g. a source system's identifiers), preserved
    * verbatim for round-trip fidelity. `ext:opencase` is excluded — the editor

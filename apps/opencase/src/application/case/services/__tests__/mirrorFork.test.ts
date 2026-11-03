@@ -121,6 +121,28 @@ describe('stripNonDataFields', () => {
   })
 })
 
+describe('stripNonDataFields — association node titles', () => {
+  const bundle = (originTitle: string, destinationId: string) => ({
+    CFDocument: { identifier: 'doc-1', title: 'Doc' },
+    CFItems: [],
+    CFAssociations: [{
+      identifier: 'assoc-1',
+      associationType: 'isRelatedTo',
+      originNodeURI: { title: originTitle, identifier: 'item-1', uri: '/ims/case/v1p1/CFItems/item-1' },
+      destinationNodeURI: { title: 'Other', identifier: destinationId, uri: `/ims/case/v1p1/CFItems/${destinationId}` }
+    }],
+    CFRubrics: []
+  })
+
+  it('ignores the titles the frontend rebuilds from each node', () => {
+    expect(stripNonDataFields(bundle('MATH.313 Count on.', 'item-2'))).toEqual(stripNonDataFields(bundle('Count on.', 'item-2')))
+  })
+
+  it('still sees an association pointing somewhere else', () => {
+    expect(stripNonDataFields(bundle('Count on.', 'item-2'))).not.toEqual(stripNonDataFields(bundle('Count on.', 'item-3')))
+  })
+})
+
 describe('mintForkedIdentifiers', () => {
   const tenantId = 'test-tenant'
   const caseVersion = '1.1'
@@ -151,7 +173,7 @@ describe('mintForkedIdentifiers', () => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
   it('mints fresh UUID identifiers and local URIs for every entity', () => {
-    const minted = mintForkedIdentifiers(payload(), tenantId, caseVersion)
+    const { bundle: minted } = mintForkedIdentifiers(payload(), tenantId, caseVersion)
 
     expect(minted.CFDocument.identifier).toMatch(uuidRegex)
     expect(minted.CFDocument.identifier).not.toBe('source-doc')
@@ -173,7 +195,7 @@ describe('mintForkedIdentifiers', () => {
   })
 
   it('remaps an association origin reference to the new item identifier', () => {
-    const minted = mintForkedIdentifiers(payload(), tenantId, caseVersion)
+    const { bundle: minted } = mintForkedIdentifiers(payload(), tenantId, caseVersion)
     const newItem1Id = minted.CFItems![0].identifier
 
     const assoc = minted.CFAssociations![0]
@@ -182,18 +204,37 @@ describe('mintForkedIdentifiers', () => {
   })
 
   it('remaps an association reference to the document-as-node case', () => {
-    const minted = mintForkedIdentifiers(payload(), tenantId, caseVersion)
+    const { bundle: minted } = mintForkedIdentifiers(payload(), tenantId, caseVersion)
 
     const assoc = minted.CFAssociations![0]
     expect(assoc.destinationNodeURI.identifier).toBe(minted.CFDocument.identifier)
     expect(assoc.destinationNodeURI.uri).toBe(minted.CFDocument.uri)
   })
 
-  it('throws on a dangling association reference', () => {
-    const p = payload()
-    p.CFAssociations[0].originNodeURI.identifier = 'does-not-exist'
+  it('leaves an association reference to a node in another framework unchanged', () => {
+    const p: any = payload()
+    const otherFrameworkItem = { title: 'Other', identifier: 'other-framework-item', uri: 'https://other.example.org/ims/case/v1p1/CFItems/other-framework-item' }
+    p.CFAssociations[0].destinationNodeURI = { ...otherFrameworkItem }
 
-    expect(() => mintForkedIdentifiers(p, tenantId, caseVersion)).toThrow(/references unknown node/)
+    const { bundle: minted } = mintForkedIdentifiers(p, tenantId, caseVersion)
+
+    const assoc = minted.CFAssociations![0]
+    expect(assoc.destinationNodeURI).toEqual(otherFrameworkItem)
+    expect(assoc.originNodeURI.identifier).toBe(minted.CFItems![0].identifier)
+  })
+
+  it('returns each old document and item identifier\'s new one', () => {
+    const { bundle: minted, forkedIdentifiers } = mintForkedIdentifiers(payload(), tenantId, caseVersion)
+
+    expect(forkedIdentifiers['source-doc']).toBe(minted.CFDocument.identifier)
+    expect(forkedIdentifiers['source-item-1']).toBe(minted.CFItems![0].identifier)
+  })
+
+  it('throws on an association reference with no identifier', () => {
+    const p: any = payload()
+    delete p.CFAssociations[0].originNodeURI.identifier
+
+    expect(() => mintForkedIdentifiers(p, tenantId, caseVersion)).toThrow(/has no identifier/)
   })
 
   it('keeps a reference URI\'s identifier but rebases it onto this instance, since forking makes the framework fully independent of the source host', () => {
@@ -202,7 +243,7 @@ describe('mintForkedIdentifiers', () => {
     p.CFItems[0].CFItemTypeURI = { identifier: 'itemtype-1', uri: 'https://source.example.org/ims/case/v1p1/CFItemTypes/itemtype-1', title: 'Standard' }
     p.CFAssociations[0].CFAssociationGroupingURI = { identifier: 'grouping-1', uri: 'https://source.example.org/ims/case/v1p1/CFAssociationGroupings/grouping-1', title: 'Alignment' }
 
-    const minted = mintForkedIdentifiers(p, tenantId, caseVersion)
+    const { bundle: minted } = mintForkedIdentifiers(p, tenantId, caseVersion)
 
     expect((minted.CFDocument as any).licenseURI).toEqual({ identifier: 'license-1', uri: '/ims/case/v1p1/CFLicenses/license-1', title: 'CC BY' })
     expect((minted.CFItems![0] as any).CFItemTypeURI).toEqual({ identifier: 'itemtype-1', uri: '/ims/case/v1p1/CFItemTypes/itemtype-1', title: 'Standard' })

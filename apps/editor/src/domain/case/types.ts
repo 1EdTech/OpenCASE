@@ -1,3 +1,5 @@
+import type { AlignmentStorage } from '@/domain/framework/model/types'
+
 /**
  * CASE 1.1 TypeScript DTOs (JSON shapes)
  * Mirrors `docs/editor-types.md`.
@@ -73,6 +75,12 @@ export interface CFDocument {
    * Persisted in `ext:opencase.publicAccess`. Absent means sign-in is required.
    */
   publicAccess?: boolean
+
+  /**
+   * Editor-only: where the framework stores its associations to other frameworks.
+   * Persisted in `ext:opencase.alignmentStorage`. Absent means inline.
+   */
+  alignmentStorage?: AlignmentStorage
 
   lastChangeDateTime: string
 
