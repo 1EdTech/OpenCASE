@@ -108,6 +108,21 @@ describe('ImportFramework', () => {
       expect(mockRepository.saveNewVersion).toHaveBeenCalledTimes(1)
     })
 
+    it('derives the source CFPackage URL for pasted JSON from the document uri (CGE-45)', async () => {
+      await importFramework.execute({
+        tenantId,
+        caseVersion,
+        cfPackage: {
+          CFPackage: { CFDocument: { ...cfDocument, uri: 'https://source.example.org/ims/case/v1p1/CFDocuments/doc-123' } }
+        }
+      })
+
+      const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
+      const savedExtensions = savedPkg.document.toJSON().extensions
+      expect(savedExtensions['ext:opencase'].sourcePackageURI).toBe('https://source.example.org/ims/case/v1p1/CFPackages/doc-123')
+      expect(savedExtensions['ext:opencase'].isModifiedFromSource).toBe(false)
+    })
+
     it('marks pasted JSON as a pristine mirror without a sourcePackageURI (no known source URL)', async () => {
       await importFramework.execute({
         tenantId,
