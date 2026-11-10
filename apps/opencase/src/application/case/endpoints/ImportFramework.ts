@@ -11,6 +11,7 @@ import { CFRubric } from '../../../domain/case/entities/CFRubric'
 import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { logger } from '../../../infrastructure/logging/Logger'
 import { OPENCASE_EXT_KEY, stripOpenCaseExtensions } from '../services/openCaseExtensions'
+import { deriveSourcePackageURI } from '../services/packageUri'
 import { coerceMistypedStrings } from '../services/coerceMistypedStrings'
 import type { ImportDocumentFlags } from '../types/ImportDocumentFlags'
 
@@ -38,8 +39,8 @@ export interface ImportFrameworkResult {
  * Create the `ext:opencase` extension on a CFDocument payload, marking it as a
  * pristine mirror of the source. The payload must already have had any incoming
  * `ext:opencase` discarded (see execute) — OpenCASE's own state is never taken
- * from an import source. `endpointUrl` is only known when the framework was
- * imported by URL (as opposed to a pasted JSON payload).
+ * from an import source. `endpointUrl` is the import URL, or for pasted JSON
+ * whatever source could be derived from the document (may be unknown).
  */
 function injectSourceProvenance (
   docPayload: any,
@@ -49,9 +50,9 @@ function injectSourceProvenance (
   const existing = docPayload.extensions ?? {}
 
   const extPatch: Record<string, unknown> = {
-    // Only record a source URL when one is known — pasted JSON has no
-    // publisher endpoint, so the field is left off entirely rather than
-    // written as undefined.
+    // Only record a source URL when one is known — pasted JSON whose source
+    // can't be derived has none, so the field is left off entirely rather
+    // than written as undefined.
     ...(endpointUrl ? { sourcePackageURI: endpointUrl } : {}),
     isModifiedFromSource: false,
     importedAt: new Date().toISOString(),
@@ -111,7 +112,8 @@ export class ImportFramework {
     } else {
       logger.info({ tenantId, caseVersion }, 'Importing framework from provided JSON')
       const normalized = stripOpenCaseExtensions(normalizeCfPackageData(cfPackage))
-      const provenanceUri = (sourcePackageUri ?? endpointUrl ?? '').trim()
+      // With no import endpoint, fall back to the source the document itself points at.
+      const provenanceUri = (sourcePackageUri ?? endpointUrl ?? deriveSourcePackageURI(normalized.CFDocument) ?? '').trim()
       sourceCFPackage = {
         ...normalized,
         CFDocument: injectSourceProvenance(normalized.CFDocument, provenanceUri || undefined, documentFlags)

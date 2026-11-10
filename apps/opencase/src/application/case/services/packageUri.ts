@@ -6,9 +6,10 @@ import type { LinkData } from '../../../domain/case/value-objects/LinkData'
  * It is never stored — a CFPackage's CFDocument (CFPckgDocument) has no
  * CFPackageURI, so it only exists in these responses.
  *
- * - Pristine mirror imported by URL: points at the source it was imported from.
+ * - Pristine mirror with a known source (imported by URL, or pasted as JSON
+ *   whose source could be derived — see deriveSourcePackageURI): points at that source.
  * - Everything else (forks, locally authored, mirrors pasted as JSON with no
- *   known source): points at this server's CFPackages endpoint.
+ *   derivable source): points at this server's CFPackages endpoint.
  */
 export function buildCFPackageURI (
   docId: SourcedId,
@@ -21,6 +22,26 @@ export function buildCFPackageURI (
     ? sourcePackageURI.trim()
     : `${caseVersion === '1.1' ? '/ims/case/v1p1' : '/ims/case/v1p0'}/CFPackages/${docId}`
   return { title: 'CFPackage', identifier: docId, uri }
+}
+
+/**
+ * Work out the publisher's CFPackage URL for a framework pasted/uploaded as JSON,
+ * where there's no import endpoint to record. Uses the CFDocument's own
+ * CFPackageURI if the publisher included one, otherwise derives it from a
+ * CASE-API-shaped CFDocument uri (`…/ims/case/v1pX/CFDocuments/{id}` →
+ * `…/ims/case/v1pX/CFPackages/{id}`). Only absolute http(s) URLs are accepted;
+ * returns undefined when no source can be determined.
+ */
+export function deriveSourcePackageURI (cfDocument: any): string | undefined {
+  const isAbsoluteHttp = (v: unknown): v is string => typeof v === 'string' && /^https?:\/\//i.test(v.trim())
+
+  const declared = cfDocument?.CFPackageURI?.uri
+  if (isAbsoluteHttp(declared)) return declared.trim()
+
+  const docUri = cfDocument?.uri
+  if (!isAbsoluteHttp(docUri)) return undefined
+  const match = docUri.trim().match(/^(.*\/ims\/case\/v1p[01])\/CFDocuments\/([^/?#]+)\/?$/i)
+  return match ? `${match[1]}/CFPackages/${match[2]}` : undefined
 }
 
 /** Read the `ext:opencase` object off a CFDocument's extensions, if present. */
