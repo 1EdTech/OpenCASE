@@ -65,6 +65,9 @@ export const LEGACY_STATUS_MAP: Readonly<Record<string, string>> = {
  * Normalise an adoption status value:
  *  1. Map known legacy values to their modern equivalents.
  *  2. Leave all other values (including custom / imported) unchanged.
+ *
+ * For classification only (badge color, draft vs. finalized) — never write
+ * the result back to a framework or show it in place of the stored value.
  */
 export function normalizeAdoptionStatus(raw: string | undefined): string | undefined {
   if (!raw) return raw

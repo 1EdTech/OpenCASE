@@ -3,27 +3,23 @@ import { cn } from '@/lib/utils'
 import { normalizeAdoptionStatus } from '@/domain/framework/model/adoptionStatus'
 
 /** Status badge styling — prominent, with strong color coding */
-const STATUS_STYLE: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+const STATUS_STYLE: Record<string, { bg: string; text: string; dot: string }> = {
   Draft: {
-    label: 'Draft',
     bg: 'bg-amber-100',
     text: 'text-amber-800',
     dot: 'bg-[#FF941F]',
   },
   'Pending Implementation': {
-    label: 'Pending',
     bg: 'bg-sky-100',
     text: 'text-sky-800',
     dot: 'bg-[#29ABE3]',
   },
   Implemented: {
-    label: 'Published',
     bg: 'bg-emerald-100',
     text: 'text-emerald-800',
     dot: 'bg-emerald-500',
   },
   Retired: {
-    label: 'Retired',
     bg: 'bg-gray-100',
     text: 'text-gray-500',
     dot: 'bg-[#919496]',
@@ -31,7 +27,7 @@ const STATUS_STYLE: Record<string, { label: string; bg: string; text: string; do
 }
 
 type Props = {
-  /** Raw CFDocument adoptionStatus — legacy values are normalized, unrecognized ones shown as-is */
+  /** Raw CFDocument adoptionStatus, shown as stored — legacy values take their modern equivalent's color */
   adoptionStatus?: string
   /** Read-only cached remote framework (CGE cache) */
   readOnly?: boolean
@@ -49,22 +45,21 @@ type Props = {
  * shared by the home screen's framework cards and the editor header.
  */
 export function FrameworkLabels({
-  adoptionStatus: rawAdoptionStatus,
+  adoptionStatus,
   readOnly,
   publicAccess,
   sourcePackageURI,
   isModifiedFromSource,
   className,
 }: Readonly<Props>) {
-  const adoptionStatus = normalizeAdoptionStatus(rawAdoptionStatus) ?? rawAdoptionStatus
-  const statusInfo = adoptionStatus ? STATUS_STYLE[adoptionStatus] : undefined
+  const statusInfo = adoptionStatus ? STATUS_STYLE[normalizeAdoptionStatus(adoptionStatus) ?? adoptionStatus] : undefined
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
       {adoptionStatus && statusInfo ? (
         <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold', statusInfo.bg, statusInfo.text)}>
           <span className={cn('inline-block h-2 w-2 rounded-full', statusInfo.dot)} />
-          {statusInfo.label}
+          {adoptionStatus}
         </span>
       ) : adoptionStatus ? (
         <span className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">

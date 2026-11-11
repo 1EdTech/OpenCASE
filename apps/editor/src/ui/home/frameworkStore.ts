@@ -79,14 +79,12 @@ function createFrameworkFromMetadata(params: {
   adoptionStatus?: string
   caseVersion?: string
 }): Framework {
-  const normalized = normalizeAdoptionStatus(params.adoptionStatus) ?? params.adoptionStatus
-
   const metadata: FrameworkMetadata = {
     title: params.title,
     description: params.description,
     creator: params.creator,
     frameworkType: params.frameworkType,
-    adoptionStatus: normalized,
+    adoptionStatus: params.adoptionStatus,
     caseVersion: params.caseVersion ?? '1.1', // Default to CASE 1.1 for new frameworks
     lastChangeDateTime: new Date().toISOString(),
   }
@@ -96,7 +94,7 @@ function createFrameworkFromMetadata(params: {
     metadata,
     items: new Map(),
     associations: new Map(),
-    status: adoptionStatusToDomainStatus(normalized),
+    status: adoptionStatusToDomainStatus(params.adoptionStatus),
   }
 }
 
