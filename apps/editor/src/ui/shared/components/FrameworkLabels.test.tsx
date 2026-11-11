@@ -11,14 +11,24 @@ describe('FrameworkLabels', () => {
 
   it.each([
     ['Draft', 'Draft'],
-    ['Pending Implementation', 'Pending'],
-    ['Implemented', 'Published'],
+    ['Pending Implementation', 'Pending Implementation'],
+    ['Implemented', 'Implemented'],
     ['Retired', 'Retired'],
-    ['Adopted', 'Published'],
-    ['Deprecated', 'Retired'],
+    ['Adopted', 'Adopted'],
+    ['Deprecated', 'Deprecated'],
   ])('shows adoption status %s as "%s"', (status, label) => {
     render(<FrameworkLabels adoptionStatus={status} />)
     expect(screen.getByText(label)).toBeInTheDocument()
+  })
+
+  it('no longer relabels Implemented as "Published"', () => {
+    render(<FrameworkLabels adoptionStatus="Implemented" />)
+    expect(screen.queryByText('Published')).not.toBeInTheDocument()
+  })
+
+  it('colors a legacy adoption status like its modern equivalent', () => {
+    render(<FrameworkLabels adoptionStatus="Adopted" />)
+    expect(screen.getByText('Adopted')).toHaveClass('bg-emerald-100', 'text-emerald-800')
   })
 
   it('shows an unrecognized adoption status as-is with the neutral badge', () => {
