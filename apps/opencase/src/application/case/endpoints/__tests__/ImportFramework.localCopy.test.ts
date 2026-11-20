@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { ImportFramework } from '../ImportFramework'
 import { CreateFramework } from '../CreateFramework'
+import { UpdateCFAssociation } from '../UpdateCFAssociation'
 import { GetCFPackage } from '../GetCFPackage'
 import { GetCFDocument } from '../GetCFDocument'
 import { FileFrameworkStore } from '../../../../infrastructure/persistence/file/FileFrameworkStore'
@@ -138,9 +139,8 @@ describe.each(['1.0', '1.1'] as CaseVersion[])('ImportFramework — local copy o
     expect(assoc(b.identifier, 'isChildOf').destinationNodeURI).toMatchObject({ identifier: a.identifier, uri: a.uri })
     expect(assoc(c.identifier, 'isChildOf').destinationNodeURI).toMatchObject({ identifier: b.identifier, uri: b.uri })
 
-    // References to other frameworks keep their identifier. (As for any local framework,
-    // node URIs are served from this host and resolved by identifier.)
-    expect(assoc(a.identifier, 'exactMatchOf').destinationNodeURI.identifier).toBe(externalItem.identifier)
+    // Keep the full reference to the other publisher.
+    expect(assoc(a.identifier, 'exactMatchOf').destinationNodeURI).toEqual(externalItem)
 
     // Rubric children get new identities and follow the item they assess.
     const criterion = rubric.CFRubricCriteria[0]
@@ -178,6 +178,42 @@ describe.each(['1.0', '1.1'] as CaseVersion[])('ImportFramework — local copy o
     const after = await read(docId)
     expect(ownedIds(after).sort()).toEqual(ownedIds(before).sort())
     expect(itemByStatement(after, 'B, edited').identifier).toBe(itemByStatement(before, 'B').identifier)
+    expect(after.CFAssociations.find((a: any) => a.associationType === 'exactMatchOf').destinationNodeURI).toEqual(externalItem)
+  })
+
+  it('keeps external item and document links through edits and a server restart', async () => {
+    const pkg = sourcePackage()
+    const externalDocument = { identifier: 'other-doc', uri: 'https://other.example.org/ims/case/v1p1/CFDocuments/other-doc', title: 'Other document' }
+    pkg.CFAssociations[3].originNodeURI = externalDocument
+    const { docId } = await importFramework.execute({ tenantId, caseVersion, cfPackage: pkg })
+    const before = await read(docId)
+    const checkLinks = (saved: any) => {
+      const association = saved.CFAssociations.find((a: any) => a.associationType === 'exactMatchOf')
+      expect(association.originNodeURI).toEqual(externalDocument)
+      expect(association.destinationNodeURI).toEqual(externalItem)
+    }
+    checkLinks(before)
+    itemByStatement(before, 'B').fullStatement = 'Edited'
+    await createFramework.execute({ tenantId, caseVersion, payload: before })
+    checkLinks(await read(docId))
+
+    const restartedStore = new FileFrameworkStore({ baseDataDir })
+    await restartedStore.loadAll()
+    const restartedGet = new GetCFPackage(new FileCFPackageRepository(restartedStore), restartedStore)
+    checkLinks(await restartedGet.execute({ tenantId, caseVersion, docId }))
+  })
+
+  it('keeps external links when an association is updated directly', async () => {
+    const { docId } = await importJson()
+    const pkg = await read(docId)
+    const association = pkg.CFAssociations.find((a: any) => a.associationType === 'exactMatchOf')
+    const update = new UpdateCFAssociation(new FileCFPackageRepository(store), store)
+    await update.execute({ tenantId, caseVersion, sourcedId: association.identifier, payload: { ...association, sequenceNumber: 2 } })
+
+    const saved = (await read(docId)).CFAssociations.find((a: any) => a.identifier === association.identifier)
+    expect(saved.destinationNodeURI).toEqual(externalItem)
+    expect(saved.originNodeURI).toEqual(association.originNodeURI)
+    expect(saved.sequenceNumber).toBe(2)
   })
 
   it('creates a separate copy each time the same source is imported', async () => {
@@ -192,13 +228,31 @@ describe.each(['1.0', '1.1'] as CaseVersion[])('ImportFramework — local copy o
     expect(await read(first.docId)).toEqual(firstPkg)
   })
 
-  it('imports a rubric criterion whose item link has no identifier', async () => {
+  it.each(['URL', 'URN', 'string'])('remaps a rubric item link with only a %s', async (kind) => {
     const pkg = sourcePackage()
-    pkg.CFRubrics[0].CFRubricCriteria[0].CFItemURI = { uri: `${source}/CFItems/item-a`, title: 'A' } as any
+    const uri = kind === 'URN' ? 'urn:case:item:item-a' : `${source}/CFItems/item-a`
+    pkg.CFRubrics[0].CFRubricCriteria[0].CFItemURI = (kind === 'string' ? uri : { uri, title: 'A' }) as any
     const { docId } = await importFramework.execute({ tenantId, caseVersion, cfPackage: pkg })
 
-    const criterion = (await read(docId)).CFRubrics[0].CFRubricCriteria[0]
+    const imported = await read(docId)
+    const item = itemByStatement(imported, 'A')
+    const criterion = imported.CFRubrics[0].CFRubricCriteria[0]
     expect(criterion.identifier).not.toBe('crit-1')
+    expect(criterion.CFItemURI).toEqual({ identifier: item.identifier, uri: item.uri, title: expect.any(String) })
+    if (kind !== 'string') expect(criterion.CFItemURI.title).toBe('A')
+
+    item.fullStatement = 'A, edited'
+    await createFramework.execute({ tenantId, caseVersion, payload: imported })
+    expect((await read(docId)).CFRubrics[0].CFRubricCriteria[0].CFItemURI).toEqual(criterion.CFItemURI)
+  })
+
+  it('keeps an unknown rubric item URL instead of guessing from its last path segment', async () => {
+    const pkg = sourcePackage()
+    const link = { title: 'External', uri: 'https://other.example.org/ims/case/v1p1/CFItems/item-a' }
+    pkg.CFRubrics[0].CFRubricCriteria[0].CFItemURI = link as any
+    const { docId } = await importFramework.execute({ tenantId, caseVersion, cfPackage: pkg })
+
+    expect((await read(docId)).CFRubrics[0].CFRubricCriteria[0].CFItemURI).toEqual(link)
   })
 
   it('keeps publisher identities for a read-only cache', async () => {

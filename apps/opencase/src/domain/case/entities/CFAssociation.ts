@@ -32,12 +32,14 @@ export class CFAssociation {
    * @param options.preserveUris        keep the source's identifiers and URIs exactly as supplied (mirrored frameworks)
    * @param options.documentIdentifiers identifiers known to be CFDocuments (e.g. the package's own CFDocument);
    *                                    association nodes with one of these identifiers get a /CFDocuments/{id} URI
+   * @param options.localNodeIdentifiers complete set of document and item IDs in this package;
+   *                                     references outside this set keep their supplied URIs
    */
   static fromRaw(
     tenantId: TenantId,
     caseVersion: CaseVersion,
     raw: any,
-    options?: { preserveUris?: boolean, documentIdentifiers?: Iterable<string> }
+    options?: { preserveUris?: boolean, documentIdentifiers?: Iterable<string>, localNodeIdentifiers?: ReadonlySet<string> }
   ): CFAssociation {
     // Extract identifier from URN if present (priority over sourcedId/identifier)
     let identifier = raw.sourcedId || raw.identifier
@@ -66,15 +68,10 @@ export class CFAssociation {
       originNodeURI = raw.originNodeURI
       destinationNodeURI = raw.destinationNodeURI
     } else {
-      // originNodeURI/destinationNodeURI reference a CFItem or a CFDocument, so —
-      // like CFItem.CFDocumentURI — their uri is always regenerated to point at the
-      // local host, regardless of what URI shape (URN, absolute foreign-host URL, or
-      // relative path) the source supplied. Only the identifier, and whether the node
-      // is a CFDocument or a CFItem, are trusted from the source data. Nodes with a
-      // non-CASE targetType are kept as supplied (see buildNodeLinkData).
+      // Rebase owned nodes. Keep external links when package membership is known.
       const documentIdentifiers = new Set<string>(options?.documentIdentifiers ?? [])
-      originNodeURI = this.buildNodeLinkData(tenantId, caseVersion, raw.originNodeURI, raw.originNode, documentIdentifiers)
-      destinationNodeURI = this.buildNodeLinkData(tenantId, caseVersion, raw.destinationNodeURI, raw.destinationNode, documentIdentifiers)
+      originNodeURI = this.buildNodeLinkData(tenantId, caseVersion, raw.originNodeURI, raw.originNode, documentIdentifiers, options?.localNodeIdentifiers)
+      destinationNodeURI = this.buildNodeLinkData(tenantId, caseVersion, raw.destinationNodeURI, raw.destinationNode, documentIdentifiers, options?.localNodeIdentifiers)
     }
 
     // CFAssociationGroupingURI references a per-tenant definition entity that
@@ -120,7 +117,8 @@ export class CFAssociation {
   }
 
   /**
-   * Builds the local LinkData for an association node (origin or destination).
+   * Rebase owned nodes and keep references outside the package.
+   * Without package membership, use legacy URI rebasing.
    * The node is treated as a CFDocument when its identifier is a known document
    * identifier, when the source supplied a `urn:case:document:` URN, or when the
    * source URI (relative or absolute, any CASE version) points at
@@ -131,7 +129,8 @@ export class CFAssociation {
     caseVersion: CaseVersion,
     link: any,
     legacyNodeId: unknown,
-    documentIdentifiers: Set<string>
+    documentIdentifiers: Set<string>,
+    localNodeIdentifiers?: ReadonlySet<string>
   ): LinkData {
     // CASE 1.1 lets an association point outside CASE (spec §1.9.3). A node whose
     // targetType is anything other than 'CASE' is not served by OpenCASE, so it is
@@ -158,6 +157,10 @@ export class CFAssociation {
       }
     } else if (typeof uriFromSource === 'string') {
       isDocument = this.isDocumentUri(uriFromSource, String(id))
+    }
+
+    if (localNodeIdentifiers && !localNodeIdentifiers.has(String(id)) && typeof uriFromSource === 'string' && uriFromSource) {
+      return { ...link, title: link.title ?? String(id), identifier: link.identifier ?? id, uri: uriFromSource }
     }
 
     if (documentIdentifiers.has(String(id))) isDocument = true
