@@ -20,7 +20,7 @@ const ROLE_OPTIONS: { value: TenantMemberRole; label: string; hint: string }[] =
 ]
 
 function roleLabel (role: TenantMemberRole | null): string {
-  if (!role) return '—'
+  if (!role) return 'No role'
   return ROLE_OPTIONS.find((o) => o.value === role)?.label ?? role
 }
 
@@ -112,7 +112,7 @@ export default function MembersDialog({
   }, [api, tenantId, email, role, loadMembers])
 
   const handleRoleChange = useCallback(async (member: TenantMember, nextRole: TenantMemberRole) => {
-    if (!member.role || member.role === nextRole) return
+    if (member.role === nextRole) return
     setUpdatingUserId(member.userId)
     setError(null)
     try {
@@ -227,11 +227,12 @@ export default function MembersDialog({
                   </div>
                   <select
                     className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700"
-                    value={m.role ?? 'viewer'}
+                    value={m.role ?? ''}
                     disabled={updatingUserId === m.userId}
                     onChange={(e) => void handleRoleChange(m, e.target.value as TenantMemberRole)}
                     aria-label={`Role for ${m.email ?? m.userId}`}
                   >
+                    {m.role ? null : <option value="" disabled>No role</option>}
                     {ROLE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}

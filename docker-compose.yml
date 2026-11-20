@@ -126,6 +126,8 @@ services:
       - SMTP_PORT=${SMTP_PORT:-1025}
       - SMTP_FROM=noreply@${OPENCASE_HOSTNAME:-opencase.local}
       - KEYCLOAK_SSL_REQUIRED=${KEYCLOAK_SSL_REQUIRED:-none}
+      # The tenant ensure-self assigns the default role in (defaults to system when empty)
+      - DEFAULT_TENANT_ID=${DEFAULT_TENANT_ID:-}
       # SSO org claim + CASE Global
       - SSO_ORG_CLAIM=${SSO_ORG_CLAIM:-org_id}
       - CGE_TOKEN_URL=${CGE_TOKEN_URL:-}
@@ -187,7 +189,7 @@ services:
       - VITE_OPENCASE_BASE_URL=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-:3000}
       - VITE_OIDC_AUTHORITY=${OPENCASE_SCHEME:-http}://${OPENCASE_HOSTNAME:-localhost}${OPENCASE_PORT_SUFFIX-:3000}/realms/${KEYCLOAK_REALM:-opencase}
       - VITE_OIDC_CLIENT_ID_PREFIX=${OIDC_CLIENT_ID_PREFIX:-tenant-}
-      # Single-tenant mode: skip tenant lookup, sign in directly (leave empty to disable)
+      # The tenant users sign in to (defaults to system when empty)
       - VITE_DEFAULT_TENANT_ID=${DEFAULT_TENANT_ID:-}
     volumes:
       # Mount source for hot-reload

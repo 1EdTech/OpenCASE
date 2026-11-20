@@ -2,8 +2,8 @@ type AppConfig = {
   opencaseBaseUrl: string
   oidcAuthority: string
   oidcClientIdPrefix: string
-  /** When set, skip tenant lookup and sign in directly with this tenant. */
-  defaultTenantId: string | null
+  /** The OpenCASE tenant users sign in to; `system` unless VITE_DEFAULT_TENANT_ID overrides it. */
+  defaultTenantId: string
 }
 
 function readRequiredEnv(key: keyof ImportMetaEnv, fallback?: string): string {
@@ -23,7 +23,7 @@ export function getAppConfig(): AppConfig {
     opencaseBaseUrl: readRequiredEnv('VITE_OPENCASE_BASE_URL', 'http://localhost:8080'),
     oidcAuthority: readRequiredEnv('VITE_OIDC_AUTHORITY', 'http://localhost:8081/realms/opencase'),
     oidcClientIdPrefix: readRequiredEnv('VITE_OIDC_CLIENT_ID_PREFIX', 'tenant-'),
-    defaultTenantId: readOptionalEnv('VITE_DEFAULT_TENANT_ID'),
+    defaultTenantId: readOptionalEnv('VITE_DEFAULT_TENANT_ID') ?? 'system',
   }
 }
 

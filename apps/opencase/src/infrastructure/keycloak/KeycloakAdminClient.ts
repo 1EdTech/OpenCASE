@@ -10,6 +10,9 @@ export interface KeycloakAdminClientConfig {
   password?: string
 }
 
+/** User attribute marking that OpenCASE has managed this user's member role at least once. */
+export const MEMBER_ROLE_PROVISIONED_ATTRIBUTE = 'opencaseRoleProvisioned'
+
 type TokenResponse = {
   access_token: string
   expires_in: number
@@ -218,6 +221,55 @@ export class KeycloakAdminClient {
 
     if (toRemove.length > 0) await this.removeClientRoles(userId, clientUuid, toRemove)
     if (toAdd.length > 0) await this.assignClientRoles(userId, clientUuid, toAdd)
+    await this.markMemberRoleProvisioned(userId)
+  }
+
+  /**
+   * Declare the role-provisioned user attribute in the realm user profile (idempotent).
+   * Keycloak 24+ silently drops attributes the user profile does not declare.
+   */
+  async ensureMemberRoleProvisionedAttribute (): Promise<void> {
+    const path = `/admin/realms/${encodeURIComponent(this.cfg.realm)}/users/profile`
+    const profile = await this.requestJson('GET', path)
+    const attributes = Array.isArray(profile?.attributes) ? profile.attributes : []
+    if (attributes.some((a: any) => a?.name === MEMBER_ROLE_PROVISIONED_ATTRIBUTE)) return
+
+    await this.requestJson('PUT', path, {
+      ...profile,
+      attributes: [
+        ...attributes,
+        {
+          name: MEMBER_ROLE_PROVISIONED_ATTRIBUTE,
+          displayName: 'OpenCASE role provisioned',
+          permissions: { view: ['admin'], edit: ['admin'] },
+          multivalued: false
+        }
+      ]
+    })
+    logger.info({ realm: this.cfg.realm }, 'Declared member-role-provisioned user profile attribute')
+  }
+
+  /**
+   * True once OpenCASE has set (or removed) this user's member role, so a user whose
+   * roles were deliberately removed is not given the default role again on next login.
+   */
+  async isMemberRoleProvisioned (userId: string): Promise<boolean> {
+    const user = await this.requestJson('GET', `/admin/realms/${encodeURIComponent(this.cfg.realm)}/users/${encodeURIComponent(userId)}`)
+    const values = user?.attributes?.[MEMBER_ROLE_PROVISIONED_ATTRIBUTE]
+    return Array.isArray(values) && values.includes('true')
+  }
+
+  async markMemberRoleProvisioned (userId: string): Promise<void> {
+    const path = `/admin/realms/${encodeURIComponent(this.cfg.realm)}/users/${encodeURIComponent(userId)}`
+    const user = await this.requestJson('GET', path)
+    if (!user?.id) throw new Error(`Keycloak user '${userId}' not found`)
+    if (user.attributes?.[MEMBER_ROLE_PROVISIONED_ATTRIBUTE]?.includes('true')) return
+
+    // PUT replaces the whole user: a partial body would clear email, names, and other attributes.
+    await this.requestJson('PUT', path, {
+      ...user,
+      attributes: { ...(user.attributes ?? {}), [MEMBER_ROLE_PROVISIONED_ATTRIBUTE]: ['true'] }
+    })
   }
 
   async ensureProtocolMapper (clientUuid: string, mapper: any): Promise<void> {
@@ -381,6 +433,27 @@ export class KeycloakAdminClient {
       email: u.email,
       roles: [...u.roles].sort()
     }))
+  }
+
+  /** List every user in the realm, paging through the Admin API. */
+  async listUsers (): Promise<Array<{ id: string, username?: string, email?: string }>> {
+    const realm = this.cfg.realm
+    const pageSize = 500
+    const users: Array<{ id: string, username?: string, email?: string }> = []
+
+    for (let first = 0; ; first += pageSize) {
+      const page = await this.requestJson(
+        'GET',
+        `/admin/realms/${encodeURIComponent(realm)}/users?briefRepresentation=true&first=${first}&max=${pageSize}`
+      )
+      if (!Array.isArray(page)) break
+      for (const u of page) {
+        if (u?.id) users.push({ id: u.id, username: u.username, email: u.email })
+      }
+      if (page.length < pageSize) break
+    }
+
+    return users
   }
 
   async findClientByClientIdPublic (clientId: string): Promise<{ id: string, clientId: string } | null> {

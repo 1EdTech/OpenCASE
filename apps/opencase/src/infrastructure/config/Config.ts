@@ -43,9 +43,12 @@ export interface AppConfig {
   // Keycloak realm SSL enforcement ('none' for HTTP dev, 'external' for production HTTPS)
   keycloakRealmSslRequired: 'none' | 'external' | 'all';
 
+  /** The OpenCASE tenant (the part after the client id prefix in Keycloak). */
+  defaultTenantId: string;
+
   /**
    * Access-token claim from federated IdP (Auth0) carrying the organization id.
-   * Convention: claim value equals OpenCASE tenantId (1:1).
+   * Unused: CASE Global identifies the org from its API key, not this claim. Candidate for removal.
    */
   ssoOrgClaim: string;
 
@@ -99,6 +102,8 @@ export function loadConfig(): AppConfig {
     smtpFrom: process.env.SMTP_FROM ?? 'noreply@opencase.local',
 
     keycloakRealmSslRequired: (process.env.KEYCLOAK_SSL_REQUIRED ?? (isProduction ? 'external' : 'none')) as 'none' | 'external' | 'all',
+
+    defaultTenantId: process.env.DEFAULT_TENANT_ID?.trim() || 'system',
 
     ssoOrgClaim: process.env.SSO_ORG_CLAIM ?? 'org_id',
 

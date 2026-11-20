@@ -349,6 +349,7 @@ export async function buildContainer(): Promise<Container> {
   for (let attempt = 1; attempt <= maxRetries && !keycloakReady; attempt++) {
     try {
       await keycloakAdmin.ensureRealmExists()
+      await keycloakAdmin.ensureMemberRoleProvisionedAttribute()
       await keycloakTenantProvisioner.bootstrapSystemAdmin()
       await keycloakAdmin.setRealmSslRequired(config.keycloakRealm, config.keycloakRealmSslRequired)
       await keycloakAdmin.setRealmSslRequired(config.keycloakAdminRealm, config.keycloakRealmSslRequired)
@@ -399,7 +400,7 @@ export async function buildContainer(): Promise<Container> {
 
   const membersManagementController = new MembersManagementController(keycloakAdmin, {
     clientIdPrefix: config.oidcClientIdPrefix,
-    ssoOrgClaim: config.ssoOrgClaim
+    defaultTenantId: config.defaultTenantId
   })
 
   const cgeCredentialsStore = new FileCgeCredentialsStore(

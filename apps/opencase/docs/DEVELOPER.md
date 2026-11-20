@@ -173,7 +173,7 @@ Keycloak-issued access tokens are JWTs containing:
 - `aud` / `azp` - Audience / authorized party (must match the tenant client id)
 - `tenantId` - Tenant identifier (injected by Keycloak mapper, required for tenant-scoped operations)
 - `scope` - Space-separated list of granted scopes (from client roles)
-- `org_id` - Optional SSO org claim (must equal `tenantId` for ensure-self); claim name configurable via `SSO_ORG_CLAIM`
+- `org_id` - Optional SSO org claim; unused (CASE Global does not need it) and a candidate for removal; claim name configurable via `SSO_ORG_CLAIM`
 - `sub` - Subject (user ID for authorization_code flow, client ID for client_credentials)
 
 ### Tenancy model
@@ -322,6 +322,8 @@ GET /management/tenants/{tenantId}/members
 Authorization: Bearer {access_token}
 ```
 
+Lists every user in the realm. Users without a role on this tenant have `role: null` and `scopes: []`.
+
 **Add member:**
 ```bash
 POST /management/tenants/{tenantId}/members
@@ -345,19 +347,19 @@ Content-Type: application/json
 { "role": "admin" }
 ```
 
-**Remove member** (removes this tenant’s client roles only):
+**Remove member** (removes this tenant’s client roles only; the user stays listed with no role and ensure-self won't give them one back):
 ```bash
 DELETE /management/tenants/{tenantId}/members/{userId}
 Authorization: Bearer {access_token}
 ```
 
-**SSO ensure-self** (no `case.*` scope; requires access-token `org_id` === `tenantId`):
+**ensure-self** (no `case.*` scope; only in the `DEFAULT_TENANT_ID` tenant, `system` by default):
 ```bash
 POST /management/tenants/{tenantId}/members/ensure-self
 Authorization: Bearer {access_token}
 ```
 
-Assigns default `author` roles on first login when the org claim matches. Re-authenticate afterward so the JWT includes the new scopes.
+Assigns default `author` roles on first login to a user who has no role and has never had one (tracked in the `opencaseRoleProvisioned` user attribute). Returns `status: "assigned"` when it did; the caller should then refresh its access token so the JWT includes the new scopes.
 
 #### OpenCASE API Keys
 

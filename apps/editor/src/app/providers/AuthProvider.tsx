@@ -16,6 +16,8 @@ type AuthContextValue = {
   completeSignIn: (_callbackUrl?: string) => Promise<void>
   signOut: () => Promise<void>
   getAccessToken: () => Promise<string | null>
+  /** Fetch a new access token silently, e.g. after the user's own roles changed. */
+  refreshAccessToken: () => Promise<void>
   /**
    * Redirect to Keycloak's password change form via kc_action=UPDATE_PASSWORD.
    * Null for federated users (external IdP) who do not have a Keycloak-managed password.
@@ -245,6 +247,11 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     return u.access_token
   }, [userManager])
 
+  const refreshAccessToken = useCallback(async () => {
+    // The userLoaded event handler above stores the renewed user.
+    await userManager.signinSilent()
+  }, [userManager])
+
   const changePasswordFn = useCallback(async () => {
     await userManager.signinRedirect({
       extraQueryParams: { kc_action: 'UPDATE_PASSWORD' },
@@ -266,9 +273,10 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       completeSignIn,
       signOut,
       getAccessToken,
+      refreshAccessToken,
       changePassword,
     }),
-    [status, tenantId, user, userName, accessToken, error, setTenantId, signIn, completeSignIn, signOut, getAccessToken, changePassword],
+    [status, tenantId, user, userName, accessToken, error, setTenantId, signIn, completeSignIn, signOut, getAccessToken, refreshAccessToken, changePassword],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

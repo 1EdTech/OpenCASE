@@ -33,6 +33,7 @@ describe('Config', () => {
       delete process.env.KEYCLOAK_BOOTSTRAP_SYSTEM_ADMIN;
       delete process.env.KEYCLOAK_SYSTEM_ADMIN_EMAIL;
       delete process.env.KEYCLOAK_SYSTEM_ADMIN_PASSWORD;
+      delete process.env.DEFAULT_TENANT_ID;
 
       const config = loadConfig();
 
@@ -49,6 +50,7 @@ describe('Config', () => {
       expect(config.keycloakBootstrapSystemAdmin).toBe(true);
       expect(config.keycloakSystemAdminEmail).toBe('system-admin@local');
       expect(config.keycloakSystemAdminPassword).toBe('admin');
+      expect(config.defaultTenantId).toBe('system');
       expect(config.ssoOrgClaim).toBe('org_id');
       expect(config.cgeTokenUrl).toBe('');
       expect(config.cgeApiBaseUrl).toBe('');
@@ -79,6 +81,7 @@ describe('Config', () => {
       process.env.KEYCLOAK_BOOTSTRAP_SYSTEM_ADMIN = 'true';
       process.env.KEYCLOAK_SYSTEM_ADMIN_EMAIL = 'sys@local';
       process.env.KEYCLOAK_SYSTEM_ADMIN_PASSWORD = 'pw';
+      process.env.DEFAULT_TENANT_ID = 'acme';
 
       const config = loadConfig();
 
@@ -95,6 +98,15 @@ describe('Config', () => {
       expect(config.keycloakBootstrapSystemAdmin).toBe(true);
       expect(config.keycloakSystemAdminEmail).toBe('sys@local');
       expect(config.keycloakSystemAdminPassword).toBe('pw');
+      expect(config.defaultTenantId).toBe('acme');
+    });
+
+    it('should fall back to the system tenant when DEFAULT_TENANT_ID is blank', () => {
+      process.env.DEFAULT_TENANT_ID = '  ';
+
+      const config = loadConfig();
+
+      expect(config.defaultTenantId).toBe('system');
     });
 
     it('should convert PORT string to number', () => {
