@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { CaseVersion, TenantId } from '../../../domain/case/value-objects/Identifiers'
-import { LinkDataHelper } from '../../../domain/case/value-objects/LinkData'
+import { LinkDataHelper, UrnCaseUriHelper } from '../../../domain/case/value-objects/LinkData'
 
 export interface RawComparableBundle {
   CFDocument: any
@@ -131,7 +131,13 @@ export function mintForkedIdentifiers (
   // Old identifier (item or document) -> newly-minted identifier.
   const nodeIdMap = new Map<string, string>()
 
-  const oldDocId = (cloned.CFDocument.sourcedId ?? cloned.CFDocument.identifier) as string | undefined
+  const sourceIdentifier = (entity: any): string | undefined =>
+    entity.identifier || entity.sourcedId || entity.id ||
+    (typeof entity.uri === 'string' && UrnCaseUriHelper.isUrnCaseUri(entity.uri)
+      ? UrnCaseUriHelper.parseUrnCaseUri(entity.uri)?.identifier
+      : undefined)
+
+  const oldDocId = sourceIdentifier(cloned.CFDocument)
   const newDocId = randomUUID()
   if (oldDocId) nodeIdMap.set(oldDocId, newDocId)
 
@@ -149,7 +155,7 @@ export function mintForkedIdentifiers (
   }
 
   for (const item of cloned.CFItems ?? []) {
-    const oldItemId = (item.sourcedId ?? item.identifier) as string | undefined
+    const oldItemId = sourceIdentifier(item)
     const newItemId = randomUUID()
     if (oldItemId) nodeIdMap.set(oldItemId, newItemId)
     item.sourcedId = newItemId
@@ -203,6 +209,29 @@ export function mintForkedIdentifiers (
     rubric.identifier = newRubricId
     rubric.sourcedId = newRubricId
     rubric.uri = `${base}/CFRubrics/${newRubricId}`
+
+    // Embedded children resolve through the local rubric endpoint.
+    for (const criterion of rubric.CFRubricCriteria ?? rubric.criteria ?? []) {
+      const newCriterionId = randomUUID()
+      criterion.identifier = newCriterionId
+      criterion.uri = `${rubric.uri}#${newCriterionId}`
+      if ('sourcedId' in criterion) criterion.sourcedId = newCriterionId
+      if ('id' in criterion) criterion.id = newCriterionId
+      if ('rubricId' in criterion) criterion.rubricId = newRubricId
+      // A criterion's item link is optional, and has never been required to carry an identifier.
+      if (criterion.CFItemURI?.identifier) {
+        criterion.CFItemURI = resolveNode(criterion.CFItemURI, 'rubric criterion CFItemURI')
+      }
+
+      for (const level of criterion.CFRubricCriterionLevels ?? []) {
+        const newLevelId = randomUUID()
+        level.identifier = newLevelId
+        level.uri = `${rubric.uri}#${newLevelId}`
+        if ('sourcedId' in level) level.sourcedId = newLevelId
+        if ('id' in level) level.id = newLevelId
+        if ('rubricCriterionId' in level) level.rubricCriterionId = newCriterionId
+      }
+    }
   }
 
   return { bundle: cloned, forkedIdentifiers: Object.fromEntries(nodeIdMap) }

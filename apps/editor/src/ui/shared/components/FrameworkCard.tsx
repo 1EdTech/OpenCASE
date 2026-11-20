@@ -40,10 +40,6 @@ type Props = {
   children?: ReactNode
   /** ISO date string for the last change — shown in the card footer */
   lastChanged?: string
-  /** URL the framework was imported from, if known — shown in the Mirrored/Forked badge tooltip */
-  sourcePackageURI?: string
-  /** Set (true or false) once a framework has been imported/mirrored; true once it's been locally modified (forked) */
-  isModifiedFromSource?: boolean
   /** Read-only cached remote framework (CGE cache) */
   readOnly?: boolean
   /** CASE API readable without signing in */
@@ -66,8 +62,6 @@ export function FrameworkCard({
   className,
   children,
   lastChanged,
-  sourcePackageURI,
-  isModifiedFromSource,
   readOnly,
   publicAccess,
 }: Readonly<Props>) {
@@ -178,8 +172,6 @@ export function FrameworkCard({
             adoptionStatus={adoptionStatus}
             readOnly={readOnly}
             publicAccess={publicAccess}
-            sourcePackageURI={sourcePackageURI}
-            isModifiedFromSource={isModifiedFromSource}
           />
 
           {relDate ? (

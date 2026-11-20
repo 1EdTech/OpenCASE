@@ -54,7 +54,8 @@ describe('ImportFramework', () => {
         endpointUrl: 'https://example.org/ims/case/v1p1/CFPackages/doc-123'
       })
 
-      expect(result.docId).toBe('doc-123')
+      expect(result.docId).not.toBe('doc-123')
+      expect(result.docId).toBe(mockRepository.saveNewVersion.mock.calls[0][2].document.sourcedId)
       expect(mockApiClient.fetchCFPackage).toHaveBeenCalledWith(
         'https://example.org/ims/case/v1p1/CFPackages/doc-123',
         undefined
@@ -92,7 +93,7 @@ describe('ImportFramework', () => {
         }
       })
 
-      expect(result.docId).toBe('doc-123')
+      expect(result.docId).not.toBe('doc-123')
       expect(mockApiClient.fetchCFPackage).not.toHaveBeenCalled()
       expect(mockRepository.saveNewVersion).toHaveBeenCalledTimes(1)
     })
@@ -104,7 +105,7 @@ describe('ImportFramework', () => {
         cfPackage: { CFDocument: cfDocument, CFItems: [], CFAssociations: [], CFRubrics: [] }
       })
 
-      expect(result.docId).toBe('doc-123')
+      expect(result.docId).not.toBe('doc-123')
       expect(mockRepository.saveNewVersion).toHaveBeenCalledTimes(1)
     })
 
@@ -120,10 +121,10 @@ describe('ImportFramework', () => {
       const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
       const savedExtensions = savedPkg.document.toJSON().extensions
       expect(savedExtensions['ext:opencase'].sourcePackageURI).toBe('https://source.example.org/ims/case/v1p1/CFPackages/doc-123')
-      expect(savedExtensions['ext:opencase'].isModifiedFromSource).toBe(false)
+      expect(savedExtensions['ext:opencase'].isModifiedFromSource).toBe(true)
     })
 
-    it('marks pasted JSON as a pristine mirror without a sourcePackageURI (no known source URL)', async () => {
+    it('creates a local copy of pasted JSON without a sourcePackageURI when the source is unknown', async () => {
       await importFramework.execute({
         tenantId,
         caseVersion,
@@ -133,7 +134,7 @@ describe('ImportFramework', () => {
       const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
       const savedExtensions = savedPkg.document.toJSON().extensions
       expect(savedExtensions?.['ext:opencase']?.sourcePackageURI).toBeUndefined()
-      expect(savedExtensions?.['ext:opencase']?.isModifiedFromSource).toBe(false)
+      expect(savedExtensions?.['ext:opencase']?.isModifiedFromSource).toBe(true)
     })
 
     it('stores associations to other frameworks inline, whatever the source file says', async () => {
@@ -149,7 +150,7 @@ describe('ImportFramework', () => {
       expect(savedPkg.document.toJSON().extensions['ext:opencase'].alignmentStorage).toBe('inline')
     })
 
-    it('preserves the source uri as-is (does not rewrite it onto this instance) when importing from a URL', async () => {
+    it('uses a local uri when importing from a URL', async () => {
       const foreignDocument = {
         ...cfDocument,
         uri: 'https://source.example.org/ims/case/v1p1/CFDocuments/doc-123'
@@ -165,10 +166,10 @@ describe('ImportFramework', () => {
       })
 
       const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
-      expect(savedPkg.document.toJSON().uri).toBe('https://source.example.org/ims/case/v1p1/CFDocuments/doc-123')
+      expect(savedPkg.document.toJSON().uri).toBe(`/ims/case/v1p1/CFDocuments/${savedPkg.document.sourcedId}`)
     })
 
-    it('preserves the source uri as-is when importing from pasted JSON', async () => {
+    it('uses a local uri when importing from pasted JSON', async () => {
       const foreignDocument = {
         ...cfDocument,
         uri: 'https://source.example.org/ims/case/v1p1/CFDocuments/doc-123'
@@ -181,7 +182,7 @@ describe('ImportFramework', () => {
       })
 
       const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
-      expect(savedPkg.document.toJSON().uri).toBe('https://source.example.org/ims/case/v1p1/CFDocuments/doc-123')
+      expect(savedPkg.document.toJSON().uri).toBe(`/ims/case/v1p1/CFDocuments/${savedPkg.document.sourcedId}`)
     })
 
     it('accepts a package with extra/unknown fields and does not save them (CGE-59)', async () => {
@@ -287,7 +288,7 @@ describe('ImportFramework', () => {
         lastChangeDateTime: '2024-01-01T00:00:00+00:00'
       })
 
-      it('saves numeric hierarchyCodes as strings and still treats the import as a pristine mirror', async () => {
+      it('saves numeric hierarchyCodes as strings in the local copy', async () => {
         importFramework = new ImportFramework(mockRepository, mockApiClient, realValidator())
 
         await importFramework.execute({
@@ -301,7 +302,7 @@ describe('ImportFramework', () => {
 
         const savedPkg = mockRepository.saveNewVersion.mock.calls[0][2]
         expect(savedPkg.definitions?.CFItemTypes?.map((t: any) => t.hierarchyCode)).toEqual(['1', '2', '3'])
-        expect(savedPkg.document.toJSON().extensions['ext:opencase'].isModifiedFromSource).toBe(false)
+        expect(savedPkg.document.toJSON().extensions['ext:opencase'].isModifiedFromSource).toBe(true)
       })
 
       it('no longer reports the coerced fields as validation warnings', async () => {
@@ -351,7 +352,7 @@ describe('ImportFramework', () => {
 
         expect(savedPkg.document.toJSON().extensions.sourceSystem).toBe('smartschool')
         // Only server-injected provenance survives — nothing from the import file.
-        expect(docOpencase.isModifiedFromSource).toBe(false)
+        expect(docOpencase.isModifiedFromSource).toBe(true)
         expect(docOpencase).not.toHaveProperty('publicAccess')
         expect(docOpencase).not.toHaveProperty('readOnly')
 
