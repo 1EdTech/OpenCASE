@@ -1789,8 +1789,6 @@ export default function EditorCanvas({ onBack, onSaveToServer, onPlanAlignmentSt
           adoptionStatus: loadedFramework?.metadata?.adoptionStatus,
           readOnly,
           publicAccess: loadedFramework?.metadata?.publicAccess === true,
-          sourcePackageURI: mirrorStatus?.sourcePackageURI,
-          isModifiedFromSource: mirrorStatus?.isModifiedFromSource,
         }}
         userName={userName ?? undefined}
         tenantId={tenantId ?? undefined}

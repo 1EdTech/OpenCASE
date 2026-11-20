@@ -37,8 +37,9 @@ export class FileCFPackageRepository implements CFPackageRepository {
     const items = (bundle.items ?? []).map((i: unknown) =>
       CFItem.fromRaw(tenantId, version, i, document.sourcedId, docURI, preserveUris)
     )
+    const localNodeIdentifiers = new Set([document.sourcedId, ...items.map(i => i.sourcedId)])
     const associations = (bundle.associations ?? []).map((a: unknown) =>
-      CFAssociation.fromRaw(tenantId, version, a, { ...preserveUris, documentIdentifiers: [document.sourcedId] })
+      CFAssociation.fromRaw(tenantId, version, a, { ...preserveUris, documentIdentifiers: [document.sourcedId], localNodeIdentifiers })
     )
     const rubrics = (bundle.rubrics ?? []).map((r: unknown) =>
       CFRubric.fromRaw(tenantId, version, r, preserveUris)

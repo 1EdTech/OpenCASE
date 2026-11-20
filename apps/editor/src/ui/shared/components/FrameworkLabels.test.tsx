@@ -46,19 +46,16 @@ describe('FrameworkLabels', () => {
     expect(screen.getByText('Public')).toHaveAttribute('title', 'Anyone can read this framework without signing in')
   })
 
-  it('shows Mirrored for an unmodified import, with the source in the tooltip', () => {
-    render(<FrameworkLabels isModifiedFromSource={false} sourcePackageURI="https://example.org/pkg" />)
-    expect(screen.getByText('Mirrored')).toHaveAttribute('title', 'Mirrored from https://example.org/pkg')
-  })
+  it.each([false, true, undefined])('does not show import status when isModifiedFromSource is %s', (isModifiedFromSource) => {
+    const provenance = { isModifiedFromSource, sourcePackageURI: 'https://example.org/pkg' }
+    const { container } = render(<FrameworkLabels {...provenance} adoptionStatus="Draft" readOnly publicAccess />)
 
-  it('shows Forked for a locally modified import', () => {
-    render(<FrameworkLabels isModifiedFromSource />)
-    expect(screen.getByText('Forked')).toHaveAttribute('title', 'Forked — originally mirrored, now locally modified')
-  })
-
-  it('shows no mirror badge for a framework that was never imported', () => {
-    render(<FrameworkLabels adoptionStatus="Draft" />)
     expect(screen.queryByText('Mirrored')).not.toBeInTheDocument()
     expect(screen.queryByText('Forked')).not.toBeInTheDocument()
+    expect(screen.queryByTitle(/mirrored|forked/i)).not.toBeInTheDocument()
+    expect(container.querySelector('svg')).not.toBeInTheDocument()
+    expect(screen.getByText('Draft')).toBeInTheDocument()
+    expect(screen.getByText('Read-only')).toBeInTheDocument()
+    expect(screen.getByText('Public')).toBeInTheDocument()
   })
 })

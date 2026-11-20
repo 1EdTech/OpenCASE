@@ -9,14 +9,15 @@ describe('CanvasHeader', () => {
       <CanvasHeader
         frameworkTitle="Skills-First Product Managers Skill Taxonomy"
         frameworkSubtitle="Competency"
-        frameworkLabels={{ adoptionStatus: 'Derived', publicAccess: true, isModifiedFromSource: false }}
+        frameworkLabels={{ adoptionStatus: 'Derived', publicAccess: true }}
       />,
     )
     expect(screen.getByText('Skills-First Product Managers Skill Taxonomy')).toBeInTheDocument()
     expect(screen.getByText('Competency')).toBeInTheDocument()
     expect(screen.getByText('Derived')).toBeInTheDocument()
     expect(screen.getByText('Public')).toBeInTheDocument()
-    expect(screen.getByText('Mirrored')).toBeInTheDocument()
+    expect(screen.queryByText('Mirrored')).not.toBeInTheDocument()
+    expect(screen.queryByText('Forked')).not.toBeInTheDocument()
   })
 
   it('shows no labels when none are given', () => {
