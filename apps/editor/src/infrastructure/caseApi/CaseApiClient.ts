@@ -88,8 +88,8 @@ export class CaseApiClient {
   }
 
   /**
-   * SSO first-login: assign default author roles when org_id claim matches tenant.
-   * Idempotent. Caller should re-authenticate if status is `assigned`.
+   * First login: assign the default author role to a user who has never had a role.
+   * Idempotent. Caller should refresh its access token if status is `assigned`.
    */
   async ensureSelfMembership(params: { tenantId: string }): Promise<{
     status: string

@@ -27,8 +27,8 @@ export class MembersManagementController {
     private readonly admin: KeycloakAdminClient,
     private readonly cfg: {
       clientIdPrefix: string
-      /** Access-token claim carrying Auth0 org id (default org_id). */
-      ssoOrgClaim: string
+      /** The OpenCASE tenant; ensure-self only assigns the default role here. */
+      defaultTenantId: string
     }
   ) {}
 
@@ -47,14 +47,23 @@ export class MembersManagementController {
 
       await this.admin.ensureTenantMemberRoles(client.id)
 
-      const users = await this.admin.listUsersWithClientRoles(client.id, [...TENANT_MEMBERSHIP_ROLES])
-      const members = users.map(u => ({
-        userId: u.id,
-        email: u.email ?? null,
-        username: u.username ?? null,
-        role: memberRoleFromScopes(u.roles),
-        scopes: u.roles.filter(isManagedMembershipRole)
-      }))
+      // Every realm user is listed, including users without a role yet, so admins can
+      // assign roles here instead of in the Keycloak Admin Console.
+      const [allUsers, usersWithRoles] = await Promise.all([
+        this.admin.listUsers(),
+        this.admin.listUsersWithClientRoles(client.id, [...TENANT_MEMBERSHIP_ROLES])
+      ])
+      const rolesByUserId = new Map(usersWithRoles.map(u => [u.id, u.roles]))
+      const members = allUsers.map(u => {
+        const roles = rolesByUserId.get(u.id) ?? []
+        return {
+          userId: u.id,
+          email: u.email ?? null,
+          username: u.username ?? null,
+          role: memberRoleFromScopes(roles),
+          scopes: roles.filter(isManagedMembershipRole)
+        }
+      })
 
       return res.status(200).json({ members })
     } catch (error: any) {
@@ -160,6 +169,8 @@ export class MembersManagementController {
       if (toRemove.length > 0) {
         await this.admin.removeClientRoles(userId, client.id, toRemove)
       }
+      // Keep ensure-self from giving the default role back on the user's next login.
+      await this.admin.markMemberRoleProvisioned(userId)
 
       return res.status(200).json({ status: 'removed', userId })
     } catch (error: any) {
@@ -169,27 +180,30 @@ export class MembersManagementController {
   }
 
   /**
-   * SSO first-login: assign default author roles when org claim matches tenant
-   * and the user has no tenant client roles yet.
+   * First login: assign the default author role to a user who has no tenant roles
+   * and has never had a member role set or removed by OpenCASE.
    */
   ensureSelf: RequestHandler = async (req: Request, res: Response) => {
     try {
       const tenantId = requireMatchingTenant(req, res)
       if (!tenantId) return
 
-      const user = (req as any).user as Record<string, unknown> | undefined
-      const claimName = this.cfg.ssoOrgClaim
-      const orgClaim = user?.[claimName]
-      const orgId = typeof orgClaim === 'string'
-        ? orgClaim
-        : Array.isArray(orgClaim)
-          ? String(orgClaim[0] ?? '')
-          : ''
-
-      if (!orgId || orgId !== tenantId) {
+      if (tenantId !== this.cfg.defaultTenantId) {
         return res.status(403).json({
           error: 'Forbidden',
-          message: `Access token claim '${claimName}' must match tenantId for ensure-self`
+          message: `ensure-self only assigns roles in tenant '${this.cfg.defaultTenantId}'`
+        })
+      }
+
+      const user = (req as any).user as Record<string, unknown> | undefined
+
+      // Only people signing in to the Editor. API-key tokens are issued to their own client,
+      // and must not be able to give their service account a member role.
+      const editorClientId = OidcJwtVerifier.computeTenantClientId(this.cfg.clientIdPrefix, tenantId)
+      if (user?.azp !== editorClientId) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: `ensure-self requires a token issued to '${editorClientId}'`
         })
       }
 
@@ -213,18 +227,22 @@ export class MembersManagementController {
         })
       }
 
+      if (await this.admin.isMemberRoleProvisioned(sub)) {
+        return res.status(200).json({ status: 'unchanged', userId: sub, role: null, scopes: [] })
+      }
+
       const role: MemberRole = 'author'
       const roles = keycloakRolesForMemberRole(role)
       await this.admin.setMemberRole(sub, client.id, roles)
 
-      logger.info({ tenantId, userId: sub }, 'SSO ensure-self assigned default author roles')
+      logger.info({ tenantId, userId: sub }, 'ensure-self assigned default author roles')
 
       return res.status(200).json({
         status: 'assigned',
         userId: sub,
         role,
         scopes: roles,
-        note: 'Re-authenticate to refresh access token scopes'
+        note: 'Refresh the access token to pick up the new scopes'
       })
     } catch (error: any) {
       logger.error({ error: error?.message }, 'Failed ensure-self membership')

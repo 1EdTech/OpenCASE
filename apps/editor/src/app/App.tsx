@@ -19,6 +19,7 @@ import type { CaseVersion } from '@/application/framework/mappers/case/CasePacka
 import type { CFAssociationGrouping, CFItemType, CFLicense, CFSubject, CFConcept, CFDefinition } from '@/domain/case/types'
 import { extractCfDefinitions, preferFrameworkDefinitions } from '@/application/framework/mappers/case/frameworkDefinitions'
 import LoginScreen from '@/ui/auth/LoginScreen'
+import { ensureDefaultMembership } from '@/app/ensureDefaultMembership'
 import { detectTopology } from '@/ui/editor/layout/detectTopology'
 import { applyInitialLayout } from '@/ui/editor/layout/applyInitialLayout'
 
@@ -38,7 +39,7 @@ export default function App() {
 }
 
 function AppInner() {
-  const { completeSignIn, getAccessToken, status: authStatus, tenantId } = useAuth()
+  const { completeSignIn, getAccessToken, refreshAccessToken, status: authStatus, tenantId } = useAuth()
   const cfg = getAppConfig()
   const api = useMemo(() => new CaseApiClient(createFetchHttpClient(cfg.opencaseBaseUrl, { getAccessToken })), [cfg.opencaseBaseUrl, getAccessToken])
 
@@ -195,18 +196,17 @@ function AppInner() {
     setRoute('login')
   }, [authStatus, route])
 
-  // SSO: ensure default tenant membership when org_id claim matches (idempotent).
+  // First login: give the user the default role (idempotent) and refresh their token if it did.
   const ensureSelfAttempted = useRef<string | null>(null)
   useEffect(() => {
     if (authStatus !== 'authenticated' || !tenantId) return
     const key = tenantId
     if (ensureSelfAttempted.current === key) return
     ensureSelfAttempted.current = key
-    void api.ensureSelfMembership({ tenantId }).catch((err: unknown) => {
-      // Expected when org_id claim is absent (non-SSO / local users).
-      console.debug('[App] ensure-self skipped or failed:', err)
+    ensureDefaultMembership(api, tenantId, refreshAccessToken).catch((err: unknown) => {
+      console.warn('[App] ensure-self failed:', err)
     })
-  }, [authStatus, tenantId, api])
+  }, [authStatus, tenantId, api, refreshAccessToken])
 
   // Fetch the full definitions catalogue from the management endpoint once authenticated.
   useEffect(() => {
