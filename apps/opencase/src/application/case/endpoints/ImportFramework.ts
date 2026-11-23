@@ -12,6 +12,7 @@ import { CFPackage } from '../../../domain/case/entities/CFPackage'
 import { logger } from '../../../infrastructure/logging/Logger'
 import { OPENCASE_EXT_KEY, stripOpenCaseExtensions } from '../services/openCaseExtensions'
 import { deriveSourcePackageURI } from '../services/packageUri'
+import { mintForkedIdentifiers } from '../services/mirrorFork'
 import { coerceMistypedStrings } from '../services/coerceMistypedStrings'
 import type { ImportDocumentFlags } from '../types/ImportDocumentFlags'
 
@@ -36,11 +37,8 @@ export interface ImportFrameworkResult {
 }
 
 /**
- * Create the `ext:opencase` extension on a CFDocument payload, marking it as a
- * pristine mirror of the source. The payload must already have had any incoming
- * `ext:opencase` discarded (see execute) — OpenCASE's own state is never taken
- * from an import source. `endpointUrl` is the import URL, or for pasted JSON
- * whatever source could be derived from the document (may be unknown).
+ * Record source provenance after incoming OpenCASE state has been removed.
+ * Editable imports get local identities. Read-only caches keep source identities.
  */
 function injectSourceProvenance (
   docPayload: any,
@@ -54,7 +52,7 @@ function injectSourceProvenance (
     // can't be derived has none, so the field is left off entirely rather
     // than written as undefined.
     ...(endpointUrl ? { sourcePackageURI: endpointUrl } : {}),
-    isModifiedFromSource: false,
+    isModifiedFromSource: documentFlags?.readOnly !== true,
     importedAt: new Date().toISOString(),
     // An imported CFPackage carries its associations to other frameworks inline,
     // and there is no way to import alignment frameworks.
@@ -121,7 +119,7 @@ export class ImportFramework {
     }
 
     // Use CFPackage format directly (matches API response format)
-    const payload = {
+    let payload = {
       CFDocument: sourceCFPackage.CFDocument,
       CFItems: sourceCFPackage.CFItems ?? [],
       CFAssociations: sourceCFPackage.CFAssociations ?? [],
@@ -130,10 +128,7 @@ export class ImportFramework {
       extensions: sourceCFPackage.extensions
     }
 
-    // Saves are strictly validated against the CFPackage schema, so numbers the
-    // publisher sent where a string belongs are turned into strings now — otherwise
-    // the framework imports fine but can never be saved (CGE-183). This is a type
-    // correction of the source's own values, so the import is still a pristine mirror.
+    // Convert numeric values to strings where the save schema requires strings.
     const packageSchemaName = caseVersion === '1.1' ? 'case-v1p1-cfpackage' : 'case-v1p0-cfpackage'
     const coercedPaths = coerceMistypedStrings(this.validator, packageSchemaName, payload)
     if (coercedPaths.length > 0) {
@@ -155,9 +150,13 @@ export class ImportFramework {
       }
     }
 
-    // Create domain entities from CFPackage format. Mirrored imports preserve the
-    // source's identifiers/URIs as-is rather than rewriting them onto this instance —
-    // they're only regenerated once the framework is edited and forked (a later task).
+    // Keep publisher identities for read-only remote references and cache refreshes.
+    if (documentFlags?.readOnly !== true) {
+      const { bundle } = mintForkedIdentifiers(payload, tenantId, caseVersion)
+      payload = { ...payload, ...bundle }
+    }
+
+    // Local identities are already set. Cache identities must stay unchanged.
     const preserveUris = { preserveUris: true }
     const document = CFDocument.fromRaw(tenantId, caseVersion, payload.CFDocument, preserveUris)
     const docId = document.sourcedId

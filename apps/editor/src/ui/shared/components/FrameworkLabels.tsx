@@ -1,4 +1,3 @@
-import { CloudArrowDownIcon } from '@heroicons/react/24/solid'
 import { cn } from '@/lib/utils'
 import { normalizeAdoptionStatus } from '@/domain/framework/model/adoptionStatus'
 
@@ -33,23 +32,17 @@ type Props = {
   readOnly?: boolean
   /** CASE API readable without signing in */
   publicAccess?: boolean
-  /** URL the framework was imported from, if known — shown in the Mirrored/Forked badge tooltip */
-  sourcePackageURI?: string
-  /** Set (true or false) once a framework has been imported/mirrored; true once it's been locally modified (forked) */
-  isModifiedFromSource?: boolean
   className?: string
 }
 
 /**
- * Framework status badges (adoption status, Read-only, Public, Mirrored/Forked),
+ * Framework status badges (adoption status, Read-only, Public),
  * shared by the home screen's framework cards and the editor header.
  */
 export function FrameworkLabels({
   adoptionStatus,
   readOnly,
   publicAccess,
-  sourcePackageURI,
-  isModifiedFromSource,
   className,
 }: Readonly<Props>) {
   const statusInfo = adoptionStatus ? STATUS_STYLE[normalizeAdoptionStatus(adoptionStatus) ?? adoptionStatus] : undefined
@@ -75,24 +68,6 @@ export function FrameworkLabels({
       {publicAccess ? (
         <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800" title="Anyone can read this framework without signing in">
           Public
-        </span>
-      ) : null}
-      {isModifiedFromSource !== undefined ? (
-        <span
-          className={cn(
-            'inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold',
-            isModifiedFromSource
-              ? 'bg-violet-100 text-violet-700'
-              : 'bg-sky-100 text-sky-700',
-          )}
-          title={
-            isModifiedFromSource
-              ? sourcePackageURI ? `Forked — originally mirrored from ${sourcePackageURI}` : 'Forked — originally mirrored, now locally modified'
-              : sourcePackageURI ? `Mirrored from ${sourcePackageURI}` : 'Mirrored — kept in sync with its imported source'
-          }
-        >
-          <CloudArrowDownIcon className="h-3 w-3" />
-          {isModifiedFromSource ? 'Forked' : 'Mirrored'}
         </span>
       ) : null}
     </div>

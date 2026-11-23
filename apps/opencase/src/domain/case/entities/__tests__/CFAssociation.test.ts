@@ -129,6 +129,26 @@ describe('CFAssociation', () => {
       expect(json.destinationNodeURI.identifier).toBe('item-2');
     });
 
+    it.each([undefined, 'CASE', 'ext:external'])('keeps external links with targetType %s when package membership is known', (targetType) => {
+      const external = {
+        title: 'External', identifier: 'external', uri: 'https://other.example.org/ims/case/v1p1/CFItems/external',
+        ...(targetType ? { targetType } : {})
+      };
+      const owned = { title: 'Owned', identifier: 'item-1', uri: 'https://source.example.org/ims/case/v1p0/CFItems/item-1' };
+      const options = { localNodeIdentifiers: new Set(['doc-1', 'item-1']), documentIdentifiers: ['doc-1'] };
+      const forward = CFAssociation.fromRaw(tenantId, caseVersion, {
+        identifier: 'assoc-1', associationType: 'exactMatchOf', originNodeURI: owned, destinationNodeURI: external
+      }, options).toJSON();
+      expect(forward.originNodeURI.uri).toBe('/ims/case/v1p1/CFItems/item-1');
+      expect(forward.destinationNodeURI).toEqual(external);
+
+      const reversed = CFAssociation.fromRaw(tenantId, caseVersion, {
+        identifier: 'assoc-2', associationType: 'exactMatchOf', originNodeURI: external, destinationNodeURI: owned
+      }, options).toJSON();
+      expect(reversed.originNodeURI).toEqual(external);
+      expect(reversed.destinationNodeURI.uri).toBe('/ims/case/v1p1/CFItems/item-1');
+    });
+
     describe('node URIs pointing at a CFDocument (#44)', () => {
       const docId = '11111111-1111-4111-8111-111111111111';
       const itemId = '22222222-2222-4222-8222-222222222222';

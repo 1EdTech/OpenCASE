@@ -257,6 +257,7 @@ export class CgeManagementController {
         tenantId,
         caseVersion,
         cfPackage,
+        sourcePackageUri: endpointUrl,
         validateSchema: req.body?.validateSchema ?? false
         // No documentFlags — editable import
       })

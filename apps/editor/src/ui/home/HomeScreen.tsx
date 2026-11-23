@@ -835,8 +835,6 @@ export default function HomeScreen({
                           frameworkType: doc.frameworkType,
                           adoptionStatus: doc.adoptionStatus,
                         }}
-                        sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
-                        isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         readOnly={doc.readOnly === true}
                         publicAccess={doc.extensions?.['ext:opencase']?.publicAccess === true}
                         rightHint={isArchiving ? 'Archiving' : hint}
@@ -902,8 +900,6 @@ export default function HomeScreen({
                           frameworkType: doc.frameworkType,
                           adoptionStatus: doc.adoptionStatus,
                         }}
-                        sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
-                        isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         readOnly
                         publicAccess={doc.extensions?.['ext:opencase']?.publicAccess === true}
                         rightHint={isArchiving ? 'Archiving' : hint}
@@ -955,8 +951,6 @@ export default function HomeScreen({
                           frameworkType: doc.frameworkType,
                           adoptionStatus: doc.adoptionStatus,
                         }}
-                        sourcePackageURI={doc.extensions?.['ext:opencase']?.sourcePackageURI}
-                        isModifiedFromSource={doc.extensions?.['ext:opencase']?.isModifiedFromSource}
                         readOnly={doc.readOnly === true}
                         publicAccess={doc.extensions?.['ext:opencase']?.publicAccess === true}
                         rightHint={isDeleting ? 'Deleting' : (isRestoring ? 'Restoring' : undefined)}

@@ -175,10 +175,12 @@ export class CreateFramework {
       const doc = CFDocument.fromRaw(tenantId, caseVersion, docPayload, uriOptions)
       const dId = doc.sourcedId
       const dURI = doc.toJSON().uri
+      const items = itemsPayload.map((i: any) => CFItem.fromRaw(tenantId, caseVersion, i, dId, dURI, uriOptions))
+      const localNodeIdentifiers = new Set([dId, ...items.map(i => i.sourcedId)])
       return {
         document: doc,
-        items: itemsPayload.map((i: any) => CFItem.fromRaw(tenantId, caseVersion, i, dId, dURI, uriOptions)),
-        associations: assocPayload.map((a: any) => CFAssociation.fromRaw(tenantId, caseVersion, a, { ...uriOptions, documentIdentifiers: [dId] })),
+        items,
+        associations: assocPayload.map((a: any) => CFAssociation.fromRaw(tenantId, caseVersion, a, { ...uriOptions, documentIdentifiers: [dId], localNodeIdentifiers })),
         rubrics: rubricsPayload.map((r: any) => CFRubric.fromRaw(tenantId, caseVersion, r, uriOptions))
       }
     }
@@ -304,8 +306,9 @@ export class CreateFramework {
     const items = cfItemsPayload.map((i: any) =>
       CFItem.fromRaw(tenantId, caseVersion, i, docId, docURI, preserveUris)
     )
+    const localNodeIdentifiers = new Set([docId, ...items.map(i => i.sourcedId)])
     const associations = cfAssociationsPayload.map((a: any) =>
-      CFAssociation.fromRaw(tenantId, caseVersion, a, { ...preserveUris, documentIdentifiers: [docId] })
+      CFAssociation.fromRaw(tenantId, caseVersion, a, { ...preserveUris, documentIdentifiers: [docId], localNodeIdentifiers })
     )
     const rubrics = cfRubricsPayload.map((r: any) =>
       CFRubric.fromRaw(tenantId, caseVersion, r, preserveUris)
