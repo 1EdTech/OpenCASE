@@ -11,8 +11,7 @@ type AuthContextValue = {
   userName: string | null
   accessToken: string | null
   error: string | null
-  setTenantId: (_tenantId: string) => void
-  signIn: (_tenantId?: string, _options?: { loginHint?: string }) => Promise<void>
+  signIn: () => Promise<void>
   completeSignIn: (_callbackUrl?: string) => Promise<void>
   signOut: () => Promise<void>
   getAccessToken: () => Promise<string | null>
@@ -23,22 +22,6 @@ type AuthContextValue = {
    * Null for federated users (external IdP) who do not have a Keycloak-managed password.
    */
   changePassword: (() => Promise<void>) | null
-}
-
-const STORAGE_KEY_TENANT = 'case-editor:auth:tenantId'
-
-function readTenantId(): string {
-  const raw = globalThis.localStorage?.getItem(STORAGE_KEY_TENANT) ?? ''
-  const trimmed = raw.trim()
-  return trimmed || 'demo'
-}
-
-function writeTenantId(tenantId: string) {
-  try {
-    globalThis.localStorage?.setItem(STORAGE_KEY_TENANT, tenantId)
-  } catch {
-    // ignore (storage may be unavailable)
-  }
 }
 
 function isFederatedUser(user: User | null): boolean {
@@ -82,7 +65,7 @@ export function createUserManager(params: { authority: string; clientId: string;
  */
 export async function runSilentRenewCallback(): Promise<void> {
   const cfg = getAppConfig()
-  const tenantId = readTenantId()
+  const tenantId = cfg.defaultTenantId
   const mgr = createUserManager({
     authority: cfg.oidcAuthority,
     clientId: `${cfg.oidcClientIdPrefix}${tenantId}`,
@@ -96,7 +79,8 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const cfg = getAppConfig()
-  const [tenantId, setTenantIdState] = useState<string>(() => readTenantId())
+  // Everyone signs in to the deployment's one tenant (`system` unless configured otherwise).
+  const tenantId = cfg.defaultTenantId
   const [status, setStatus] = useState<AuthStatus>('loading')
   const [user, setUser] = useState<User | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -161,39 +145,17 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
     }
   }, [userManager])
 
-  const setTenantId = useCallback((nextTenantId: string) => {
-    const trimmed = nextTenantId.trim()
-    if (!trimmed) return
-    writeTenantId(trimmed)
-    setTenantIdState(trimmed)
-  }, [])
-
-  const signIn = useCallback(
-    async (maybeTenantId?: string, options?: { loginHint?: string }) => {
-      const nextTenantId = (maybeTenantId ?? tenantId).trim()
-      if (!nextTenantId) throw new Error('tenantId is required')
-      if (nextTenantId !== tenantId) setTenantId(nextTenantId)
-
-      setStatus('loading')
-      setError(null)
-      // Important: tenantId changes affect client_id. If the caller supplied a different tenantId,
-      // we must redirect using a UserManager configured for that tenant immediately (state updates
-      // are async, and React StrictMode can remount in dev).
-      const mgr =
-        nextTenantId === tenantId
-          ? userManager
-          : createUserManager({
-              authority: cfg.oidcAuthority,
-              clientId: `${cfg.oidcClientIdPrefix}${nextTenantId}`,
-              redirectUri,
-              tenantId: nextTenantId,
-            })
-      await mgr.signinRedirect({
-        extraQueryParams: options?.loginHint ? { login_hint: options.loginHint } : undefined,
-      })
-    },
-    [tenantId, userManager, setTenantId, cfg.oidcAuthority, cfg.oidcClientIdPrefix, redirectUri],
-  )
+  const signIn = useCallback(async () => {
+    setStatus('loading')
+    setError(null)
+    try {
+      await userManager.signinRedirect()
+    } catch (e) {
+      // The redirect never started (e.g. no Web Crypto outside a secure context): let the user retry.
+      setStatus('anonymous')
+      throw e
+    }
+  }, [userManager])
 
   const completeSignIn = useCallback(async (callbackUrl?: string) => {
     setStatus('loading')
@@ -268,7 +230,6 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       userName,
       accessToken,
       error,
-      setTenantId,
       signIn,
       completeSignIn,
       signOut,
@@ -276,7 +237,7 @@ export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
       refreshAccessToken,
       changePassword,
     }),
-    [status, tenantId, user, userName, accessToken, error, setTenantId, signIn, completeSignIn, signOut, getAccessToken, refreshAccessToken, changePassword],
+    [status, tenantId, user, userName, accessToken, error, signIn, completeSignIn, signOut, getAccessToken, refreshAccessToken, changePassword],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

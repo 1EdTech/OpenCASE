@@ -159,11 +159,6 @@ services:
       - "traefik.http.routers.opencase-oauth.entrypoints=web"
       - "traefik.http.routers.opencase-oauth.priority=100"
       - "traefik.http.routers.opencase-oauth.service=opencase"
-      # Route /public/* to OpenCASE (tenant lookup, etc.)
-      - "traefik.http.routers.opencase-public.rule=Host(`${OPENCASE_HOSTNAME:-localhost}`) && PathPrefix(`/public`)"
-      - "traefik.http.routers.opencase-public.entrypoints=web"
-      - "traefik.http.routers.opencase-public.priority=100"
-      - "traefik.http.routers.opencase-public.service=opencase"
       # Route /health to OpenCASE
       - "traefik.http.routers.opencase-health.rule=Host(`${OPENCASE_HOSTNAME:-localhost}`) && Path(`/health`)"
       - "traefik.http.routers.opencase-health.entrypoints=web"

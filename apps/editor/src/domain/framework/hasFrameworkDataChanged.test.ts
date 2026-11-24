@@ -80,7 +80,7 @@ describe('hasFrameworkDataChanged', () => {
   })
 
   it('ignores canvas-only changes stored as TOP-LEVEL metadata keys (the shape fromEditorGraph.ts actually produces)', () => {
-    // fromEditorGraph.ts (re-derives a Framework from the live canvas on every
+    // fromEditorGraph.ts (re-derives a Framework from the editor graph on every
     // save, and to capture the fork-detection baseline) writes colorBand/
     // originHandle/destinationHandle directly on metadata, NOT nested under
     // an 'ext:opencase' key — e.g. switching layout algorithms (star ↔

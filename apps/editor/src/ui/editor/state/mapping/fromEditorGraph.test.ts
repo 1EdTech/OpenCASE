@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toReactFlowGraph } from './toReactFlow'
+import { toEditorGraph } from './toEditorGraph'
 import { fromEditorGraph } from './fromEditorGraph'
 import type { Framework, Item, Association } from '@/domain/framework/model/types'
 import type { FrameworkId, ItemId, AssociationId } from '@/domain/shared/types'
@@ -45,8 +45,8 @@ describe('fromEditorGraph — association node-reference uri round-trip', () => 
       status: 'Draft',
     }
 
-    // Simulate: load into canvas, then save immediately with no edits.
-    const graph = toReactFlowGraph({ framework })
+    // Simulate: load into the editor, then save immediately with no edits.
+    const graph = toEditorGraph({ framework })
     const { framework: roundTripped } = fromEditorGraph({ graph })
 
     const roundTrippedAssoc = roundTripped.associations.get(assoc.id)
@@ -76,7 +76,7 @@ describe('fromEditorGraph — association node-reference uri round-trip', () => 
       status: 'Draft',
     }
 
-    const graph = toReactFlowGraph({ framework })
+    const graph = toEditorGraph({ framework })
     const { framework: roundTripped } = fromEditorGraph({ graph })
 
     const roundTrippedAssoc = roundTripped.associations.get(assoc.id)

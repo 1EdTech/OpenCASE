@@ -1,6 +1,6 @@
 # Associations: import, display and authoring
 
-How the editor and server handle a framework's associations: what gets imported, where associations are stored, how the Tree View shows and edits them, and what happens on save. The canvas view is disabled and is not covered here.
+How the editor and server handle a framework's associations: what gets imported, where associations are stored, how the Tree View shows and edits them, and what happens on save.
 
 ---
 
@@ -103,9 +103,9 @@ Import order matters for hosted vs remote. When imported frameworks link to each
 
 ## Loading into the editor
 
-The editor state (`EditorContext`, `editorReducer`) holds a framework as nodes (items and the document) and edges (associations between them). Only associations with **both ends in the framework** become edges. Associations to anything else, including every external association, have no edge. `withOffCanvasAssociations` carries them over from the framework as loaded when the editor saves, so they aren't lost.
+The editor state (`EditorContext`, `editorReducer`) holds a framework as nodes (items and the document) and edges (associations between them). Only associations with **both ends in the framework** become edges. Associations to anything else, including every external association, have no edge. `withOffCanvasAssociations` carries them over from the framework as loaded when the editor saves, so they aren't lost. That includes links the former canvas view drew to CASE Global frameworks (`ext:opencase.remoteLink`); a save keeps them but drops the canvas's handle positions from their `ext:opencase`, along with the document's and items' layout, edge style, and `linkedFrameworks`/`remoteItemLinks`.
 
-Edges keep their association's stored node titles (`toReactFlow` → `fromEditorGraph`), so a save writes back the titles that were loaded.
+Edges keep their association's stored node titles (`toEditorGraph` → `fromEditorGraph`), so a save writes back the titles that were loaded.
 
 ---
 
@@ -208,7 +208,7 @@ Associations interact with forking in four ways:
 | Alignment framework shape, ownership, merge, fork remap | `src/domain/framework/alignmentFrameworks.ts` |
 | Inline edits made in the Tree View | `src/domain/framework/inlineAlignmentEdits.ts`, `editorReducer` (`inlineAlignment/*`) |
 | Moving associations on save | `src/application/framework/services/AlignmentStorage.ts` |
-| Saving, plan before fork warning | `src/ui/editor/EditorCanvas.tsx` (`handleSave`, `doSave`), `src/app/App.tsx` (`handleSaveToServer`) |
+| Saving, plan before fork warning | `src/ui/editor/FrameworkEditor.tsx` (`handleSave`, `doSave`), `src/app/App.tsx` (`handleSaveToServer`) |
 | Data-change detection (editor) | `src/domain/framework/hasFrameworkDataChanged.ts` |
 | Associations without an edge | `src/domain/framework/offCanvasAssociations.ts` |
 | Association export, node titles | `src/application/framework/mappers/case/toCasePackage.ts` |

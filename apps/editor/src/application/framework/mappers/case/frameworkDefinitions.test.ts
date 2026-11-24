@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { frameworkToCfPackage } from './toCasePackage'
 import { extractCfDefinitions, preferFrameworkDefinitions, type DefinitionLists } from './frameworkDefinitions'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
-import { toReactFlowGraph } from '@/ui/editor/reactflow/mapping/toReactFlow'
-import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
+import { toEditorGraph } from '@/ui/editor/state/mapping/toEditorGraph'
+import { fromEditorGraph } from '@/ui/editor/state/mapping/fromEditorGraph'
 import type { CFItemType, CFPackage, CFSubject } from '@/domain/case/types'
 
 const DOC_ID = 'sc-doc'
@@ -101,15 +101,14 @@ function makeScPackage(): CFPackage {
   } as unknown as CFPackage
 }
 
-// Open the package in the editor and save it again, the way App + EditorCanvas do.
+// Open the package in the editor and save it again, the way App + FrameworkEditor do.
 function openAndSave(pkg: CFPackage, tenant: DefinitionLists) {
   const own = extractCfDefinitions(pkg)
   const loaded = loadFrameworkFromCfPackage(pkg)
   if (!loaded) throw new Error('failed to load framework')
-  const { framework, layout } = fromEditorGraph({ graph: toReactFlowGraph({ framework: loaded }) })
+  const { framework } = fromEditorGraph({ graph: toEditorGraph({ framework: loaded }) })
   return frameworkToCfPackage({
     framework,
-    layout,
     caseVersion: '1.1',
     ...preferFrameworkDefinitions(own, tenant),
     definitionsExtensions: own?.extensions,

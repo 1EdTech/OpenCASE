@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import '@testing-library/jest-dom'
 import { render, screen } from '@testing-library/react'
-import CanvasHeader from './CanvasHeader'
+import EditorHeader from './EditorHeader'
 
-describe('CanvasHeader', () => {
+describe('EditorHeader', () => {
   it('shows the framework labels beside the title', () => {
     render(
-      <CanvasHeader
+      <EditorHeader
         frameworkTitle="Skills-First Product Managers Skill Taxonomy"
         frameworkSubtitle="Competency"
         frameworkLabels={{ adoptionStatus: 'Derived', publicAccess: true }}
@@ -21,7 +21,7 @@ describe('CanvasHeader', () => {
   })
 
   it('shows no labels when none are given', () => {
-    render(<CanvasHeader frameworkTitle="Untitled" />)
+    render(<EditorHeader frameworkTitle="Untitled" />)
     expect(screen.queryByText('Mirrored')).not.toBeInTheDocument()
     expect(screen.queryByText('Public')).not.toBeInTheDocument()
   })

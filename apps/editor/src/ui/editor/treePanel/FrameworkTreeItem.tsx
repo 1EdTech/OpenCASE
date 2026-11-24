@@ -78,13 +78,18 @@ function FrameworkTreeItem({
         onDragStart={(e) => {
           if (!isDraggable) return
           e.dataTransfer.setData('text/plain', node.id)
-          e.dataTransfer.effectAllowed = 'link'
+          // 'copy', not 'link': Wayland's drag and drop has no link action, so a link-only drop never lands.
+          e.dataTransfer.effectAllowed = 'copy'
           onDragStart?.(node.id, e)
+        }}
+        onDragEnter={(e) => {
+          // A drop target cancels dragenter as well as dragover (HTML drag and drop).
+          if (isDropTarget) e.preventDefault()
         }}
         onDragOver={(e) => {
           if (!isDropTarget) return
           e.preventDefault()
-          e.dataTransfer.dropEffect = 'link'
+          e.dataTransfer.dropEffect = 'copy'
           onDragOver?.(node.id, e)
         }}
         onDragLeave={(e) => {

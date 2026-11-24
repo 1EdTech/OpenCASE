@@ -70,7 +70,6 @@ import { CaseApiClient } from '../infrastructure/http/CaseApiClient'
 import { JsonSchemaValidator } from '../infrastructure/validation/JsonSchemaValidator'
 import { KeycloakAdminClient } from '../infrastructure/keycloak/KeycloakAdminClient'
 import { KeycloakTenantProvisioner } from '../infrastructure/keycloak/KeycloakTenantProvisioner'
-import { TenantLookupController } from '../interfaces/http/http-public/public/controllers/TenantLookupController'
 import { FileCgeCredentialsStore } from '../infrastructure/cge/FileCgeCredentialsStore'
 import { CgeAuthClient } from '../infrastructure/cge/CgeAuthClient'
 import { CgeApiClient } from '../infrastructure/cge/CgeApiClient'
@@ -121,9 +120,6 @@ export interface Container {
       apiKeys: ApiKeysManagementController
       members: MembersManagementController
       cge: CgeManagementController
-    }
-    public: {
-      tenantLookup: TenantLookupController
     }
   }
 }
@@ -422,10 +418,6 @@ export async function buildContainer(): Promise<Container> {
     searchCachedFrameworkItems
   )
 
-  const tenantLookupController = new TenantLookupController(keycloakAdmin, {
-    clientIdPrefix: config.oidcClientIdPrefix
-  })
-
   return {
     config,
     logger,
@@ -472,9 +464,6 @@ export async function buildContainer(): Promise<Container> {
         apiKeys: apiKeysManagementController,
         members: membersManagementController,
         cge: cgeManagementController
-      },
-      public: {
-        tenantLookup: tenantLookupController
       }
     }
   }

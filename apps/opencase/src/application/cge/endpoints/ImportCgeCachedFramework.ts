@@ -17,8 +17,6 @@ export interface ImportCgeCachedFrameworkCommand {
   refresh?: boolean
   linkedFromDocId?: string
   validateSchema?: boolean
-  /** When true, fetch publisher CFPackage without CGE bearer token. */
-  skipPublisherAuth?: boolean
 }
 
 export interface ImportCgeCachedFrameworkResult {
@@ -49,8 +47,7 @@ export class ImportCgeCachedFramework {
       subscribe = false,
       refresh = false,
       linkedFromDocId,
-      validateSchema = false,
-      skipPublisherAuth = false
+      validateSchema = false
     } = cmd
 
     if (!frameworkId.trim()) {
@@ -84,7 +81,7 @@ export class ImportCgeCachedFramework {
       }
     }
 
-    const cfPackageRaw = await this.cgeApi.fetchPublisherPackage(tenantId, endpointUrl, { skipAuth: skipPublisherAuth })
+    const cfPackageRaw = await this.cgeApi.fetchPublisherPackage(tenantId, endpointUrl)
     let normalized
     try {
       normalized = normalizeCfPackageData(cfPackageRaw)
@@ -98,9 +95,11 @@ export class ImportCgeCachedFramework {
       ''
     ).trim()
 
-    if (publisherDocId) {
-      const existingMeta = this.store.getDocumentMetadata(tenantId, caseVersion, publisherDocId)
-      if (existingMeta && existingMeta.readOnly !== true && existingMeta.cgeFrameworkId !== frameworkId) {
+    // Storage keys are independent of CASE identifiers, so resolve the publisher's document id first.
+    const existingStorageKey = publisherDocId ? this.store.resolveStorageKey(tenantId, caseVersion, publisherDocId) : null
+    const existingMeta = existingStorageKey ? this.store.getDocumentMetadata(tenantId, caseVersion, existingStorageKey) : null
+    if (existingMeta) {
+      if (existingMeta.readOnly !== true && existingMeta.cgeFrameworkId !== frameworkId) {
         throw new Error(
           `Framework "${existingMeta.title}" (${publisherDocId}) is already imported as an editable document. Open it from the home screen instead of adding it as a read-only remote cache.`
         )
@@ -115,6 +114,8 @@ export class ImportCgeCachedFramework {
       cfPackage: cfPackageRaw,
       sourcePackageUri: endpointUrl,
       validateSchema,
+      // A refresh replaces the cached copy rather than adding a second document with the same ids.
+      storageKey: existingMeta?.readOnly === true ? existingStorageKey ?? undefined : undefined,
       documentFlags: {
         readOnly: true,
         cgeFrameworkId: frameworkId,

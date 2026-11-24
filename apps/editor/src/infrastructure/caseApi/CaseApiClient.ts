@@ -22,6 +22,10 @@ export type OpenCaseListExtensions = {
   publicAccess?: boolean
   /** Server-level archive flag — independent of CASE adoptionStatus. */
   archived?: boolean
+  /** A read-only copy cached from a publisher, not editable on this server. */
+  readOnly?: boolean
+  /** For a read-only copy of a CASE Global framework: its coalition framework id. */
+  cgeFrameworkId?: string
 }
 
 export type AlignmentFrameworkSummary = {
@@ -66,26 +70,6 @@ export type CfDocumentSummary = {
 
 export class CaseApiClient {
   constructor(private readonly _http: HttpClient) {}
-
-  async lookupTenantByEmail(params: { email: string }): Promise<{ tenantId?: string } | null> {
-    const email = params.email.trim()
-    if (!email) return null
-    const res = (await this._http.get(`/public/tenant-lookup?email=${encodeURIComponent(email)}`)) as unknown
-    if (!res || typeof res !== 'object') return null
-    const any = res as { tenantId?: unknown }
-    if (typeof any.tenantId === 'string' && any.tenantId.trim()) return { tenantId: any.tenantId.trim() }
-    return {}
-  }
-
-  async lookupTenantByOrgId(params: { orgId: string }): Promise<{ tenantId?: string } | null> {
-    const orgId = params.orgId.trim()
-    if (!orgId) return null
-    const res = (await this._http.get(`/public/tenant-lookup?orgId=${encodeURIComponent(orgId)}`)) as unknown
-    if (!res || typeof res !== 'object') return null
-    const any = res as { tenantId?: unknown }
-    if (typeof any.tenantId === 'string' && any.tenantId.trim()) return { tenantId: any.tenantId.trim() }
-    return {}
-  }
 
   /**
    * First login: assign the default author role to a user who has never had a role.
@@ -703,7 +687,6 @@ export class CaseApiClient {
     refresh?: boolean
     linkedFromDocId?: string
     caseVersion?: '1.0' | '1.1'
-    skipPublisherAuth?: boolean
   }): Promise<CgeImportResult> {
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/import`
     const res = (await this._http.post(url, {
@@ -715,7 +698,6 @@ export class CaseApiClient {
       refresh: params.refresh ?? false,
       linkedFromDocId: params.linkedFromDocId,
       caseVersion: params.caseVersion ?? '1.1',
-      skipPublisherAuth: params.skipPublisherAuth ?? false,
     })) as unknown
     if (res && typeof res === 'object') {
       const obj = res as CgeImportResult
@@ -739,12 +721,9 @@ export class CaseApiClient {
   async refreshCgeCache(params: {
     tenantId: string
     frameworkId: string
-    skipPublisherAuth?: boolean
   }): Promise<CgeImportResult> {
     const url = `/management/tenants/${encodeURIComponent(params.tenantId)}/cge/frameworks/${encodeURIComponent(params.frameworkId)}/refresh`
-    const res = (await this._http.post(url, {
-      skipPublisherAuth: params.skipPublisherAuth ?? false,
-    })) as unknown
+    const res = (await this._http.post(url, {})) as unknown
     if (res && typeof res === 'object') {
       const obj = res as CgeImportResult
       return {

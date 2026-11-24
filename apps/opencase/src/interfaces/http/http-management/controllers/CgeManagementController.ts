@@ -181,7 +181,6 @@ export class CgeManagementController {
       const refresh = req.body?.refresh === true
       const caseVersion = (req.body?.caseVersion === '1.0' ? '1.0' : '1.1') as '1.0' | '1.1'
       const linkedFromDocId = typeof req.body?.linkedFromDocId === 'string' ? req.body.linkedFromDocId.trim() : undefined
-      const skipPublisherAuth = req.body?.skipPublisherAuth === true || req.body?.skipPublisherAuth === 'true'
 
       if (!frameworkId && !sourceUri) {
         return res.status(400).json({
@@ -200,8 +199,7 @@ export class CgeManagementController {
           subscribe,
           refresh,
           linkedFromDocId,
-          validateSchema: req.body?.validateSchema ?? false,
-          skipPublisherAuth
+          validateSchema: req.body?.validateSchema ?? false
         })
 
         logger.info({
@@ -307,15 +305,13 @@ export class CgeManagementController {
       if (!frameworkId) return res.status(400).json({ error: 'Missing frameworkId' })
 
       const caseVersion = getCaseVersion(req, { default: '1.1' })!
-      const skipPublisherAuth = req.body?.skipPublisherAuth === true || req.body?.skipPublisherAuth === 'true'
 
       const result = await this.importCgeCachedFramework.execute({
         tenantId,
         caseVersion,
         frameworkId,
         refresh: true,
-        subscribe: false,
-        skipPublisherAuth
+        subscribe: false
       })
 
       return res.status(200).json({

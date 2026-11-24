@@ -22,7 +22,7 @@ export type HomeFramework = {
   /**
    * Legacy: EditorGraph stored directly. Used for backward compatibility with
    * localStorage data that predates the domain-first architecture.
-   * @deprecated Use `framework` instead; graph should be derived via `toReactFlowGraph`
+   * @deprecated Use `framework` instead; graph should be derived via `toEditorGraph`
    */
   graph?: EditorGraph
   /**

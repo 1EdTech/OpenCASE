@@ -14,7 +14,7 @@ Every education system organises what students should learn into structured docu
 
 | | |
 |---|---|
-| **Visual Editor** | Build competency frameworks on an interactive canvas. Drag, connect, and organise items visually — no spreadsheets or hand-edited files required. |
+| **Visual Editor** | Build competency frameworks in a tree view, and align their items to other frameworks (including CASE Global ones) by dragging — no spreadsheets or hand-edited files required. |
 | **Publishing Server** | Publish frameworks through a standards-compliant API so that learning platforms, assessment tools, and credential systems can discover and consume them automatically. |
 | **Identity and Access** | Multi-tenant security so that different organisations can each manage their own frameworks independently, with role-based access controls for viewers, authors, and administrators. |
 

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { toReactFlowGraph } from './toReactFlow'
+import { toEditorGraph } from './toEditorGraph'
 import type { Framework, Item, Association } from '@/domain/framework/model/types'
 import type { FrameworkId, ItemId, AssociationId } from '@/domain/shared/types'
-import { FRAMEWORK_ROOT_ASSOCIATION_TYPE } from '@/ui/editor/reactflow/types'
+import { FRAMEWORK_ROOT_ASSOCIATION_TYPE } from '@/ui/editor/state/graphTypes'
 
 function makeItem(id: string, statement: string): Item {
   return {
@@ -17,7 +17,7 @@ function makeItem(id: string, statement: string): Item {
   }
 }
 
-describe('toReactFlowGraph', () => {
+describe('toEditorGraph', () => {
   it('does not recreate framework root starts edges for connected parentless items', () => {
     const fwId = 'fw-1'
     const itemA = makeItem('item-a', 'Item A')
@@ -51,7 +51,7 @@ describe('toReactFlowGraph', () => {
       status: 'Draft',
     }
 
-    const graph = toReactFlowGraph({ framework })
+    const graph = toEditorGraph({ framework })
 
     const startsEdges = graph.edges.filter((e) => e.data?.associationType === FRAMEWORK_ROOT_ASSOCIATION_TYPE)
     expect(startsEdges).toHaveLength(0)

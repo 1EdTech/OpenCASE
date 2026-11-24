@@ -2,12 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   createEmptyFrameworkGraph,
   createSampleGraph,
-  formatAssociationType,
-  getEdgeMarkers,
-  getEdgeStyle,
   makeCfDocument,
   makeCfItem,
-  makeEdgeLabel,
 } from './editorFactories'
 
 // ── makeCfItem ─────────────────────────────────────────────────────────
@@ -50,94 +46,6 @@ describe('makeCfDocument', () => {
     })
     expect(doc.frameworkType).toBe('K-12')
     expect(doc.adoptionStatus).toBe('Draft')
-  })
-})
-
-// ── getEdgeMarkers ─────────────────────────────────────────────────────
-
-describe('getEdgeMarkers', () => {
-  it('returns markerEnd for isChildOf', () => {
-    const markers = getEdgeMarkers('isChildOf')
-    expect(markers.markerEnd).toBeDefined()
-    expect(markers.markerStart).toBeUndefined()
-  })
-
-  it('returns bidirectional markers for isRelatedTo', () => {
-    const markers = getEdgeMarkers('isRelatedTo')
-    expect(markers.markerStart).toBeDefined()
-    expect(markers.markerEnd).toBeDefined()
-  })
-
-  it('returns bidirectional markers for exactMatchOf', () => {
-    const markers = getEdgeMarkers('exactMatchOf')
-    expect(markers.markerStart).toBeDefined()
-    expect(markers.markerEnd).toBeDefined()
-  })
-
-  it('returns markerStart for isPartOf (reversed arrow)', () => {
-    const markers = getEdgeMarkers('isPartOf')
-    expect(markers.markerStart).toBeDefined()
-    expect(markers.markerEnd).toBeUndefined()
-  })
-
-  it('returns markerEnd for __startsFrom (framework root)', () => {
-    const markers = getEdgeMarkers('__startsFrom')
-    expect(markers.markerEnd).toBeDefined()
-    expect(markers.markerStart).toBeUndefined()
-  })
-})
-
-// ── getEdgeStyle ───────────────────────────────────────────────────────
-
-describe('getEdgeStyle', () => {
-  it('returns dashed style for __startsFrom', () => {
-    const style = getEdgeStyle('__startsFrom')
-    expect(style.strokeDasharray).toBeDefined()
-  })
-
-  it('returns dotted style for exactMatchOf', () => {
-    const style = getEdgeStyle('exactMatchOf')
-    expect(style.strokeDasharray).toBeDefined()
-  })
-
-  it('returns dashed style for isPartOf', () => {
-    const style = getEdgeStyle('isPartOf')
-    expect(style.strokeDasharray).toBeDefined()
-  })
-
-  it('returns solid style for isChildOf', () => {
-    const style = getEdgeStyle('isChildOf')
-    expect(style.strokeDasharray).toBeUndefined()
-    expect(style.strokeWidth).toBe(1.5)
-  })
-})
-
-// ── formatAssociationType ──────────────────────────────────────────────
-
-describe('formatAssociationType', () => {
-  it('formats known association types', () => {
-    expect(formatAssociationType('isChildOf')).toBe('child of')
-    expect(formatAssociationType('isPartOf')).toBe('part of')
-    expect(formatAssociationType('isRelatedTo')).toBe('related to')
-    expect(formatAssociationType('precedes')).toBe('precedes')
-    expect(formatAssociationType('exactMatchOf')).toBe('exact match')
-    expect(formatAssociationType('__startsFrom')).toBe('starts')
-  })
-
-  it('returns raw string for unknown types', () => {
-    expect(formatAssociationType('customType')).toBe('customType')
-  })
-})
-
-// ── makeEdgeLabel ──────────────────────────────────────────────────────
-
-describe('makeEdgeLabel', () => {
-  it('returns type label without sequence number', () => {
-    expect(makeEdgeLabel('isChildOf')).toBe('child of')
-  })
-
-  it('includes sequence number when provided', () => {
-    expect(makeEdgeLabel('isChildOf', 3)).toBe('3 · child of')
   })
 })
 

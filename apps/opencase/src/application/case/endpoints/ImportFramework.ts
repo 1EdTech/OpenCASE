@@ -28,6 +28,8 @@ export interface ImportFrameworkCommand {
   documentFlags?: ImportDocumentFlags
   /** Publisher CFPackage URL — used for provenance when importing from cfPackage JSON. */
   sourcePackageUri?: string
+  /** Write a new version of this stored document (refreshing a read-only cache) instead of creating a new one. */
+  storageKey?: string
 }
 
 export interface ImportFrameworkResult {
@@ -89,7 +91,7 @@ export class ImportFramework {
   ) {}
 
   async execute (cmd: ImportFrameworkCommand): Promise<ImportFrameworkResult> {
-    const { tenantId, caseVersion, endpointUrl, accessToken, cfPackage, validateSchema, schemaName, documentFlags, sourcePackageUri } = cmd
+    const { tenantId, caseVersion, endpointUrl, accessToken, cfPackage, validateSchema, schemaName, documentFlags, sourcePackageUri, storageKey: existingStorageKey } = cmd
 
     if (!endpointUrl && !cfPackage) {
       throw new Error('Either endpointUrl or cfPackage must be provided')
@@ -178,8 +180,9 @@ export class ImportFramework {
     // the (possibly foreign, possibly reused-on-a-later-re-import)
     // sourcedId. This is what lets a fork reassign the document's public
     // identifier later without colliding with a future re-import of the
-    // same original source under its original identifier.
-    const storageKey = randomUUID()
+    // same original source under its original identifier. A cache refresh
+    // passes the cached document's key so the new version replaces it.
+    const storageKey = existingStorageKey ?? randomUUID()
     await this.pkgRepo.saveNewVersion(tenantId, caseVersion, pkg, storageKey)
 
     logger.info(

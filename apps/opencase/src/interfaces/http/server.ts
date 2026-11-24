@@ -3,7 +3,6 @@ import cors from 'cors'
 import { makeAuthMiddleware, makeOptionalAuthMiddleware } from './middleware/auth'
 import { registerV1p1Routes } from './http-public/v1p1/routes'
 import { registerV1p0Routes } from './http-public/v1p0/routes'
-import { registerPublicRoutes } from './http-public/public/routes'
 import { registerManagementRoutes } from './http-management/routes'
 import { type Container } from '../../wiring/container'
 
@@ -33,11 +32,6 @@ export function createServer (container: Container): express.Express {
     '/ims/case/v1p0/discovery/imscasev1p0_openapi3_v1p0.json',
     container.controllers.v1p0.discovery.getOpenAPISpec as RequestHandler
   )
-
-  // Public routes (no auth)
-  registerPublicRoutes(app, {
-    tenantLookupController: container.controllers.public.tenantLookup
-  })
 
   // CASE Provider API — optional auth (frameworks marked public are readable without auth)
   // IDs are globally unique so no tenantId is needed for read endpoints.
