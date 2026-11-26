@@ -10,13 +10,8 @@ function makeState(overrides: Partial<EditorState> = {}): EditorState {
   return {
     nodes: [makeFrameworkNode(), makeItemNode('item-1'), makeItemNode('item-2')],
     edges: [makeEdge('fw-1', 'item-1'), makeEdge('fw-1', 'item-2')],
-    remoteLinks: [],
     inlineAlignmentEdits: NO_INLINE_ALIGNMENT_EDITS,
     selectedNodeId: null,
-    selectedEdgeId: null,
-    selectedNodeIds: [],
-    selectedEdgeIds: [],
-    layoutVersion: 0,
     dirty: false,
     ...overrides,
   }
@@ -25,27 +20,19 @@ function makeState(overrides: Partial<EditorState> = {}): EditorState {
 // ── Selection ──────────────────────────────────────────────────────────
 
 describe('selection actions', () => {
-  it('selection/setNode sets selectedNodeId and clears selectedEdgeId', () => {
-    const state = makeState({ selectedEdgeId: 'e_1' })
-    const next = editorReducer(state, { type: 'selection/setNode', nodeId: 'item-1' })
+  it('selection/setNode sets selectedNodeId', () => {
+    const next = editorReducer(makeState(), { type: 'selection/setNode', nodeId: 'item-1' })
     expect(next.selectedNodeId).toBe('item-1')
-    expect(next.selectedEdgeId).toBeNull()
   })
 
-  it('selection/setEdge sets selectedEdgeId and clears selectedNodeId', () => {
+  it('selection/setNode returns the same state when the node is already selected', () => {
     const state = makeState({ selectedNodeId: 'item-1' })
-    const next = editorReducer(state, { type: 'selection/setEdge', edgeId: 'e_fw-1_item-1' })
-    expect(next.selectedEdgeId).toBe('e_fw-1_item-1')
-    expect(next.selectedNodeId).toBeNull()
+    expect(editorReducer(state, { type: 'selection/setNode', nodeId: 'item-1' })).toBe(state)
   })
 
-  it('selection/clear clears both selections and deselects all nodes/edges', () => {
-    const state = makeState({ selectedNodeId: 'item-1', selectedEdgeId: 'e_1' })
-    const next = editorReducer(state, { type: 'selection/clear' })
+  it('selection/clear clears the selection', () => {
+    const next = editorReducer(makeState({ selectedNodeId: 'item-1' }), { type: 'selection/clear' })
     expect(next.selectedNodeId).toBeNull()
-    expect(next.selectedEdgeId).toBeNull()
-    expect(next.nodes.every((n) => !n.selected)).toBe(true)
-    expect(next.edges.every((e) => !e.selected)).toBe(true)
   })
 })
 
@@ -74,8 +61,8 @@ describe('dirty flag actions', () => {
 // ── Graph load ─────────────────────────────────────────────────────────
 
 describe('graph/load', () => {
-  it('replaces the entire graph and resets selection/layout/dirty', () => {
-    const state = makeState({ selectedNodeId: 'item-1', dirty: true, layoutVersion: 5 })
+  it('replaces the entire graph and resets selection/dirty', () => {
+    const state = makeState({ selectedNodeId: 'item-1', dirty: true })
     const newNodes = [makeFrameworkNode(), makeItemNode('new-item')]
     const newEdges = [makeEdge('fw-1', 'new-item')]
 
@@ -87,111 +74,9 @@ describe('graph/load', () => {
     expect(next.nodes).toEqual(newNodes)
     expect(next.edges).toEqual(newEdges)
     expect(next.selectedNodeId).toBeNull()
-    expect(next.selectedEdgeId).toBeNull()
-    expect(next.layoutVersion).toBe(0)
     expect(next.dirty).toBe(false)
   })
 })
-
-// ── Layout actions ─────────────────────────────────────────────────────
-
-describe('layout actions', () => {
-  it('layout/apply updates node positions and increments layoutVersion', () => {
-    const state = makeState()
-    const next = editorReducer(state, {
-      type: 'layout/apply',
-      positions: { 'item-1': { x: 100, y: 200 } },
-    })
-
-    const item = next.nodes.find((n) => n.id === 'item-1')
-    expect(item?.position).toEqual({ x: 100, y: 200 })
-    expect(next.layoutVersion).toBe(state.layoutVersion + 1)
-    // layout/apply does NOT mark dirty (it's for auto-layout)
-    expect(next.dirty).toBe(false)
-  })
-
-  it('layout/applyHierarchy updates positions and handles but does NOT mark dirty (switching layout/view is not a data edit)', () => {
-    const state = makeState()
-    const edgeId = state.edges[0].id
-
-    const next = editorReducer(state, {
-      type: 'layout/applyHierarchy',
-      positions: {
-        'fw-1': { x: 0, y: 96 },
-        'item-1': { x: 260, y: 280 },
-      },
-      edgeHandles: {
-        [edgeId]: {
-          sourceHandle: 'bottom',
-          targetHandle: 'left',
-          edgeType: 'smoothstep',
-          labelPosition: 'target',
-        },
-      },
-    })
-
-    expect(next.nodes.find((n) => n.id === 'item-1')?.position).toEqual({ x: 260, y: 280 })
-    const edge = next.edges.find((e) => e.id === edgeId)
-    expect(edge?.sourceHandle).toBe('bottom')
-    expect(edge?.targetHandle).toBe('left')
-    expect(edge?.data?.edgeType).toBe('smoothstep')
-    expect(next.dirty).toBe(false)
-    expect(next.layoutVersion).toBe(state.layoutVersion + 1)
-  })
-})
-
-// ── Edge connect ───────────────────────────────────────────────────────
-
-describe('edges/connect', () => {
-  it('creates a new edge between two items', () => {
-    const state = makeState()
-    const next = editorReducer(state, {
-      type: 'edges/connect',
-      connection: { source: 'item-1', target: 'item-2', sourceHandle: null, targetHandle: null },
-    })
-
-    expect(next.edges.length).toBe(state.edges.length + 1)
-    const newEdge = next.edges[next.edges.length - 1]
-    expect(newEdge.source).toBe('item-1')
-    expect(newEdge.target).toBe('item-2')
-    expect(newEdge.data?.associationType).toBe('isChildOf')
-    expect(next.dirty).toBe(true)
-  })
-
-  it('creates __startsFrom edge when connecting framework to item', () => {
-    const state = makeState()
-    const next = editorReducer(state, {
-      type: 'edges/connect',
-      connection: { source: 'fw-1', target: 'item-1', sourceHandle: null, targetHandle: null },
-    })
-
-    const newEdge = next.edges[next.edges.length - 1]
-    expect(newEdge.data?.associationType).toBe('__startsFrom')
-  })
-
-  it('swaps source/target to keep framework as source', () => {
-    const state = makeState()
-    const next = editorReducer(state, {
-      type: 'edges/connect',
-      connection: { source: 'item-1', target: 'fw-1', sourceHandle: null, targetHandle: null },
-    })
-
-    const newEdge = next.edges[next.edges.length - 1]
-    expect(newEdge.source).toBe('fw-1')
-    expect(newEdge.target).toBe('item-1')
-  })
-
-  it('rejects connection with null source', () => {
-    const state = makeState()
-    const next = editorReducer(state, {
-      type: 'edges/connect',
-      connection: { source: null, target: 'item-1', sourceHandle: null, targetHandle: null },
-    })
-    expect(next).toBe(state)
-  })
-})
-
-// ── Node CRUD ──────────────────────────────────────────────────────────
 
 describe('node/addChild', () => {
   it('adds a child node and connecting edge', () => {
@@ -234,24 +119,6 @@ describe('node/addChild', () => {
   })
 })
 
-describe('node/addDetachedItem', () => {
-  it('adds a detached item node (no edge)', () => {
-    const state = makeState()
-    const next = editorReducer(state, {
-      type: 'node/addDetachedItem',
-      nodeId: 'detached-1',
-      cfItem: { identifier: 'detached-1', uri: '', fullStatement: 'Detached', lastChangeDateTime: '' },
-    })
-
-    expect(next.nodes.length).toBe(state.nodes.length + 1)
-    expect(next.edges.length).toBe(state.edges.length) // no new edge
-    const node = next.nodes.find((n) => n.id === 'detached-1')
-    expect(node?.type).toBe('caseItemNode')
-    expect(next.selectedNodeId).toBe('detached-1')
-    expect(next.dirty).toBe(true)
-  })
-})
-
 // ── Node/edge data updates ─────────────────────────────────────────────
 
 describe('node/updateData', () => {
@@ -267,130 +134,13 @@ describe('node/updateData', () => {
     expect((item?.data as { cfItem: { fullStatement: string } }).cfItem.fullStatement).toBe('Updated statement')
     expect(next.dirty).toBe(true)
   })
-
-  it('syncs remote link banner colors when external framework color changes', () => {
-    const state = makeState({
-      nodes: [
-        ...makeState().nodes,
-        {
-          id: 'ext-1',
-          type: 'externalFrameworkNode',
-          position: { x: 500, y: 0 },
-          data: { refId: 'fw-ref-1', title: 'Remote', color: '#0ea5e9' },
-        },
-      ],
-      remoteLinks: [
-        {
-          id: 'link-1',
-          localItemId: 'item-1',
-          remoteItemUri: 'urn:case:item:r1',
-          remoteItemIdentifier: 'r1',
-          remoteFrameworkRefId: 'fw-ref-1',
-          associationType: 'isRelatedTo',
-          remoteLabel: 'Remote item',
-          remoteFrameworkColor: '#0ea5e9',
-          remoteFrameworkTitle: 'Remote',
-        },
-      ],
-    })
-
-    const next = editorReducer(state, {
-      type: 'node/updateData',
-      nodeId: 'ext-1',
-      patch: { color: '#dc2626' },
-    })
-
-    expect(next.remoteLinks[0]?.remoteFrameworkColor).toBe('#dc2626')
-    expect((next.nodes.find((n) => n.id === 'ext-1')?.data as { color: string }).color).toBe('#dc2626')
-  })
-})
-
-describe('edge/updateData', () => {
-  it('updates association type on an edge', () => {
-    const state = makeState()
-    const edgeId = state.edges[0].id
-    const next = editorReducer(state, {
-      type: 'edge/updateData',
-      edgeId,
-      patch: { associationType: 'isPeerOf' },
-    })
-
-    const edge = next.edges.find((e) => e.id === edgeId)
-    expect(edge?.data?.associationType).toBe('isPeerOf')
-    expect(next.dirty).toBe(true)
-  })
-})
-
-// ── Edge flip ──────────────────────────────────────────────────────────
-
-describe('edge/flip', () => {
-  it('swaps source and target', () => {
-    const state = makeState()
-    const edgeId = state.edges[0].id
-    const original = state.edges[0]
-
-    const next = editorReducer(state, { type: 'edge/flip', edgeId })
-    const flipped = next.edges.find((e) => e.id === edgeId)
-
-    expect(flipped?.source).toBe(original.target)
-    expect(flipped?.target).toBe(original.source)
-    expect(next.dirty).toBe(true)
-  })
-})
-
-// ── Graph delete ───────────────────────────────────────────────────────
-
-describe('graph/delete', () => {
-  it('removes specified nodes and their connected edges', () => {
-    const state = makeState()
-    const next = editorReducer(state, {
-      type: 'graph/delete',
-      nodeIds: ['item-1'],
-      edgeIds: [],
-      reattachChildren: false,
-    })
-
-    expect(next.nodes.find((n) => n.id === 'item-1')).toBeUndefined()
-    // Edge from fw-1 to item-1 should be removed
-    expect(next.edges.find((e) => e.target === 'item-1')).toBeUndefined()
-    // Edge to item-2 should remain
-    expect(next.edges.find((e) => e.target === 'item-2')).toBeDefined()
-    expect(next.dirty).toBe(true)
-  })
-
-  it('removes specified edges without removing nodes', () => {
-    const state = makeState()
-    const edgeId = state.edges[0].id
-    const next = editorReducer(state, {
-      type: 'graph/delete',
-      nodeIds: [],
-      edgeIds: [edgeId],
-      reattachChildren: false,
-    })
-
-    expect(next.nodes.length).toBe(state.nodes.length) // no nodes removed
-    expect(next.edges.find((e) => e.id === edgeId)).toBeUndefined()
-    expect(next.dirty).toBe(true)
-  })
-
-  it('clears selection if selected node is deleted', () => {
-    const state = makeState({ selectedNodeId: 'item-1' })
-    const next = editorReducer(state, {
-      type: 'graph/delete',
-      nodeIds: ['item-1'],
-      edgeIds: [],
-      reattachChildren: false,
-    })
-
-    expect(next.selectedNodeId).toBeNull()
-  })
 })
 
 // ── Referential identity (perf regression guards) ──────────────────────
 //
 // These guard against re-introducing full-array reallocation for actions
 // that should only touch a specific node/edge — see POR-736 phase 2.
-// Downstream memoization (EditorContext's `nodesWithCallbacks`, Tree Panel's
+// Downstream memoization (EditorContext's `cfItems`, Tree Panel's
 // `cfItemsById`) relies on untouched entries keeping their exact object
 // reference across a dispatch.
 
@@ -406,8 +156,8 @@ describe('referential identity', () => {
     expect(next.nodes.find((n) => n.id === 'item-2')).toBe(otherNode)
   })
 
-  it('node/addChild only reallocates the previously-selected node and the new one', () => {
-    const state = makeState({ selectedNodeId: 'item-2', selectedNodeIds: ['item-2'] })
+  it('node/addChild leaves existing nodes and edges untouched', () => {
+    const state = makeState({ selectedNodeId: 'item-2' })
     const untouchedItem = state.nodes.find((n) => n.id === 'item-1')
     const untouchedEdgeToItem1 = state.edges.find((e) => e.target === 'item-1')
 
@@ -420,51 +170,6 @@ describe('referential identity', () => {
 
     expect(next.nodes.find((n) => n.id === 'item-1')).toBe(untouchedItem)
     expect(next.edges.find((e) => e.target === 'item-1')).toBe(untouchedEdgeToItem1)
-    // The previously-selected node should be the only pre-existing node reallocated (selected: false)
-    const previouslySelected = next.nodes.find((n) => n.id === 'item-2')
-    expect(previouslySelected?.selected).toBe(false)
-  })
-
-  it('node/addDetachedItem leaves all existing nodes untouched except the previously-selected one', () => {
-    const state = makeState({ selectedNodeId: 'item-1', selectedNodeIds: ['item-1'] })
-    const untouchedItem = state.nodes.find((n) => n.id === 'item-2')
-
-    const next = editorReducer(state, {
-      type: 'node/addDetachedItem',
-      nodeId: 'detached-1',
-      cfItem: { identifier: 'detached-1', uri: '', fullStatement: 'Detached', lastChangeDateTime: '' },
-    })
-
-    expect(next.nodes.find((n) => n.id === 'item-2')).toBe(untouchedItem)
-  })
-
-  it('node/addExternalFramework leaves all existing nodes untouched except the previously-selected one', () => {
-    const state = makeState({ selectedNodeId: 'item-1', selectedNodeIds: ['item-1'] })
-    const untouchedItem = state.nodes.find((n) => n.id === 'item-2')
-
-    const next = editorReducer(state, {
-      type: 'node/addExternalFramework',
-      nodeId: 'ext-1',
-      data: { refId: 'ext-ref-1', title: 'External', color: '' },
-    })
-
-    expect(next.nodes.find((n) => n.id === 'item-2')).toBe(untouchedItem)
-  })
-
-  it('graph/delete leaves untouched remaining nodes/edges referentially identical', () => {
-    const state = makeState()
-    const untouchedNode = state.nodes.find((n) => n.id === 'item-2')
-    const untouchedEdge = state.edges.find((e) => e.target === 'item-2')
-
-    const next = editorReducer(state, {
-      type: 'graph/delete',
-      nodeIds: ['item-1'],
-      edgeIds: [],
-      reattachChildren: false,
-    })
-
-    expect(next.nodes.find((n) => n.id === 'item-2')).toBe(untouchedNode)
-    expect(next.edges.find((e) => e.target === 'item-2')).toBe(untouchedEdge)
   })
 })
 

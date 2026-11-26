@@ -1,7 +1,6 @@
 import type { CFAssociation, CFAssociationGrouping, CFConcept, CFDefinition, CFDocument, CFItem, CFItemType, CFLicense, CFSubject, CFPackage, CaseExtensions, LinkURI } from '@/domain/case/types'
 import type { AlignmentStorage, Framework } from '@/domain/framework/model/types'
 import type { CaseVersion } from './CasePackageSnapshot'
-import type { LayoutState, NodeLayout } from '@/ui/editor/reactflow/mapping/types'
 
 const nowIso = () => new Date().toISOString()
 
@@ -89,16 +88,28 @@ function makePackageUri(uuid: string): string {
 }
 
 type OpencaseExtension = {
-  layout?: NodeLayout
-  notes?: string
-  originHandle?: string
-  destinationHandle?: string
-  edgeType?: string
   colorBand?: string
-  linkedFrameworks?: unknown[]
-  remoteItemLinks?: unknown[]
   publicAccess?: boolean
   alignmentStorage?: AlignmentStorage
+}
+
+/**
+ * ext:opencase keys the former canvas view wrote. Nothing reads them any more, so a
+ * save leaves them out: the document's and items' ext:opencase are rebuilt from
+ * editor state, and these are removed from an association's.
+ */
+const RETIRED_CANVAS_KEYS = ['layout', 'edgeType', 'linkedFrameworks', 'remoteItemLinks', 'originHandle', 'destinationHandle'] as const
+
+/** An association's extensions without the retired canvas keys in its ext:opencase. */
+function withoutRetiredCanvasKeys(extensions: CaseExtensions | undefined): CaseExtensions | undefined {
+  const opencase = extensions?.[OPENCASE_EXT_KEY]
+  if (!opencase || typeof opencase !== 'object') return extensions
+  const kept = { ...(opencase as Record<string, unknown>) }
+  if (!RETIRED_CANVAS_KEYS.some((k) => k in kept)) return extensions
+  for (const k of RETIRED_CANVAS_KEYS) delete kept[k]
+  const { [OPENCASE_EXT_KEY]: _opencase, ...rest } = extensions!
+  const result: CaseExtensions = Object.keys(kept).length > 0 ? { ...rest, [OPENCASE_EXT_KEY]: kept } : rest
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 /**
@@ -112,7 +123,7 @@ function mergeOpencaseExtension(
   const extensions = { ...base }
   
   // Only add if there's data to store
-  if (opencaseData.layout || opencaseData.notes || opencaseData.originHandle || opencaseData.destinationHandle || opencaseData.edgeType || opencaseData.colorBand || opencaseData.linkedFrameworks || opencaseData.remoteItemLinks || opencaseData.publicAccess || opencaseData.alignmentStorage) {
+  if (opencaseData.colorBand || opencaseData.publicAccess || opencaseData.alignmentStorage) {
     const existing = (extensions[OPENCASE_EXT_KEY] as OpencaseExtension | undefined) ?? {}
     extensions[OPENCASE_EXT_KEY] = {
       ...existing,
@@ -128,9 +139,7 @@ function mergeOpencaseExtension(
  */
 function frameworkToCfDocument(
   framework: Framework,
-  caseVersion: CaseVersion,
-  layout?: NodeLayout,
-  options?: { edgeType?: string; linkedFrameworks?: unknown[]; remoteItemLinks?: unknown[] }
+  caseVersion: CaseVersion
 ): CFDocument {
   const meta = framework.metadata
   const fwId = String(framework.id)
@@ -167,12 +176,8 @@ function frameworkToCfDocument(
     },
     // meta.extensions holds the document's non-OpenCASE extensions (never ext:opencase),
     // so ext:opencase is always regenerated from editor state while the rest round-trip.
-    extensions: (layout || options?.edgeType || options?.linkedFrameworks || options?.remoteItemLinks || meta.publicAccess === true || meta.alignmentStorage)
+    extensions: (meta.publicAccess === true || meta.alignmentStorage)
       ? mergeOpencaseExtension(meta.extensions, {
-          layout,
-          edgeType: options?.edgeType,
-          linkedFrameworks: options?.linkedFrameworks,
-          remoteItemLinks: options?.remoteItemLinks,
           ...(meta.publicAccess === true ? { publicAccess: true } : {}),
           ...(meta.alignmentStorage ? { alignmentStorage: meta.alignmentStorage } : {}),
         })
@@ -187,8 +192,7 @@ function frameworkToCfDocument(
  */
 function itemToCfItem(
   framework: Framework,
-  itemId: string,
-  layout?: NodeLayout
+  itemId: string
 ): CFItem & { sourcedId: string } {
   // ItemId is a branded type, but we receive string from the caller
   const item = framework.items.get(itemId as Parameters<typeof framework.items.get>[0])
@@ -211,8 +215,8 @@ function itemToCfItem(
   }
 
   // Keep every non-OpenCASE extension verbatim. An item's ext:opencase only holds
-  // layout and colorBand, both regenerated below from current editor state, so the
-  // loaded copy is dropped rather than letting stale values (e.g. a cleared colorBand) survive.
+  // colorBand (and, from the former canvas view, layout), so it is rebuilt below from
+  // current editor state rather than letting stale values (e.g. a cleared colorBand) survive.
   const { [OPENCASE_EXT_KEY]: _staleOpencaseExt, ...customExtensions } = (md.extensions as CaseExtensions | undefined) ?? {}
   const existingExtensions = Object.keys(customExtensions).length > 0 ? customExtensions : undefined
 
@@ -243,8 +247,8 @@ function itemToCfItem(
       identifier: fwId,
       title: fwTitle,
     },
-    extensions: (layout || s('colorBand'))
-      ? mergeOpencaseExtension(existingExtensions, { layout, colorBand: s('colorBand') })
+    extensions: s('colorBand')
+      ? mergeOpencaseExtension(existingExtensions, { colorBand: s('colorBand') })
       : existingExtensions,
   }
 
@@ -289,15 +293,10 @@ function associationToCfAssociation(
   const originTargetType = s('originTargetType')
   const destinationTargetType = s('destinationTargetType')
 
-  const existingExtensions = (md.extensions as CaseExtensions | undefined) ?? undefined
+  const existingExtensions = withoutRetiredCanvasKeys((md.extensions as CaseExtensions | undefined) ?? undefined)
   const remoteExt = (existingExtensions?.[OPENCASE_EXT_KEY] as { remoteLink?: boolean; remoteItemUri?: string; remoteItemIdentifier?: string; remoteLabel?: string; localItemUri?: string } | undefined)
 
-  // Persist user-defined edge handle positions in ext:opencase
-  const originHandle = s('originHandle')
-  const destinationHandle = s('destinationHandle')
-  const extensions = (originHandle || destinationHandle)
-    ? mergeOpencaseExtension(existingExtensions, { originHandle, destinationHandle })
-    : existingExtensions
+  const extensions = existingExtensions
 
   const isRemoteLink = remoteExt?.remoteLink === true
 
@@ -355,18 +354,13 @@ function associationToCfAssociation(
  * Convert domain Framework to CASE CFPackage format.
  * 
  * This is the authoritative conversion from the domain model to CASE format.
- * Layout data (positions, dimensions) can be optionally included in extensions.
- * 
+ *
  * @param framework - The domain Framework (source of truth)
  * @param caseVersion - Target CASE version for serialization ('1.0' or '1.1')
- * @param layout - Optional layout state to store in extensions
  */
 export function frameworkToCfPackage(params: {
   framework: Framework
   caseVersion: CaseVersion
-  layout?: LayoutState
-  /** Edge rendering style to persist with this framework */
-  edgeType?: string
   /** CFItemType definitions to include in CFDefinitions (from editor state) */
   cfItemTypes?: CFItemType[]
   /** CFSubject definitions to include in CFDefinitions (from editor state) */
@@ -379,26 +373,15 @@ export function frameworkToCfPackage(params: {
   cfLicenses?: CFLicense[]
   /** Extensions on the framework's own CFDefinitions object, carried through unchanged */
   definitionsExtensions?: CaseExtensions
-  /** Remote framework editor data from canvas */
-  remoteEditorData?: { linkedFrameworks: unknown[]; remoteItemLinks: unknown[] }
 }): CFPackage {
-  const { framework, caseVersion, layout, edgeType, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses, definitionsExtensions, remoteEditorData } = params
-  const fwId = String(framework.id)
+  const { framework, caseVersion, cfItemTypes, cfSubjects, cfConcepts, cfAssociationGroupings, cfLicenses, definitionsExtensions } = params
 
   // Build CFDocument
-  const documentLayout = layout?.byNodeId?.[fwId]
-  const document = frameworkToCfDocument(framework, caseVersion, documentLayout, {
-    edgeType,
-    linkedFrameworks: remoteEditorData?.linkedFrameworks,
-    remoteItemLinks: remoteEditorData?.remoteItemLinks,
-  })
+  const document = frameworkToCfDocument(framework, caseVersion)
 
   // Build CFItems
   const itemIds = Array.from(framework.items.keys()).map(String)
-  const items: CFItem[] = itemIds.map((itemId) => {
-    const itemLayout = layout?.byNodeId?.[itemId]
-    return itemToCfItem(framework, itemId, itemLayout)
-  })
+  const items: CFItem[] = itemIds.map((itemId) => itemToCfItem(framework, itemId))
 
   // Build CFAssociations
   const assocIds = Array.from(framework.associations.keys()).map(String)
@@ -847,5 +830,4 @@ export function absolutizeCaseUris<T>(payload: T, baseUrl: string): T {
 export type FrameworkExportParams = {
   framework: Framework
   caseVersion: CaseVersion
-  layout?: LayoutState
 }

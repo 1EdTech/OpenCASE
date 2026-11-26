@@ -120,22 +120,6 @@
             },
             "description": "Simple health check.\n\nReturns `{ \"status\": \"ok\" }` if the server is running."
           }
-        },
-        {
-          "name": "Tenant Lookup",
-          "request": {
-            "auth": { "type": "noauth" },
-            "method": "GET",
-            "url": {
-              "raw": "{{base_url}}/public/tenant-lookup?email=admin@demo.local",
-              "host": ["{{base_url}}"],
-              "path": ["public", "tenant-lookup"],
-              "query": [
-                { "key": "email", "value": "admin@demo.local", "description": "Email to look up" }
-              ]
-            },
-            "description": "Anti-enumeration tenant lookup. Always returns 202; includes `tenantId` only if the email matches a known user."
-          }
         }
       ]
     },

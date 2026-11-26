@@ -47,35 +47,18 @@ Dependencies flow inward: `domain ← application ← infrastructure ← ui`
 Editor state uses a **pure reducer** pattern. The reducer and all its helpers have zero React dependencies, which makes them straightforward to test and reason about.
 
 - `state/EditorContext.tsx` — Thin React provider that wires the reducer to hooks. Orchestration only, no business logic.
-- `state/editorReducer.ts` — Pure reducer handling all state transitions (selection, CRUD, layout, connect, delete, etc.)
-- `state/helpers/nodeGeometry.ts` — Geometry utilities, type guards, graph adjacency builders
-- `state/editorFactories.ts` — Factory functions for items, documents, edges, and graph structures
+- `state/editorReducer.ts` — Pure reducer handling all state transitions (selection, item edits, adding items, inline alignment edits, graph loading)
+- `state/graphTypes.ts` — Editor graph node/edge types and type guards
+- `state/editorFactories.ts` — Factory functions for items, documents, and graphs
 
 ---
 
-## Layout Algorithms
+## Editor Graph Mapping
 
-Three auto-layout modes, all pure functions with no side effects:
+The CASE domain model (Framework, Item, Association) is the source of truth. The editor graph that the Tree View and save work from is a derived projection, with no layout:
 
-| Layout | When to use | Edge style |
-|--------|------------|-----------|
-| **Hierarchy** | Flat lists — many items at one level | smoothstep |
-| **Star** | Radial — framework at centre, branches fan out | bezier |
-| **Tree** | General purpose — recursive horizontal spread | bezier |
-
-The editor auto-detects which layout suits a framework when no saved positions exist, and applies it *before* the first render (so there's no visible jump).
-
-- `layout/detectTopology.ts` — Classifies the graph shape
-- `layout/applyInitialLayout.ts` — Pre-render layout orchestrator
-
----
-
-## React Flow Mapping
-
-The CASE domain model (Framework, Item, Association) is the source of truth. React Flow is a derived projection:
-
-- `reactflow/mapping/toReactFlow.ts` — Domain → React Flow
-- `reactflow/mapping/fromEditorGraph.ts` — React Flow → Domain + layout
+- `state/mapping/toEditorGraph.ts` — Domain → editor graph
+- `state/mapping/fromEditorGraph.ts` — editor graph → Domain
 
 ---
 
@@ -85,7 +68,7 @@ The CASE domain model (Framework, Item, Association) is the source of truth. Rea
 npm run test
 ```
 
-The test suite covers all the pure modules — reducer, layout algorithms, geometry helpers, topology detection, and factories. Tests live alongside the code they cover (`*.test.ts`), with shared fixtures in `src/__tests__/fixtures.ts`.
+The test suite covers the pure modules — reducer, graph mapping, CASE package mappers, and factories. Tests live alongside the code they cover (`*.test.ts`), with shared fixtures in `src/__tests__/fixtures.ts`.
 
 ---
 
@@ -94,6 +77,5 @@ The test suite covers all the pure modules — reducer, layout algorithms, geome
 - **React 19** + TypeScript
 - **Vite** (build + dev server)
 - **Tailwind CSS v4** + shadcn/ui
-- **@xyflow/react** (React Flow)
 - **Vitest** (testing)
 - **oidc-client-ts** (authentication)

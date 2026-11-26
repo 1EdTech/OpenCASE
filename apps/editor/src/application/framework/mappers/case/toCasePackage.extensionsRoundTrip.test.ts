@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { frameworkToCfPackage } from './toCasePackage'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
-import { toReactFlowGraph } from '@/ui/editor/reactflow/mapping/toReactFlow'
-import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
+import { toEditorGraph } from '@/ui/editor/state/mapping/toEditorGraph'
+import { fromEditorGraph } from '@/ui/editor/state/mapping/fromEditorGraph'
 import { hasFrameworkDataChanged } from '@/domain/framework/hasFrameworkDataChanged'
+import { withOffCanvasAssociations } from '@/domain/framework/offCanvasAssociations'
 import type { CFDocument, CFItem, CFPackage } from '@/domain/case/types'
 import type { Framework, Item } from '@/domain/framework/model/types'
 import type { ItemId } from '@/domain/shared/types'
@@ -52,12 +53,12 @@ function makePackage(): CFPackage {
 function loadIntoEditor() {
   const framework = loadFrameworkFromCfPackage(makePackage())
   if (!framework) throw new Error('failed to load framework')
-  return toReactFlowGraph({ framework })
+  return toEditorGraph({ framework })
 }
 
-function saveFromEditor(graph: ReturnType<typeof toReactFlowGraph>) {
-  const { framework, layout } = fromEditorGraph({ graph })
-  return frameworkToCfPackage({ framework, caseVersion: '1.1', layout })
+function saveFromEditor(graph: ReturnType<typeof toEditorGraph>) {
+  const { framework } = fromEditorGraph({ graph })
+  return frameworkToCfPackage({ framework, caseVersion: '1.1' })
 }
 
 function withItemMetadata(framework: Framework, patch: Record<string, unknown>): Framework {
@@ -68,7 +69,7 @@ function withItemMetadata(framework: Framework, patch: Record<string, unknown>):
 }
 
 describe('CASE extensions round-trip through the editor', () => {
-  it('shows custom item and document extensions on the canvas, without ext:opencase on the document', () => {
+  it('shows custom item and document extensions in the editor, without ext:opencase on the document', () => {
     const graph = loadIntoEditor()
     const itemNode = graph.nodes.find((n) => (n.data as { cfItem?: CFItem }).cfItem?.identifier === 'item-1')
     const docNode = graph.nodes.find((n) => (n.data as { cfDocument?: CFDocument }).cfDocument?.identifier === DOC_ID)
@@ -91,7 +92,52 @@ describe('CASE extensions round-trip through the editor', () => {
     expect(item?.extensions).toMatchObject({ smartschoolId: 'ss-1', 'ext:opencase': { colorBand: '#ff0000' } })
 
     const assoc = saved.CFAssociations?.find((a) => a.identifier === 'assoc-root')
-    expect(assoc?.extensions).toMatchObject({ minimumGoal: 'MG-7', 'ext:opencase': { originHandle: 'top' } })
+    expect(assoc?.extensions).toEqual({ minimumGoal: 'MG-7' })
+  })
+
+  it('drops the former canvas view\'s ext:opencase data when saving, and keeps the rest', () => {
+    const pkg = makePackage()
+    pkg.CFDocument.extensions = {
+      ...pkg.CFDocument.extensions,
+      'ext:opencase': {
+        publicAccess: true,
+        layout: { x: 1, y: 2, w: 400, h: 160 },
+        edgeType: 'smoothstep',
+        linkedFrameworks: [{ id: 'ref-1', cgeFrameworkId: 'cge-1' }],
+        remoteItemLinks: [{ id: 'link-1', localItemId: 'item-1' }],
+      },
+    }
+    const item = pkg.CFItems![0]
+    item.extensions = { ...item.extensions, 'ext:opencase': { colorBand: '#ff0000', layout: { x: 10, y: 20 } } }
+    pkg.CFAssociations!.push({
+      identifier: 'assoc-remote',
+      uri: '/ims/case/v1p1/CFAssociations/assoc-remote',
+      associationType: 'isRelatedTo',
+      originNodeURI: { identifier: 'item-1', uri: '/ims/case/v1p1/CFItems/item-1', title: 'Item 1' },
+      destinationNodeURI: { identifier: 'remote-item', uri: 'https://publisher.example/CFItems/remote-item', title: 'Remote' },
+      lastChangeDateTime: '2026-01-01T00:00:00.000Z',
+      extensions: {
+        'ext:opencase': { remoteLink: true, remoteItemIdentifier: 'remote-item', remoteItemUri: 'https://publisher.example/CFItems/remote-item', originHandle: 'right', destinationHandle: 'left' },
+      },
+    } as unknown as NonNullable<CFPackage['CFAssociations']>[number])
+
+    const loaded = loadFrameworkFromCfPackage(pkg)!
+    const saved = frameworkToCfPackage({
+      framework: withOffCanvasAssociations(loaded, fromEditorGraph({ graph: toEditorGraph({ framework: loaded }) }).framework),
+      caseVersion: '1.1',
+    })
+
+    expect(saved.CFDocument.extensions).toEqual({
+      sourceSystem: { name: 'smartschool', curriculumId: 'cur-9' },
+      'ext:opencase': { publicAccess: true },
+    })
+    expect(saved.CFItems?.[0].extensions).toEqual({ smartschoolId: 'ss-1', 'ext:opencase': { colorBand: '#ff0000' } })
+    // A link the canvas drew to a CASE Global framework is kept, minus its handles.
+    const remote = saved.CFAssociations?.find((a) => a.identifier === 'assoc-remote')
+    expect(remote?.destinationNodeURI).toMatchObject({ identifier: 'remote-item', uri: 'https://publisher.example/CFItems/remote-item' })
+    expect(remote?.extensions).toEqual({
+      'ext:opencase': { remoteLink: true, remoteItemIdentifier: 'remote-item', remoteItemUri: 'https://publisher.example/CFItems/remote-item' },
+    })
   })
 
   it('keeps custom document extensions even when there is no ext:opencase data to write', () => {
@@ -128,7 +174,7 @@ describe('CASE extensions round-trip through the editor', () => {
     if (!framework) throw new Error('failed to load framework')
 
     expect(framework.metadata.alignmentStorage).toBe('alignmentFramework')
-    const saved = saveFromEditor(toReactFlowGraph({ framework }))
+    const saved = saveFromEditor(toEditorGraph({ framework }))
     expect(saved.CFDocument.extensions).toEqual({ 'ext:opencase': expect.objectContaining({ alignmentStorage: 'alignmentFramework' }) })
   })
 })

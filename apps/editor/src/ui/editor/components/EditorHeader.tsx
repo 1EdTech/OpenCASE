@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ComponentProps, ComponentType } from 'react'
-import { Cog6ToothIcon, QuestionMarkCircleIcon, ArrowRightStartOnRectangleIcon, ChevronLeftIcon, Bars3BottomLeftIcon, SparklesIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon, ShareIcon, QueueListIcon } from '@heroicons/react/24/solid'
+import { ArrowRightStartOnRectangleIcon, ChevronLeftIcon, CloudArrowUpIcon, CheckCircleIcon, KeyIcon } from '@heroicons/react/24/solid'
 import { Button } from '@/ui/shared/components/ui/button'
-import type { CFAssociationGrouping } from '@/domain/case/types'
-import { CANVAS_VIEW_ENABLED } from '@/ui/editor/featureFlags'
 import { FrameworkLabels } from '@/ui/shared/components/FrameworkLabels'
 
 type MenuItem = {
@@ -11,99 +9,6 @@ type MenuItem = {
   icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
   onClick?: () => void
   disabled?: boolean
-}
-
-// Hierarchy layout is hidden (redundant with Canvas View) but kept wired up for now; slated for removal.
-const SHOW_HIERARCHY_LAYOUT_MENU_ITEM = false
-
-function PopoverMenu({
-  label,
-  icon: Icon,
-  items,
-  align = 'right',
-  showLabel = false,
-  active = false,
-}: Readonly<{
-  label: string
-  icon?: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>
-  items: (MenuItem | 'divider')[]
-  align?: 'left' | 'right'
-  /** Show the label text next to the icon */
-  showLabel?: boolean
-  /** Render in active/highlighted state */
-  active?: boolean
-}>) {
-  const [open, setOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onPointerDown = (e: PointerEvent) => {
-      if (!rootRef.current) return
-      if (!rootRef.current.contains(e.target as Node)) setOpen(false)
-    }
-    globalThis.addEventListener('pointerdown', onPointerDown)
-    return () => globalThis.removeEventListener('pointerdown', onPointerDown)
-  }, [open])
-
-  return (
-    <div className="relative" ref={rootRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title={label}
-        className={[
-          'flex cursor-pointer items-center gap-1.5 rounded-lg px-2 py-1.5 transition-colors focus:outline-none focus:ring-2 focus:ring-[#662F90]/30',
-          active
-            ? 'bg-teal-100 text-teal-700 hover:bg-teal-200'
-            : 'text-[#2E2F2F]/60 hover:bg-[#662F90]/8 hover:text-[#662F90]',
-          !showLabel && 'h-8 w-8 justify-center',
-        ].filter(Boolean).join(' ')}
-      >
-        {Icon ? <Icon className="h-4 w-4 shrink-0" aria-hidden={true} /> : null}
-        {showLabel ? <span className="max-w-[140px] truncate text-xs font-medium">{label}</span> : <span className="sr-only">{label}</span>}
-      </button>
-
-      {open ? (
-        <div
-          role="menu"
-          className={[
-            'absolute z-40 mt-2 w-52 overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg',
-            align === 'right' ? 'right-0' : 'left-0',
-          ].join(' ')}
-        >
-          <div className="p-1">
-            {items.map((it, idx) => {
-              if (it === 'divider') return <div key={`d_${idx}`} className="my-1 h-px bg-black/10" />
-
-              const ItemIcon = it.icon
-              return (
-                <button
-                  key={it.label}
-                  role="menuitem"
-                  type="button"
-                  disabled={it.disabled}
-                  className={[
-                    'flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm',
-                    it.disabled ? 'cursor-not-allowed text-slate-400' : 'text-slate-800 hover:bg-slate-900/5',
-                  ].join(' ')}
-                  onClick={() => {
-                    it.onClick?.()
-                    setOpen(false)
-                  }}
-                >
-                  {ItemIcon ? <ItemIcon className="h-4 w-4 text-slate-600" aria-hidden /> : null}
-                  <span className="truncate">{it.label}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      ) : null}
-    </div>
-  )
 }
 
 function initials(name?: string) {
@@ -187,14 +92,13 @@ function AvatarMenu({
 
 export type SaveStatus = 'idle' | 'saving' | 'success' | 'error'
 
-export default function CanvasHeader({
+export default function EditorHeader({
   frameworkTitle,
   frameworkSubtitle,
   frameworkLabels,
   userName,
   tenantId: _tenantId,
   reserveRightForPanel,
-  showSettings,
   isDirty,
   saveStatus = 'idle',
   saveError,
@@ -203,14 +107,6 @@ export default function CanvasHeader({
   onSignIn,
   onSignOut,
   onChangePassword,
-  onOpenSettings,
-  onResetHierarchy,
-  onResetStar,
-  onSwitchTreeView,
-  activeView = 'canvas',
-  cfAssociationGroupings,
-  activeGroupingFilter,
-  onSetGroupingFilter,
 }: {
   frameworkTitle: string
   frameworkSubtitle?: string
@@ -219,7 +115,6 @@ export default function CanvasHeader({
   userName?: string
   tenantId?: string
   reserveRightForPanel?: boolean
-  showSettings?: boolean
   /** Whether the editor has unsaved changes */
   isDirty?: boolean
   /** Current save status */
@@ -233,21 +128,6 @@ export default function CanvasHeader({
   onSignOut?: () => void
   /** Opens the change password dialog */
   onChangePassword?: () => void
-  onOpenSettings?: () => void
-  /** Re-layout graph in hierarchy mode (flat column below framework) */
-  onResetHierarchy?: () => void
-  /** Re-layout graph in star/radial topology mode */
-  onResetStar?: () => void
-  /** Toggle between the tree panel view and canvas view */
-  onSwitchTreeView?: () => void
-  /** Currently active view mode */
-  activeView?: 'canvas' | 'tree'
-  /** Association grouping definitions for filter dropdown */
-  cfAssociationGroupings?: CFAssociationGrouping[]
-  /** Currently active grouping filter (null = show all) */
-  activeGroupingFilter?: string | null
-  /** Set the active grouping filter */
-  onSetGroupingFilter?: (_id: string | null) => void
 }) {
   // Build user menu items
   const userMenuItems: (MenuItem | 'divider')[] = []
@@ -358,51 +238,6 @@ export default function CanvasHeader({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Pathway highlight dropdown */}
-          {cfAssociationGroupings && cfAssociationGroupings.length > 0 ? (
-            (() => {
-              const activeGrouping = activeGroupingFilter
-                ? cfAssociationGroupings.find((g) => g.identifier === activeGroupingFilter)
-                : null
-              return (
-                <PopoverMenu
-                  label={activeGrouping ? (activeGrouping.title ?? activeGrouping.identifier) : 'Pathways'}
-                  icon={ShareIcon}
-                  showLabel
-                  active={Boolean(activeGrouping)}
-                  items={[
-                    ...(activeGroupingFilter ? [{
-                      label: 'Clear highlight',
-                      onClick: () => onSetGroupingFilter?.(null),
-                    }, 'divider' as const] : []),
-                    ...cfAssociationGroupings.map((g) => ({
-                      label: activeGroupingFilter === g.identifier ? `✓ ${g.title ?? g.identifier}` : (g.title ?? g.identifier),
-                      onClick: () => onSetGroupingFilter?.(activeGroupingFilter === g.identifier ? null : g.identifier),
-                    })),
-                  ]}
-                />
-              )
-            })()
-          ) : null}
-
-          {showSettings ? (
-            <PopoverMenu
-              label="Settings"
-              icon={Cog6ToothIcon}
-              items={[
-                { label: 'Settings', icon: Cog6ToothIcon, onClick: onOpenSettings },
-                // View switching is hidden while Tree View is the only view (see featureFlags.ts).
-                ...(CANVAS_VIEW_ENABLED ? [
-                  ...(SHOW_HIERARCHY_LAYOUT_MENU_ITEM ? [{ label: 'Hierarchy layout', icon: Bars3BottomLeftIcon, onClick: onResetHierarchy, disabled: !onResetHierarchy }] : []),
-                  { label: 'Canvas View', icon: SparklesIcon, onClick: onResetStar, disabled: !onResetStar },
-                  { label: activeView === 'tree' ? '✓ Tree View' : 'Tree View', icon: QueueListIcon, onClick: onSwitchTreeView, disabled: !onSwitchTreeView },
-                ] : []),
-                'divider',
-                { label: 'Help', icon: QuestionMarkCircleIcon, onClick: () => {} },
-              ]}
-            />
-          ) : null}
-
           <AvatarMenu userName={userName} items={userMenuItems} />
         </div>
       </div>

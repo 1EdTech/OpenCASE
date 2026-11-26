@@ -1,5 +1,7 @@
 # Project Context: CASE Framework Editor
 
+> Historical design notes. The React Flow canvas described below was removed in CGE-165; the editor now uses the Tree View only. See [architecture.md](architecture.md) for the current structure.
+
 ## What this project is
 
 This project is an **editor for CASE frameworks**, built as an **open-source reference implementation**.

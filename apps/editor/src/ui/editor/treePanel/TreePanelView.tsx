@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronRight, Plus, X } from 'lucide-react'
+import { ChevronRight, Plus, RefreshCw, X } from 'lucide-react'
 import { useEditor } from '@/ui/editor/state/EditorContext'
 import { buildFrameworkTree, type FrameworkEdgeRecord, type FrameworkTreeNode } from '@/domain/framework/treeDerivation'
 import type { CFItem } from '@/domain/case/types'
@@ -16,7 +16,11 @@ import {
   type ExternalAlignmentTarget,
   type HostedDocumentRef,
 } from '@/domain/framework/externalAlignments'
+import type { CaseApiClient } from '@/infrastructure/caseApi/CaseApiClient'
+import type { CgeFrameworkSummary } from '@/infrastructure/caseApi/cgeTypes'
 import FrameworkTreeList from './FrameworkTreeList'
+import CgeTargetSearch from './CgeTargetSearch'
+import { formatApiErrorMessage } from '@/infrastructure/caseApi/http'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -40,7 +44,6 @@ type PendingAssociation = {
 
 // Module-scope stable reference (never recreated) — passed as a no-op
 // onDragStart prop so it doesn't defeat FrameworkTreeItem's React.memo.
-const NOOP_DRAG_START = () => { /* cursor hint only */ }
 
 const ALIGNMENT_ASSOCIATION_TYPES: Array<{ value: string; label: string }> = [
   { value: 'exactMatchOf', label: 'Exact Match Of' },
@@ -103,6 +106,19 @@ type Props = {
   alignmentsRevision?: number
   /** Resolves item identifiers to the hosted frameworks that hold them; unresolved destinations are shown as remote. */
   onLookupItemDocuments?: (identifiers: string[]) => Promise<Record<string, HostedDocumentRef>>
+  /** CASE Global search in the Add Target Framework picker. Absent when there is no signed-in tenant. */
+  cge?: CgeTargetSupport
+}
+
+export type CgeTargetSupport = {
+  tenantId: string
+  api: CaseApiClient
+  /** Caches a CASE Global framework on this server (read-only) and returns its document id. */
+  onAddTarget: (framework: CgeFrameworkSummary) => Promise<string>
+  /** Ids of the server frameworks that are read-only CASE Global caches. */
+  cachedFrameworkIds: ReadonlySet<string>
+  /** Downloads a cached framework from its publisher again and reloads it. */
+  onRefreshTarget: (docId: string) => Promise<void>
 }
 
 // ── Helpers: build tree data from a domain Framework ──────────────────────
@@ -210,9 +226,8 @@ function findNearestVisible(
 
 // ── Component ─────────────────────────────────────────────────────────────
 
-export default function TreePanelView({ availableFrameworks = [], serverFrameworks = [], onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, loadedFramework, onLookupItemDocuments, alignmentsRevision }: Props) {
+export default function TreePanelView({ availableFrameworks = [], serverFrameworks = [], onLoadTargetFramework, onSaveAlignments, onLoadAlignmentsForTarget, onDiscoverAlignedTargets, loadedFramework, onLookupItemDocuments, alignmentsRevision, cge }: Props) {
   const {
-    nodes,
     cfItems,
     frameworkEdges,
     rootItemIds,
@@ -220,7 +235,8 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
     frameworkInfo,
     cfDocument,
     selectedNodeId,
-    onNodesChange,
+    selectNode,
+    clearSelection,
     addChild,
     inlineAlignmentEdits,
     addInlineAlignment,
@@ -249,6 +265,8 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
   // so edits only send new destinations to the server.
   const hostedDocumentsRef = useRef<Record<string, HostedDocumentRef>>({})
   const lookedUpIdsRef = useRef<Set<string>>(new Set())
+  // Bumped when a framework arrives on the server, so remembered misses are looked up again.
+  const [hostedLookupRevision, setHostedLookupRevision] = useState(0)
   const inlineAssociations = useMemo<PendingAssociation[]>(
     () => externalTargets.flatMap((t) => t.alignments.map((a) => ({ ...a, toFrameworkId: t.id, inline: true }))),
     [externalTargets],
@@ -264,6 +282,9 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
   const [savingTargetId, setSavingTargetId] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [addModalSource, setAddModalSource] = useState<'server' | 'cge'>('server')
+  const [refreshingTargetId, setRefreshingTargetId] = useState<string | null>(null)
+  const [refreshError, setRefreshError] = useState<{ targetId: string; message: string } | null>(null)
 
   // ── Tree expansion state (lifted so line recalculation fires on every expand/collapse) ──
   const [leftExpandedIds, setLeftExpandedIds] = useState<Set<string>>(() => new Set())
@@ -624,11 +645,14 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
       const grouped = groupExternalAlignments(alignments, hostedDocuments)
       setExternalTargets(grouped)
       setTargets((prev) => {
-        const existingIds = new Set(prev.map((t) => t.id))
+        // A remote source with no associations left (e.g. its framework is now hosted) is dropped.
+        const groupedIds = new Set(grouped.map((t) => t.id))
+        const kept = prev.filter((t) => !isRemoteTargetId(t.id) || groupedIds.has(t.id))
+        const existingIds = new Set(kept.map((t) => t.id))
         const toAdd = grouped
           .filter((t) => !existingIds.has(t.id))
           .map((t) => ({ id: t.id, alignmentDocId: globalThis.crypto?.randomUUID?.() ?? `align-${Date.now()}-${t.id}`, hasUnsavedChanges: false }))
-        return toAdd.length > 0 ? [...prev, ...toAdd] : prev
+        return toAdd.length > 0 || kept.length !== prev.length ? [...kept, ...toAdd] : prev
       })
     }
 
@@ -648,7 +672,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
         })
     }
     return () => { cancelled = true }
-  }, [editedFramework, onLookupItemDocuments])
+  }, [editedFramework, onLookupItemDocuments, hostedLookupRevision])
 
   // When expanding a pre-populated target whose framework data isn't loaded yet, fetch it
   useEffect(() => {
@@ -709,12 +733,13 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
   // Stable references: FrameworkTreeItem is React.memo'd, so unstable callback
   // identities here would force every visible row to re-render on every
   // TreePanelView render (defeating the memo).
-  const handleSelect = useCallback((id: string) => {
-    const deselects = nodes
-      .filter((n) => n.selected && n.id !== id)
-      .map((n) => ({ type: 'select' as const, id: n.id, selected: false }))
-    onNodesChange([...deselects, { type: 'select' as const, id, selected: true }])
-  }, [nodes, onNodesChange])
+  const handleSelect = selectNode
+
+  // The item details panel opens over the right-hand panel, so close it once a drag starts.
+  // Deferred: Chrome can cancel a drag when the page changes during dragstart itself.
+  const handleLeftDragStart = useCallback(() => {
+    if (selectedNodeId) globalThis.setTimeout(clearSelection, 0)
+  }, [selectedNodeId, clearSelection])
 
   const handleRightDragOver = useCallback((id: string) => setDragOverItemId(id), [])
   const handleRightDragLeave = useCallback(() => setDragOverItemId(null), [])
@@ -966,6 +991,36 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
     handleExpandTarget(id)
   }, [availableFrameworks, onLoadTargetFramework, handleExpandTarget])
 
+  const handleAddCgeTarget = useCallback(async (framework: CgeFrameworkSummary) => {
+    if (!cge) return
+    const docId = await cge.onAddTarget(framework)
+    // The new copy may hold destinations that were looked up before as not hosted.
+    for (const id of [...lookedUpIdsRef.current]) {
+      if (!hostedDocumentsRef.current[id]) lookedUpIdsRef.current.delete(id)
+    }
+    setHostedLookupRevision((r) => r + 1)
+    if (targetIds.has(docId)) {
+      // Already a target: show it rather than toggling it closed.
+      setIsAddModalOpen(false)
+      if (expandedTargetId !== docId) handleExpandTarget(docId)
+      return
+    }
+    await handleAddTarget(docId)
+  }, [cge, targetIds, expandedTargetId, handleExpandTarget, handleAddTarget])
+
+  const handleRefreshTarget = useCallback(async (id: string) => {
+    if (!cge) return
+    setRefreshingTargetId(id)
+    setRefreshError(null)
+    try {
+      await cge.onRefreshTarget(id)
+    } catch (e) {
+      setRefreshError({ targetId: id, message: formatApiErrorMessage(e, 'Refresh from the publisher failed') })
+    } finally {
+      setRefreshingTargetId(null)
+    }
+  }, [cge])
+
   // ── Layout ──
 
   const panelHeight = 'h-[calc(100vh-128px)]'
@@ -1040,7 +1095,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                 onSelect={handleSelect}
                 onAddChild={handleAddChild}
                 isDraggable={Boolean(expandedTargetFramework) || expandedRemoteTarget !== null}
-                onDragStart={NOOP_DRAG_START}
+                onDragStart={handleLeftDragStart}
                 associationCounts={leftAssociationCounts}
                 onBadgeClick={handleLeftBadgeClick}
                 belowHeaderSlot={(
@@ -1097,13 +1152,16 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                   const pendingAssocCount = pendingAssociations.filter((a) => a.toFrameworkId === target.id).length
                   const isLoading = loadingTargetIds.has(target.id)
                   const isSelf = target.id === activeFrameworkId
+                  const isCgeCache = cge?.cachedFrameworkIds.has(target.id) === true
+                  const isRefreshing = refreshingTargetId === target.id
 
                   return (
                     <div key={target.id} className="border-b border-black/10 last:border-b-0">
+                      <div className="flex items-center hover:bg-slate-50">
                       <button
                         type="button"
                         onClick={() => { handleExpandTarget(target.id) }}
-                        className="flex w-full items-center gap-2 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+                        className="flex min-w-0 flex-1 items-center gap-2 py-3 pl-4 pr-2 text-left transition-colors"
                       >
                         <ChevronRight
                           className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
@@ -1112,6 +1170,7 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                           {targetTitle(target.id)}
                           {isSelf && <span className="text-slate-400"> (this framework)</span>}
                           {isRemote && <span className="text-slate-400"> (not on this server)</span>}
+                          {isCgeCache && <span className="text-slate-400"> (CASE Global)</span>}
                         </span>
                         {isLoading && (
                           <span className="shrink-0 animate-pulse text-[10px] text-slate-400">Loading…</span>
@@ -1125,10 +1184,26 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                           <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" title="Unsaved changes" />
                         )}
                       </button>
+                      {isCgeCache && (
+                        <button
+                          type="button"
+                          onClick={() => { void handleRefreshTarget(target.id) }}
+                          disabled={isRefreshing || isLoading}
+                          title="Refresh from the publisher"
+                          aria-label={`Refresh ${targetTitle(target.id)} from the publisher`}
+                          className="mr-3 shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-teal-600 disabled:opacity-50"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                        </button>
+                      )}
+                      </div>
+                      {refreshError?.targetId === target.id && (
+                        <p className="mx-4 mb-2 rounded bg-rose-50 px-2 py-1 text-xs text-rose-700">{refreshError.message}</p>
+                      )}
 
                       {isExpanded && (fw || isRemote) && (
                         <div className="flex flex-col border-t border-black/5">
-                          <div className="h-[calc(100vh-330px)] overflow-hidden">
+                          <div className="flex max-h-[calc(100vh-330px)] flex-col overflow-hidden">
                             <FrameworkTreeList
                               title={targetTitle(target.id)}
                               frameworkNodeId={null}
@@ -1281,9 +1356,27 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
               <p className="mt-0.5 text-xs text-slate-500">
                 Select a framework to add to the crosswalk panel.
               </p>
+              {cge && (
+                <div className="mt-3 flex gap-1 rounded-lg bg-slate-100 p-0.5 text-xs" role="tablist">
+                  {([['server', 'This server'], ['cge', 'CASE Global']] as const).map(([source, label]) => (
+                    <button
+                      key={source}
+                      type="button"
+                      role="tab"
+                      aria-selected={addModalSource === source}
+                      onClick={() => setAddModalSource(source)}
+                      className={`flex-1 rounded-md px-2 py-1 font-medium ${addModalSource === source ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto p-2">
-              {addableLocalFrameworks.length === 0 && addableServerFrameworks.length === 0 ? (
+              {cge && addModalSource === 'cge' ? (
+                <CgeTargetSearch tenantId={cge.tenantId} api={cge.api} onAdd={handleAddCgeTarget} />
+              ) : addableLocalFrameworks.length === 0 && addableServerFrameworks.length === 0 ? (
                 <p className="px-3 py-6 text-center text-sm text-slate-400">
                   All available frameworks have already been added.
                 </p>
@@ -1321,7 +1414,9 @@ export default function TreePanelView({ availableFrameworks = [], serverFramewor
                     >
                       <span className="flex-1 min-w-0">
                         <span className="block truncate text-sm font-medium text-slate-700">{fw.title}</span>
-                        <span className="block text-xs text-slate-400">From server</span>
+                        <span className="block text-xs text-slate-400">
+                          {cge?.cachedFrameworkIds.has(fw.id) ? 'CASE Global (read-only copy)' : 'From server'}
+                        </span>
                       </span>
                     </button>
                   ))}

@@ -45,6 +45,41 @@ describe('stripNonDataFields', () => {
     expect(stripNonDataFields(base)).toEqual(stripNonDataFields(afterLayoutEdit))
   })
 
+  it('treats a save that drops the former canvas view\'s ext:opencase data as data-identical', () => {
+    const assoc = {
+      identifier: 'assoc-1',
+      associationType: 'isRelatedTo',
+      originNodeURI: { identifier: 'item-1', uri: '/ims/case/v1p1/CFItems/item-1' },
+      destinationNodeURI: { identifier: 'remote-1', uri: 'https://publisher.example/CFItems/remote-1' }
+    }
+    const mirrored = {
+      CFDocument: {
+        identifier: 'doc-1',
+        title: 'Doc',
+        extensions: {
+          'ext:opencase': {
+            isModifiedFromSource: false,
+            layout: { x: 0, y: 96, w: 400, h: 160 },
+            edgeType: 'smoothstep',
+            linkedFrameworks: [{ id: 'ref-1' }],
+            remoteItemLinks: [{ id: 'link-1' }]
+          }
+        }
+      },
+      CFItems: [{ identifier: 'item-1', fullStatement: 'S1', extensions: { 'ext:opencase': { layout: { x: 1, y: 2 } } } }],
+      CFAssociations: [{ ...assoc, extensions: { 'ext:opencase': { remoteLink: true, originHandle: 'right', destinationHandle: 'left' } } }],
+      CFRubrics: []
+    }
+    const resaved = {
+      CFDocument: { identifier: 'doc-1', title: 'Doc', extensions: { 'ext:opencase': { isModifiedFromSource: false } } },
+      CFItems: [{ identifier: 'item-1', fullStatement: 'S1' }],
+      CFAssociations: [{ ...assoc, extensions: { 'ext:opencase': { remoteLink: true } } }],
+      CFRubrics: []
+    }
+
+    expect(stripNonDataFields(mirrored)).toEqual(stripNonDataFields(resaved))
+  })
+
   it('ignores CFPackageURI/CFDocumentURI — GET-only back-references the frontend always re-synthesizes on export', () => {
     const base = {
       CFDocument: {

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { frameworkToCfPackage, toOpenCaseFormat } from './toCasePackage'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
-import { toReactFlowGraph } from '@/ui/editor/reactflow/mapping/toReactFlow'
-import { fromEditorGraph } from '@/ui/editor/reactflow/mapping/fromEditorGraph'
+import { toEditorGraph } from '@/ui/editor/state/mapping/toEditorGraph'
+import { fromEditorGraph } from '@/ui/editor/state/mapping/fromEditorGraph'
 import { withOffCanvasAssociations } from '@/domain/framework/offCanvasAssociations'
 import type { CFPackage } from '@/domain/case/types'
 
@@ -78,10 +78,10 @@ function load(pkg: CFPackage = makePackage()) {
   return framework
 }
 
-/** Load → canvas graph → save, the same path EditorCanvas.handleSave takes. */
+/** Load → editor graph → save, the same path FrameworkEditor.handleSave takes. */
 function saveFromEditor(pkg?: CFPackage) {
   const loaded = load(pkg)
-  const framework = withOffCanvasAssociations(loaded, fromEditorGraph({ graph: toReactFlowGraph({ framework: loaded }) }).framework)
+  const framework = withOffCanvasAssociations(loaded, fromEditorGraph({ graph: toEditorGraph({ framework: loaded }) }).framework)
   return { framework, openCase: toOpenCaseFormat(frameworkToCfPackage({ framework, caseVersion: '1.1' })) }
 }
 

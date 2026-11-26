@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorProvider } from '@/ui/editor/state/EditorContext'
-import EditorCanvas from '@/ui/editor/EditorCanvas'
+import FrameworkEditor from '@/ui/editor/FrameworkEditor'
 import HomeScreen from '@/ui/home/HomeScreen'
 import { createNewFrameworkDraft, createHomeFrameworkFromDomain, loadFrameworks, saveFrameworks, type HomeFramework } from '@/ui/home/frameworkStore'
 import type { CreateFrameworkDraft } from '@/ui/home/CreateFrameworkDialog'
@@ -9,19 +9,18 @@ import { alignmentFrameworkSourceId, alignmentFrameworkTargetId } from '@/domain
 import { AuthProvider, useAuth } from '@/app/providers/AuthProvider'
 import { getAppConfig } from '@/app/config'
 import { CaseApiClient, type CfDocumentSummary } from '@/infrastructure/caseApi/CaseApiClient'
+import type { CgeFrameworkSummary } from '@/infrastructure/caseApi/cgeTypes'
+import type { CgeTargetSupport } from '@/ui/editor/treePanel/TreePanelView'
 import { createFetchHttpClient } from '@/infrastructure/caseApi/http'
 import { loadFrameworkFromCfPackage } from '@/application/framework/services/FrameworkLoader'
 import { planAlignmentStorage, saveWithAlignmentStorage, type AlignmentStoragePlan, type AlignmentStoragePort } from '@/application/framework/services/AlignmentStorage'
-import { toReactFlowGraph, extractLayoutFromCfPackage, extractEditorSettingsFromCfPackage, extractRemoteFrameworkDataFromCfPackage, normalizeLinkedFrameworkColors } from '@/ui/editor/reactflow/mapping'
+import { toEditorGraph } from '@/ui/editor/state/mapping/toEditorGraph'
 import { frameworkToCfPackage, toOpenCaseFormat } from '@/application/framework/mappers/case/toCasePackage'
-import type { LayoutState } from '@/ui/editor/reactflow/mapping'
 import type { CaseVersion } from '@/application/framework/mappers/case/CasePackageSnapshot'
 import type { CFAssociationGrouping, CFItemType, CFLicense, CFSubject, CFConcept, CFDefinition } from '@/domain/case/types'
 import { extractCfDefinitions, preferFrameworkDefinitions } from '@/application/framework/mappers/case/frameworkDefinitions'
 import LoginScreen from '@/ui/auth/LoginScreen'
 import { ensureDefaultMembership } from '@/app/ensureDefaultMembership'
-import { detectTopology } from '@/ui/editor/layout/detectTopology'
-import { applyInitialLayout } from '@/ui/editor/layout/applyInitialLayout'
 
 /** Parse the `<id>` out of a `#/framework/<id>` hash, or null if the hash doesn't match. */
 function getFrameworkIdFromHash(): string | null {
@@ -49,12 +48,6 @@ function AppInner() {
   const [frameworks, setFrameworks] = useState<HomeFramework[]>(() => loadFrameworks())
   const [activeFrameworkId, setActiveFrameworkId] = useState<string | null>(() => getFrameworkIdFromHash())
   
-  // Store layouts extracted from CASE extensions (keyed by framework ID)
-  const [frameworkLayouts, setFrameworkLayouts] = useState<Record<string, LayoutState>>({})
-
-  // Store per-framework edge type from CASE extensions (keyed by framework ID)
-  const [frameworkEdgeTypes, setFrameworkEdgeTypes] = useState<Record<string, string>>({})
-
   // Each framework's own CFDefinitions as returned by its CFPackage (keyed by framework ID).
   // These take precedence over the tenant catalogue when the framework is saved.
   const [frameworkCfDefinitions, setFrameworkCfDefinitions] = useState<Record<string, CFDefinition>>({})
@@ -366,10 +359,6 @@ function AppInner() {
         // Extract CFDefinitions (item types, subjects, concepts, groupings) from the package
         mergeCfDefinitions(pkg)
 
-        // Extract layout and editor settings from CASE extensions before converting to domain model
-        const layout = extractLayoutFromCfPackage(pkg)
-        const editorSettings = extractEditorSettingsFromCfPackage(pkg)
-
         // Use the FrameworkLoader to map CASE → domain Framework
         // This handles v1p0/v1p1 differences through the normalization layer
         const framework = loadFrameworkFromCfPackage(pkg)
@@ -401,16 +390,6 @@ function AppInner() {
           const { [fw.id]: _replaced, ...rest } = prev
           return ownDefinitions ? { ...rest, [fw.id]: ownDefinitions } : rest
         })
-
-        // Store the extracted layout
-        if (layout) {
-          setFrameworkLayouts((prev) => ({ ...prev, [fw.id]: layout }))
-        }
-
-        // Store the extracted edge type
-        if (editorSettings?.edgeType) {
-          setFrameworkEdgeTypes((prev) => ({ ...prev, [fw.id]: editorSettings.edgeType! }))
-        }
 
         setFrameworks((prev) => {
           // Update existing framework or add new one
@@ -455,20 +434,18 @@ function AppInner() {
 
   // Load a framework from the server into the local session without navigating to it.
   // Used by TreePanelView when the user selects a crosswalk target that isn't loaded locally yet.
+  // `replace` swaps in the server's copy when the framework is already loaded (after a refresh).
   const handleLoadTargetFramework = useCallback(
-    async (docId: string) => {
+    async (docId: string, options?: { replace?: boolean }) => {
       const pkg = await api.getCfPackage({ docId, caseVersion: 'v1p1' })
       mergeCfDefinitions(pkg)
-      const layout = extractLayoutFromCfPackage(pkg)
-      const editorSettings = extractEditorSettingsFromCfPackage(pkg)
       const framework = loadFrameworkFromCfPackage(pkg)
       if (!framework) throw new Error('Failed to load framework from CASE package')
       const fw = createHomeFrameworkFromDomain(framework)
-      if (layout) setFrameworkLayouts((prev) => ({ ...prev, [fw.id]: layout }))
-      if (editorSettings?.edgeType) setFrameworkEdgeTypes((prev) => ({ ...prev, [fw.id]: editorSettings.edgeType! }))
       setFrameworks((prev) => {
-        if (prev.some((f) => f.id === fw.id)) return prev
-        const next = [...prev, fw]
+        const existingIdx = prev.findIndex((f) => f.id === fw.id)
+        if (existingIdx !== -1 && !options?.replace) return prev
+        const next = existingIdx === -1 ? [...prev, fw] : prev.map((f, i) => (i === existingIdx ? { ...fw, readOnly: f.readOnly } : f))
         saveFrameworks(next)
         return next
       })
@@ -476,37 +453,69 @@ function AppInner() {
     [api, mergeCfDefinitions],
   )
 
-  // Derive the graph from the active framework
-  // This converts the domain Framework to React Flow format.
-  // When no saved layout exists the topology is detected and an appropriate
-  // auto-layout is applied *before* the first render so there is no visible jump.
-  const { graph: activeGraph, autoEdgeType } = useMemo(() => {
-    if (!activeFramework) return { graph: null, autoEdgeType: undefined as string | undefined }
-
-    // Use legacy graph if available (for backward compatibility with stored data)
-    if (activeFramework.graph) {
-      return { graph: activeFramework.graph, autoEdgeType: undefined as string | undefined }
+  // Server frameworks that are read-only copies of CASE Global frameworks: document id -> coalition framework id.
+  const cgeCacheFrameworkIds = useMemo(() => {
+    const ids = new Map<string, string>()
+    for (const doc of serverCfDocuments) {
+      const ext = doc.extensions?.['ext:opencase']
+      const cgeFrameworkId = doc.cgeFrameworkId ?? ext?.cgeFrameworkId
+      if ((doc.readOnly ?? ext?.readOnly) === true && cgeFrameworkId) ids.set(doc.identifier, cgeFrameworkId)
     }
+    return ids
+  }, [serverCfDocuments])
 
-    // Get the stored layout for this framework (from CASE extensions)
-    const layout = frameworkLayouts[activeFramework.id]
-    const remoteEditorData = extractRemoteFrameworkDataFromCfPackage({
-      CFDocument: activeFramework.cfDocument,
-      CFItems: [],
-      CFAssociations: [],
+  // Cache a CASE Global framework on this server (read-only) so it can be a crosswalk target.
+  const handleAddCgeTarget = useCallback(async (fw: CgeFrameworkSummary): Promise<string> => {
+    if (!tenantId) throw new Error('Sign in required')
+    for (const [docId, cgeFrameworkId] of cgeCacheFrameworkIds) {
+      if (cgeFrameworkId === fw.frameworkId) return docId
+    }
+    const result = await api.importCgeFramework({
+      tenantId,
+      frameworkId: fw.frameworkId,
+      sourceUri: fw.sourceUri,
+      registryId: fw.registryId,
+      readOnly: true,
+      subscribe: false,
     })
-    remoteEditorData.linkedFrameworks = normalizeLinkedFrameworkColors(remoteEditorData.linkedFrameworks)
-    const graph = toReactFlowGraph({ framework: activeFramework.framework, layout, remoteEditorData })
-
-    // If no saved layout, detect topology and apply appropriate layout
-    if (!layout) {
-      const topology = detectTopology(graph)
-      const result = applyInitialLayout(graph, topology)
-      return { graph: result.graph, autoEdgeType: result.edgeType }
+    const summary: CfDocumentSummary = {
+      identifier: result.docId,
+      title: result.title ?? fw.title,
+      readOnly: true,
+      cgeFrameworkId: fw.frameworkId,
     }
+    setServerCfDocuments((prev) => (prev.some((d) => d.identifier === result.docId) ? prev : [...prev, summary]))
+    return result.docId
+  }, [api, tenantId, cgeCacheFrameworkIds])
 
-    return { graph, autoEdgeType: undefined as string | undefined }
-  }, [activeFramework, frameworkLayouts])
+  // Download a cached CASE Global framework from its publisher again, then reload it.
+  const handleRefreshCgeTarget = useCallback(async (docId: string) => {
+    const cgeFrameworkId = cgeCacheFrameworkIds.get(docId)
+    if (!tenantId || !cgeFrameworkId) return
+    await api.refreshCgeCache({ tenantId, frameworkId: cgeFrameworkId })
+    await handleLoadTargetFramework(docId, { replace: true })
+  }, [api, tenantId, cgeCacheFrameworkIds, handleLoadTargetFramework])
+
+  const cgeTargetSupport = useMemo<CgeTargetSupport | undefined>(
+    () => (tenantId
+      ? {
+          tenantId,
+          api,
+          onAddTarget: handleAddCgeTarget,
+          cachedFrameworkIds: new Set(cgeCacheFrameworkIds.keys()),
+          onRefreshTarget: handleRefreshCgeTarget,
+        }
+      : undefined),
+    [tenantId, api, handleAddCgeTarget, cgeCacheFrameworkIds, handleRefreshCgeTarget],
+  )
+
+  // Derive the editor graph from the active framework
+  const activeGraph = useMemo(() => {
+    if (!activeFramework) return null
+    // Use legacy graph if available (for backward compatibility with stored data)
+    if (activeFramework.graph) return activeFramework.graph
+    return toEditorGraph({ framework: activeFramework.framework })
+  }, [activeFramework])
 
   // Determine CASE version from framework metadata or CFDocument
   // (computed early so useCallback has stable deps - must be before all early returns)
@@ -516,24 +525,10 @@ function AppInner() {
         ?? '1.1') as CaseVersion)
     : '1.1'
   
-  // Always save/archive via v1p1 management endpoints.
+  // Always save via v1p1 management endpoints.
   // The backend serves frameworks transparently over both v1p0 and v1p1 public APIs
   // via on-the-fly downconversion, so a single v1p1 store is sufficient.
   const caseApiVersion: 'v1p0' | 'v1p1' = 'v1p1'
-
-  // Handler to archive the active framework on the server
-  // Must be defined before early returns (React hooks rules)
-  const handleArchiveFramework = useCallback(async () => {
-    if (!tenantId || !activeFrameworkId) {
-      throw new Error('Not signed in or no active framework')
-    }
-    await api.deleteCfPackage({
-      tenantId,
-      docId: activeFrameworkId,
-      caseVersion: caseApiVersion,
-    })
-    removeFrameworkFromStorage(activeFrameworkId)
-  }, [api, tenantId, activeFrameworkId, caseApiVersion, removeFrameworkFromStorage])
 
   // Handler to fetch the published CFPackage from the server (returns CASE JSON with absolute URIs).
   // This is the user-facing view/export, so omit OpenCASE extensions (ext:opencase).
@@ -594,14 +589,6 @@ function AppInner() {
           const next = prev.filter((f) => f.id !== oldId)
           saveFrameworks(next)
           return next
-        })
-        setFrameworkLayouts((prev) => {
-          const { [oldId]: _dropped, ...rest } = prev
-          return rest
-        })
-        setFrameworkEdgeTypes((prev) => {
-          const { [oldId]: _dropped, ...rest } = prev
-          return rest
         })
         setFrameworkCfDefinitions((prev) => {
           const { [oldId]: _dropped, ...rest } = prev
@@ -785,19 +772,16 @@ function AppInner() {
       initialGraph={activeGraph} 
       graphKey={activeFramework.id} 
       caseVersion={activeCaseVersion}
-      skipAutoLayout={Boolean(frameworkLayouts[activeFramework.id]) || Boolean(autoEdgeType)}
-      initialEdgeType={frameworkEdgeTypes[activeFramework.id] ?? autoEdgeType}
       initialCfItemTypes={editorDefinitions.cfItemTypes}
       initialCfSubjects={editorDefinitions.cfSubjects}
       initialCfConcepts={editorDefinitions.cfConcepts}
       initialCfLicenses={editorDefinitions.cfLicenses}
       initialCfAssociationGroupings={editorDefinitions.cfAssociationGroupings}
     >
-      <EditorCanvas
+      <FrameworkEditor
         onBack={() => navigateHome()}
         onSaveToServer={tenantId ? handleSaveToServer : undefined}
         onPlanAlignmentStorage={tenantId ? handlePlanAlignmentStorage : undefined}
-        onArchiveFramework={tenantId && activeFrameworkId ? handleArchiveFramework : undefined}
         onFetchCfPackage={activeFrameworkId ? handleFetchCfPackage : undefined}
         availableFrameworks={frameworks}
         serverFrameworks={serverFrameworkSummaries}
@@ -806,6 +790,7 @@ function AppInner() {
         onLoadAlignmentsForTarget={tenantId ? handleLoadAlignmentsForTarget : undefined}
         onDiscoverAlignedTargets={tenantId ? handleDiscoverAlignedTargets : undefined}
         onLookupItemDocuments={handleLookupItemDocuments}
+        cge={cgeTargetSupport}
         mirrorStatus={activeFramework.mirrorStatus}
         readOnly={activeFramework.readOnly}
         cfDefinitionsExtensions={activeCfDefinitions?.extensions}

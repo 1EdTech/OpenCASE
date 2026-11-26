@@ -106,7 +106,6 @@ Traefik routes requests based on path:
 | `/` | editor | React SPA (catch-all, lowest priority) |
 | `/ims/*` | opencase | CASE Provider API (read) |
 | `/management/*` | opencase | Management API (write) |
-| `/public/*` | opencase | Public endpoints (tenant lookup) |
 | `/health` | opencase | Health check |
 | `/realms/*` | keycloak | OIDC authentication |
 | `/admin/*` | keycloak | Keycloak admin console |

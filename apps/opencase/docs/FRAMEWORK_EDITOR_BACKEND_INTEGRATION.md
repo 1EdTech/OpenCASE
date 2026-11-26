@@ -348,24 +348,6 @@ There is no dedicated `POST /CFItems` or `POST /CFAssociations` management endpo
 
 ---
 
-## Email-first sign-in (tenant discovery)
+## Sign-in tenant
 
-### Goal
-Remove the explicit tenant picker in the SPA. Instead, implement a 2-step login:
-
-1) user enters email
-2) SPA calls OpenCASE **public tenant lookup** endpoint to discover `tenantId`
-3) SPA starts Keycloak OIDC redirect using `client_id = tenant-<tenantId>` (or whatever prefix you configured)
-
-This preserves the client-per-tenant Keycloak model while improving UX.
-
-### Public lookup endpoint
-
-- **Endpoint (no auth)**: `GET /public/tenant-lookup?email=<email>`
-- **Anti-enumeration behavior**:
-  - Always responds with **`202 Accepted`**
-  - Response body **may** include `{ "tenantId": "..." }` if the email maps to a tenant
-  - If no mapping exists (or lookup fails), response omits `tenantId`
-
-### Manual flow (SPA)
-Start at Home → enter email → click Continue → call lookup → if `tenantId` returned, redirect to Keycloak → return to app → store token → OpenCASE calls succeed.
+Every user signs in to one OpenCASE tenant: `DEFAULT_TENANT_ID` (`VITE_DEFAULT_TENANT_ID` in the editor), or `system` when that is empty. The SPA starts the Keycloak OIDC redirect with `client_id = tenant-<tenantId>` (or whatever prefix you configured). There is no tenant picker or tenant lookup endpoint.

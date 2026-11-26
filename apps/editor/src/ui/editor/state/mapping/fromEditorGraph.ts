@@ -1,14 +1,10 @@
 import type { EditorGraph } from '@/ui/editor/state/editorFactories'
 import type { Framework, FrameworkMetadata, Item, Association, AssociationType, ItemType } from '@/domain/framework/model/types'
 import type { AssociationId, FrameworkId, ItemId } from '@/domain/shared/types'
-import type { LayoutState } from './types'
 import type { CFDocument, CFItem } from '@/domain/case/types'
-import type { ExternalFrameworkNodeData } from '@/ui/editor/reactflow/types'
-import type { LinkedFrameworkRef, RemoteItemLink } from '@/ui/editor/remoteFramework/remoteFrameworkTypes'
 
 const isFrameworkNode = (n: EditorGraph['nodes'][number]) => n.type === 'caseFrameworkNode'
 const isItemNode = (n: EditorGraph['nodes'][number]) => n.type === 'caseItemNode'
-const isExternalFrameworkNode = (n: EditorGraph['nodes'][number]) => n.type === 'externalFrameworkNode'
 
 function mapItemType(rawType?: string): ItemType | undefined {
   const raw = (rawType ?? '').toLowerCase()
@@ -42,12 +38,8 @@ function readCfItem(node: EditorGraph['nodes'][number]): CFItem | null {
   return any?.cfItem ?? null
 }
 
-export type RemoteEditorData = {
-  linkedFrameworks: LinkedFrameworkRef[]
-  remoteItemLinks: RemoteItemLink[]
-}
-
-export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Framework; layout: LayoutState; remoteEditorData: RemoteEditorData } {
+/** Rebuild the domain framework from the editor graph, for saving and for fork detection. */
+export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Framework } {
   const { graph } = params
   const fwNode = graph.nodes.find(isFrameworkNode)
   const fwId = (fwNode?.id ?? 'fw') as unknown as FrameworkId
@@ -135,16 +127,12 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     } | undefined
 
     // Framework→item edges represent top-level isChildOf associations (item isChildOf document).
-    // These must be preserved so sequence numbers and handle positions survive save/reload.
+    // These must be preserved so sequence numbers survive save/reload.
     if (source === fwNodeId) {
       if (!items.has(target as unknown as ItemId)) continue
 
       // Recover original association ID from cfAssociation, or generate a stable one
       const originalId = edgeData?.cfAssociation?.identifier ?? `isChildOf_${target}_${fwNodeId}`
-
-      // Handle mapping: visual source=framework(parent/destination), visual target=item(child/origin)
-      const originHandle = e.targetHandle ?? undefined      // item's handle
-      const destinationHandle = e.sourceHandle ?? undefined  // framework's handle
 
       const fwGroupingURI = edgeData?.cfAssociation?.CFAssociationGroupingURI
       const assoc: Association = {
@@ -159,8 +147,6 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
           originTitle: edgeData?.cfAssociation?.originNodeURI?.title,
           destinationTitle: edgeData?.cfAssociation?.destinationNodeURI?.title,
           sequenceNumber: edgeData?.sequenceNumber ?? edgeData?.cfAssociation?.sequenceNumber,
-          originHandle,
-          destinationHandle,
           CFAssociationGroupingIdentifier: fwGroupingURI?.identifier,
           CFAssociationGroupingTitle: fwGroupingURI?.title,
           notes: edgeData?.cfAssociation?.notes,
@@ -177,19 +163,12 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
 
     const associationType = edgeToAssociationType(e.id, edgeData)
     
-    // For hierarchical types (isChildOf, isPartOf), the edge goes from child to parent visually
-    // but the association semantically means "child isChildOf parent"
+    // A hierarchical edge runs parent → child, but the association means "child isChildOf parent"
     const isHierarchical = associationType === 'isChildOf' || associationType === 'isPartOf'
-    
-    // Map visual edge handles to semantic origin/destination handles.
-    // Hierarchical: visual source=parent=destination, visual target=child=origin
-    // Non-hierarchical: visual source=origin, visual target=destination
-    const originHandle = (isHierarchical ? e.targetHandle : e.sourceHandle) ?? undefined
-    const destinationHandle = (isHierarchical ? e.sourceHandle : e.targetHandle) ?? undefined
-    
+
     const groupingURI = edgeData?.cfAssociation?.CFAssociationGroupingURI
     // Recover original association identifier from cfAssociation if available (e.g. for hierarchical edges
-    // where toReactFlow assigns a synthetic e_parent_child edge ID)
+    // where toEditorGraph assigns a synthetic e_parent_child edge ID)
     const assocId = edgeData?.cfAssociation?.identifier ?? e.id
     const assoc: Association = {
       id: assocId as unknown as AssociationId,
@@ -203,8 +182,6 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
         originTitle: edgeData?.cfAssociation?.originNodeURI?.title,
         destinationTitle: edgeData?.cfAssociation?.destinationNodeURI?.title,
         sequenceNumber: edgeData?.cfAssociation?.sequenceNumber,
-        originHandle,
-        destinationHandle,
         CFAssociationGroupingIdentifier: groupingURI?.identifier,
         CFAssociationGroupingTitle: groupingURI?.title,
         notes: edgeData?.cfAssociation?.notes,
@@ -223,82 +200,5 @@ export function fromEditorGraph(params: { graph: EditorGraph }): { framework: Fr
     status: 'Draft',
   }
 
-  const byNodeId: LayoutState['byNodeId'] = {}
-  for (const n of graph.nodes) {
-    const styleAny = n.style as unknown as { width?: number; height?: number } | undefined
-    byNodeId[n.id] = {
-      x: n.position.x,
-      y: n.position.y,
-      w: typeof styleAny?.width === 'number' ? styleAny.width : undefined,
-      h: typeof styleAny?.height === 'number' ? styleAny.height : undefined,
-    }
-  }
-
-  const linkedFrameworks: LinkedFrameworkRef[] = graph.nodes
-    .filter(isExternalFrameworkNode)
-    .map((n) => {
-      const d = n.data as ExternalFrameworkNodeData
-      return {
-        id: d.refId,
-        cgeFrameworkId: d.cgeFrameworkId ?? '',
-        cacheDocId: d.cacheDocId ?? '',
-        title: d.title,
-        color: d.color,
-        sourceUri: d.sourceUri ?? d.uri,
-        nodePosition: { x: n.position.x, y: n.position.y },
-        itemCount: d.itemCount,
-        cachedAt: d.cachedAt,
-        skipPublisherAuth: d.skipPublisherAuth,
-        cacheError: d.cacheError ?? undefined,
-      }
-    })
-
-  const remoteItemLinks = (graph.remoteLinks ?? []).map((link) => {
-    const fw = graph.nodes.find(
-      (n) => n.type === 'externalFrameworkNode' && (n.data as ExternalFrameworkNodeData).refId === link.remoteFrameworkRefId,
-    )
-    const fwData = fw?.data as ExternalFrameworkNodeData | undefined
-    return {
-      ...link,
-      remoteFrameworkColor: fwData?.color ?? link.remoteFrameworkColor,
-      remoteFrameworkTitle: fwData?.title ?? link.remoteFrameworkTitle,
-    }
-  })
-
-  // Add cross-framework associations for remote links
-  for (const link of remoteItemLinks) {
-    if (!items.has(link.localItemId as unknown as ItemId)) continue
-    const localItem = items.get(link.localItemId as unknown as ItemId)!
-    const localUri = (localItem.metadata?.caseUri as string | undefined) ?? link.localItemId
-    const assocId = (link.cfAssociationId ?? link.id) as unknown as AssociationId
-    const assoc: Association = {
-      id: assocId,
-      fromItemId: link.localItemId as unknown as ItemId,
-      toItemId: link.localItemId as unknown as ItemId,
-      associationType: link.associationType as AssociationType,
-      metadata: {
-        caseUri: link.remoteItemUri,
-        extensions: {
-          'ext:opencase': {
-            remoteLink: true,
-            remoteItemUri: link.remoteItemUri,
-            remoteItemIdentifier: link.remoteItemIdentifier,
-            remoteFrameworkRefId: link.remoteFrameworkRefId,
-            localItemUri: localUri,
-            remoteLabel: link.remoteLabel,
-            remoteHumanCodingScheme: link.remoteHumanCodingScheme,
-            remoteFrameworkTitle: link.remoteFrameworkTitle,
-          },
-        },
-      },
-    }
-    associations.set(assoc.id, assoc)
-  }
-
-  return {
-    framework,
-    layout: { byNodeId },
-    remoteEditorData: { linkedFrameworks, remoteItemLinks },
-  }
+  return { framework }
 }
-

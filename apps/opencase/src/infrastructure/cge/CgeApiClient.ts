@@ -230,51 +230,44 @@ export class CgeApiClient {
   /**
    * Fetch a CFPackage from a publisher CASE host, presenting the CGE JWT.
    * Accepts either wrapped ({ CFPackage: ... }) or flat CASE JSON.
+   *
+   * If the publisher still refuses (401 or 403) after withToken's retry with a
+   * fresh token, the request is sent once more without a token: open CASE
+   * servers need none, and some reject a token they don't recognize. When that
+   * also fails, the error from the request with the token is thrown.
    */
-  async fetchPublisherPackage (tenantId: string, endpointUrl: string, options?: { skipAuth?: boolean }): Promise<any> {
-    if (options?.skipAuth) {
-      const res = await fetch(endpointUrl, {
-        method: 'GET',
-        headers: { Accept: 'application/json' }
-      })
-      if (!res.ok) {
-        const text = await res.text().catch(() => '')
-        const error: any = new Error(`Publisher fetch failed: ${res.status}. ${text.slice(0, 500)}`)
-        error.status = res.status
-        throw error
-      }
-      return await res.json()
-    }
-
-    return await this.withToken(tenantId, async (token) => {
-      const fetchOnce = async (accessToken: string) => {
-        const res = await fetch(endpointUrl, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/json'
-          }
-        })
-        if (!res.ok) {
-          const text = await res.text().catch(() => '')
-          const error: any = new Error(`Publisher fetch failed: ${res.status}. ${text.slice(0, 500)}`)
-          error.status = res.status
-          throw error
-        }
-        return await res.json()
-      }
-
+  async fetchPublisherPackage (tenantId: string, endpointUrl: string): Promise<any> {
+    try {
+      return await this.withToken(tenantId, async (token) => await this.getPublisherJson(endpointUrl, token))
+    } catch (err: any) {
+      if (err?.status !== 401 && err?.status !== 403) throw err
+      logger.info({ tenantId, endpointUrl, status: err.status }, 'Publisher refused the CGE token; retrying without it')
       try {
-        return await fetchOnce(token)
-      } catch (err: any) {
-        if (err?.status !== 401) throw err
-        const creds = await this.credentialsStore.get(tenantId)
-        if (!creds) throw err
-        const { tokenUrl } = this.resolveEndpoints(creds)
-        const refreshed = await this.auth.refreshAccessToken(tokenUrl, creds.clientId, creds.clientSecret)
-        return await fetchOnce(refreshed)
+        return await this.getPublisherJson(endpointUrl)
+      } catch {
+        throw err
       }
-    })
+    }
+  }
+
+  private async getPublisherJson (endpointUrl: string, accessToken?: string): Promise<any> {
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`
+    let res: Response
+    try {
+      res = await fetch(endpointUrl, { method: 'GET', headers })
+    } catch (err: any) {
+      // Node reports only "fetch failed"; the cause says why (DNS, refused, timeout, TLS).
+      const cause = err?.cause?.code ?? err?.cause?.message ?? err?.message ?? 'unknown error'
+      throw new Error(`Could not reach the publisher at ${endpointUrl}: ${cause}`)
+    }
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      const error: any = new Error(`Publisher fetch failed: ${res.status}. ${text.slice(0, 500)}`)
+      error.status = res.status
+      throw error
+    }
+    return await res.json()
   }
 
   async testCredentials (tenantId: string): Promise<{ ok: boolean, message: string }> {

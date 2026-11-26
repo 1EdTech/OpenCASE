@@ -42,10 +42,10 @@ describe('withOffCanvasAssociations', () => {
     expect(withOffCanvasAssociations(loaded, saved).associations.has(external.id)).toBe(false)
   })
 
-  it('leaves editor-authored remote links to remoteEditorData', () => {
+  it('carries over links the former canvas view drew to a CASE Global framework', () => {
     const remote = assoc('remote-1', 'item-1', 'remote-item', { extensions: { 'ext:opencase': { remoteLink: true } } })
     const saved = framework([item('item-1')], [])
-    expect(withOffCanvasAssociations(framework([item('item-1')], [remote]), saved).associations.has(remote.id)).toBe(false)
+    expect(withOffCanvasAssociations(framework([item('item-1')], [remote]), saved).associations.has(remote.id)).toBe(true)
   })
 
   it('returns the saved framework untouched when there is nothing to carry over', () => {

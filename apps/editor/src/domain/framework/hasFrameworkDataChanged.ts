@@ -1,22 +1,19 @@
 import type { Association, Framework, Item } from '@/domain/framework/model/types'
 
 /**
- * Canvas-only concerns (node position, per-node color band, edge handle
- * anchors, edge render style) show up in TWO different metadata shapes
- * depending on where the Framework snapshot came from:
+ * Editor-only presentation data (per-item color band, and node positions and
+ * edge handle anchors written by the former canvas view) shows up in TWO
+ * metadata shapes depending on where the Framework snapshot came from:
  *  - Stored as CASE extensions: under `metadata.extensions['ext:opencase']`
  *    (or a top-level `metadata['ext:opencase']` key from older builds).
  *    Other keys in `metadata.extensions` are real framework data and ARE
  *    compared — editing a custom extension is a data change.
- *  - Re-derived from the live canvas during an editing session
- *    (`fromEditorGraph.ts`, called on every save and to capture the
- *    fork-detection baseline): `colorBand` (items) and `originHandle`/
- *    `destinationHandle` (associations) are written directly as TOP-LEVEL
- *    metadata keys, not nested under `ext:opencase` — e.g. switching layout
- *    algorithms (star ↔ hierarchical) recomputes every edge's handle
- *    anchors, which land here.
- * Both shapes must be excluded here so neither a pure layout edit nor
- * switching layout algorithms ever reads as a "framework data" change.
+ *  - Re-derived from the editor graph (`fromEditorGraph.ts`, called on every
+ *    save and to capture the fork-detection baseline): `colorBand` (items) is
+ *    written as a TOP-LEVEL metadata key, as were `originHandle`/
+ *    `destinationHandle` (associations) before the canvas view was removed.
+ * Both shapes are excluded here so presentation data never reads as a
+ * "framework data" change.
  */
 function stripLayoutMetadata(metadata: Record<string, unknown> | undefined): Record<string, unknown> {
   if (!metadata) return {}
@@ -50,7 +47,7 @@ function sortedNormalizedEntries<K extends string, V>(map: Map<K, V>, normalize:
 /**
  * True if two Framework snapshots differ in actual framework data —
  * metadata, item statements/types/CASE fields, hierarchy, or associations.
- * Deliberately blind to canvas-only concerns (position, color band, edge
+ * Deliberately blind to editor-only presentation data (position, color band, edge
  * handle anchors), since those don't affect a mirrored framework's CASE-spec
  * content and shouldn't be treated as a forking change.
  */

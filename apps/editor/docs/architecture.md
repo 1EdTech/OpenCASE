@@ -2,16 +2,15 @@
 
 ## What this project is
 
-An **open-source editor for 1EdTech CASE frameworks**. You can create and edit frameworks (CFDocument), items (CFItem), and associations (CFAssociation) through a visual canvas, with a **draft → publish** workflow. It's deliberately focused on core authoring — not trying to replace commercial CASE tools.
+An **open-source editor for 1EdTech CASE frameworks**. You can create and edit frameworks (CFDocument), items (CFItem), and associations (CFAssociation) in a Tree View, with a **draft → publish** workflow. It's deliberately focused on core authoring — not trying to replace commercial CASE tools.
 
-Under the hood, the CASE model is treated as a **graph** (items + associations). The canvas you see in the UI is just one way to visualise that graph — the domain model is what matters.
+Under the hood, the CASE model is treated as a **graph** (items + associations). The Tree View is one way to show that graph — the domain model is what matters. (An earlier canvas view, built on React Flow, was removed in CGE-165.)
 
 ## Tech stack
 
 * React 19 + TypeScript (Vite)
 * Tailwind CSS v4
 * shadcn/ui components
-* React Flow (`@xyflow/react`)
 * Vitest (unit testing)
 * oidc-client-ts (authentication)
 
@@ -23,12 +22,12 @@ These are the principles we don't bend on:
 
 1. **Domain model is the source of truth** — The domain representation of a framework (items + associations) is authoritative.
 
-2. **React Flow is a projection of the domain graph** — React Flow nodes/edges are derived from the domain model. They're not the canonical data.
+2. **The editor graph is a projection of the domain model** — the editor's nodes/edges are derived from the domain model. They're not the canonical data.
 
 3. **All user interactions become application commands** — UI events (edit node, add child, connect, delete) must translate to commands handled by the application layer.
 
 4. **Clean architecture dependency direction** — Dependencies always point inward:
-   * `domain` has no dependencies on React, React Flow, APIs, or storage
+   * `domain` has no dependencies on React, APIs, or storage
    * `application` depends on `domain`
    * `infrastructure` implements interfaces defined by `application`
    * `ui` depends on `application` (and uses `infrastructure` through composition)
@@ -37,12 +36,12 @@ These are the principles we don't bend on:
 
 ## Folder structure
 
-Pure logic (reducer, layout algorithms, geometry) is isolated from React so it can be tested and reasoned about independently.
+Pure logic (reducer, graph mapping) is isolated from React so it can be tested and reasoned about independently.
 
 ```
 src
 ├── app
-│   ├── App.tsx                     # App shell — topology detection + pre-render layout
+│   ├── App.tsx                     # App shell — loading, saving, CASE Global targets
 │   ├── main.tsx
 │   └── providers/
 
@@ -62,26 +61,17 @@ src
 
 ├── ui
 │   ├── editor
-│   │   ├── components/             # Canvas, header, dialogs
-│   │   ├── reactflow/
-│   │   │   ├── nodeTypes/          # CaseItemNode, CaseFrameworkNode
-│   │   │   ├── edgeTypes/          # LabeledEdge
-│   │   │   ├── mapping/
-│   │   │   │   ├── toReactFlow.ts  # Domain → React Flow nodes/edges
-│   │   │   │   └── fromEditorGraph.ts  # React Flow → Domain + layout
-│   │   │   └── types.ts           # CaseEditorNodeType, CaseEditorEdge, CaseEdgeData
+│   │   ├── FrameworkEditor.tsx     # Header, Tree View, properties panel, save
+│   │   ├── components/             # Header, properties panel, dialogs
+│   │   ├── treePanel/              # Tree View and crosswalk (associated frameworks)
 │   │   ├── state/
 │   │   │   ├── EditorContext.tsx   # React provider (orchestration only)
 │   │   │   ├── editorReducer.ts   # Pure state reducer (no React dependency)
-│   │   │   ├── editorFactories.ts # Node/edge factory helpers
-│   │   │   └── helpers/
-│   │   │       └── nodeGeometry.ts # Pure geometry, type guards, adjacency
-│   │   ├── layout/
-│   │   │   ├── detectTopology.ts       # Classify graph as hierarchy/star/tree
-│   │   │   ├── applyInitialLayout.ts   # Pre-render layout orchestrator
-│   │   │   ├── hierarchyLayout.ts      # Flat column layout (smoothstep)
-│   │   │   ├── starLayout.ts           # Elliptical radial layout (bezier)
-│   │   │   └── treeLayout.ts           # Recursive tree-spread layout (bezier)
+│   │   │   ├── editorFactories.ts # Graph factory helpers
+│   │   │   ├── graphTypes.ts      # CaseEditorNodeType, CaseEditorEdge, CaseEdgeData
+│   │   │   └── mapping/
+│   │   │       ├── toEditorGraph.ts    # Domain → editor graph
+│   │   │       └── fromEditorGraph.ts  # Editor graph → Domain
 │   │   └── terminology/
 │   │       ├── lens.ts
 │   │       └── strings.ts
@@ -110,22 +100,22 @@ We treat CASE as a **graph**:
 * `Association` = edge (`CFAssociation`)
 * `Framework` = aggregate root owning items + associations (`CFDocument` + supporting structures)
 
-The domain model has no knowledge of React Flow, the UI, or any external system.
+The domain model has no knowledge of the UI or any external system.
 
 ---
 
-## Domain ↔ React Flow mapping
+## Domain ↔ editor graph mapping
 
 This is the most important boundary in the codebase. The mapping code is intentionally centralised in two files:
 
-* `src/ui/editor/reactflow/mapping/toReactFlow.ts` — Domain → React Flow
-* `src/ui/editor/reactflow/mapping/fromEditorGraph.ts` — React Flow → Domain
+* `src/ui/editor/state/mapping/toEditorGraph.ts` — Domain → editor graph
+* `src/ui/editor/state/mapping/fromEditorGraph.ts` — editor graph → Domain
 
 **How it works:**
 
-1. **Domain → React Flow is derived** — React Flow nodes/edges are built from the domain `Framework` (Item → Node, Association → Edge).
-2. **UI changes become commands** — When a user drags, edits, or connects something, the UI translates that into an application command. The command updates the domain model, and the UI re-renders by re-projecting the domain.
-3. **Layout is separate** — Positions (x, y) are a UI concern. They're stored in UI state, not in domain entities.
+1. **Domain → graph is derived** — the editor's nodes/edges are built from the domain `Framework` (Item → Node, Association → Edge).
+2. **UI changes become commands** — When a user edits or adds something, the UI dispatches a reducer action; saving rebuilds the domain `Framework` from the graph.
+3. **No layout** — nodes carry no positions. Saves no longer write the canvas-era `ext:opencase` layout, edge style, or remote-link data, and drop it where a loaded framework had it.
 
 ---
 
@@ -135,21 +125,12 @@ Editor state uses a **pure reducer** pattern, cleanly separated from React:
 
 ### Pure modules (no React dependency)
 
-* **`state/editorReducer.ts`** — A single pure function that handles all state transitions: selection, CRUD, layout, connections, graph loading, etc.
-* **`state/helpers/nodeGeometry.ts`** — Geometry utilities (sizing, handles, overlap detection), type guards, and graph adjacency builders.
-* **`state/editorFactories.ts`** — Factory functions for items, documents, edges, and graph structures.
-
-### Layout algorithms (also pure)
-
-* **`layout/detectTopology.ts`** — Looks at a graph's shape and classifies it as `hierarchy`, `star`, or `tree`.
-* **`layout/hierarchyLayout.ts`** — Vertical column: framework at top, items stacked below. Smoothstep edges.
-* **`layout/starLayout.ts`** — Radial: framework at centre, branches fan out in angular sectors. Bezier edges.
-* **`layout/treeLayout.ts`** — Recursive horizontal tree-spread. Bezier edges.
-* **`layout/applyInitialLayout.ts`** — Pre-render orchestrator. Detects topology and applies layout *before* the first React Flow render, so there's no visible jump.
+* **`state/editorReducer.ts`** — A single pure function that handles all state transitions: selection, item edits, adding items, inline alignment edits, graph loading.
+* **`state/editorFactories.ts`** — Factory functions for items, documents, and graphs.
 
 ### React orchestration
 
-* **`state/EditorContext.tsx`** — A thin React provider. It imports the reducer and layout functions, wires them up with hooks, and exposes the `EditorContext` API. Business logic stays out.
+* **`state/EditorContext.tsx`** — A thin React provider. It wires the reducer up with hooks and exposes the `EditorContext` API. Business logic stays out.
 
 ---
 
@@ -178,7 +159,7 @@ Implements the interfaces defined in `application/ports`:
 
 ## UI layer
 
-* Renders the canvas editor (React Flow)
+* Renders the framework in the Tree View
 * Provides panels and dialogs for editing properties
 * Translates UI events → commands
 * Shows draft status and the explicit publishing flow
@@ -219,7 +200,7 @@ npm run test         # Single run
 npm run test:watch   # Watch mode
 ```
 
-If you're adding a new reducer action or layout algorithm, please add tests to go with it.
+If you're adding a new reducer action, please add tests to go with it.
 
 ---
 
@@ -233,8 +214,8 @@ Where to put things:
 * **External integrations** → `infrastructure/`
 
 If you're working on **nodes/edges**:
-* Change components in `ui/editor/reactflow/*`
-* Keep mapping logic in `mapping/*`
+* Change the graph types in `ui/editor/state/graphTypes.ts`
+* Keep mapping logic in `ui/editor/state/mapping/*`
 
 If you're adding **state logic**:
 * Add new actions to the `Action` union in `editorReducer.ts`

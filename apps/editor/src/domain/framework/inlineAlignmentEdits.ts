@@ -2,7 +2,7 @@ import type { Association, AssociationType, Framework } from '@/domain/framework
 
 /**
  * Edits to a framework's inline associations to other frameworks, made in the
- * Tree View. These associations aren't canvas edges, so they never enter the
+ * Tree View. These associations aren't editor graph edges, so they never enter the
  * editor graph: the edits are kept alongside it and applied to the framework
  * when it's saved.
  *
