@@ -253,7 +253,14 @@ export class CgeApiClient {
   private async getPublisherJson (endpointUrl: string, accessToken?: string): Promise<any> {
     const headers: Record<string, string> = { Accept: 'application/json' }
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`
-    const res = await fetch(endpointUrl, { method: 'GET', headers })
+    let res: Response
+    try {
+      res = await fetch(endpointUrl, { method: 'GET', headers })
+    } catch (err: any) {
+      // Node reports only "fetch failed"; the cause says why (DNS, refused, timeout, TLS).
+      const cause = err?.cause?.code ?? err?.cause?.message ?? err?.message ?? 'unknown error'
+      throw new Error(`Could not reach the publisher at ${endpointUrl}: ${cause}`)
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       const error: any = new Error(`Publisher fetch failed: ${res.status}. ${text.slice(0, 500)}`)

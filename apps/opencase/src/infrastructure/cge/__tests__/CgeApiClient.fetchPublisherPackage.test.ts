@@ -76,4 +76,12 @@ describe('CgeApiClient.fetchPublisherPackage', () => {
     await expect(makeClient().fetchPublisherPackage('t1', ENDPOINT)).rejects.toMatchObject({ status: 500 })
     expect(calls).toHaveLength(1)
   })
+
+  it('names the publisher address and the network cause when no response comes back', async () => {
+    global.fetch = jest.fn(async () => {
+      throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } })
+    }) as any
+    await expect(makeClient().fetchPublisherPackage('t1', ENDPOINT))
+      .rejects.toThrow(`Could not reach the publisher at ${ENDPOINT}: ENOTFOUND`)
+  })
 })
